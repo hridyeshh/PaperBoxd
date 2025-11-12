@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 
 import { InteractiveHoverButton } from "@/components/ui/shared/interactive-hover-button";
 
 function Hero() {
   const [titleNumber, setTitleNumber] = useState(0);
+  const router = useRouter();
   const titles = useMemo(
     () => [
       "Save the books you've read", 
@@ -68,15 +70,17 @@ function Hero() {
             </h1>
 
             <p className="text-lg md:text-xl leading-relaxed tracking-tight text-muted-foreground max-w-2xl text-center">
-              Managing a small business today is already tough. Avoid further
-              complications by ditching outdated, tedious trade methods. Our
-              goal is to streamline SMB trade, making it easier and faster than
-              ever.
+              PaperBoxd lets you save the books you've read
             </p>
           </div>
           <div className="flex flex-row flex-wrap justify-center gap-3">
-            <InteractiveHoverButton text="Log in" className="w-40" />
-            <InteractiveHoverButton text=" Sign up here" className="w-48" />
+            <InteractiveHoverButton
+              text="Start saving your books"
+              showIdleAccent={false}
+              invert
+              className="w-64 sm:w-72"
+              onClick={() => router.push("/auth")}
+            />
           </div>
         </div>
       </div>

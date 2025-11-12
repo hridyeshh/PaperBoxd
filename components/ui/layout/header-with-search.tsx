@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { CommandItem, SearchModal } from "@/components/ui/search-modal";
 import { Sheet, SheetContent, SheetFooter } from "@/components/ui/sheet";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 const links = [
   { label: "Books", href: "#Books" },
@@ -93,6 +94,7 @@ export function Header() {
               <SearchIcon className="size-4" />
             </Button>
           </SearchModal>
+          <ThemeToggle className="transition-transform hover:scale-[1.02]" />
           <Sheet open={open} onOpenChange={setOpen}>
             <Button
               size="icon"
