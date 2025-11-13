@@ -1,13 +1,15 @@
 "use client";
 
+import Image from "next/image";
 import React from "react";
-import { Grid2x2PlusIcon, MenuIcon, SearchIcon } from "lucide-react";
+import { ChevronDown, Grid2x2PlusIcon, MenuIcon, SearchIcon, LinkIcon, QrCodeIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { CommandItem, SearchModal } from "@/components/ui/search-modal";
 import { Sheet, SheetContent, SheetFooter } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { Dropdown } from "@/components/ui/dropdown";
 
 const links = [
   { label: "Books", href: "#Books" },
@@ -48,8 +50,32 @@ const searchItems: CommandItem[] = [
   },
 ];
 
-export function Header() {
+interface HeaderProps {
+  profileButtonLabel?: string;
+  onProfileButtonClick?: () => void;
+  profileAvatarSrc?: string;
+  profileMenuOpen?: boolean;
+}
+
+export function Header({
+  profileButtonLabel,
+  onProfileButtonClick,
+  profileAvatarSrc,
+  profileMenuOpen,
+}: HeaderProps) {
   const [open, setOpen] = React.useState(false);
+  const [internalProfileMenuOpen, setInternalProfileMenuOpen] = React.useState(false);
+  const avatarSrc =
+    profileAvatarSrc ??
+    "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80";
+  const profileLabel = profileButtonLabel ?? "Open profile menu";
+  const isProfileMenuOpen = profileMenuOpen ?? internalProfileMenuOpen;
+
+  const handleProfileMenuOpenChange = (nextOpen: boolean) => {
+    if (profileMenuOpen === undefined) {
+      setInternalProfileMenuOpen(nextOpen);
+    }
+  };
 
   return (
     <header
@@ -95,6 +121,51 @@ export function Header() {
             </Button>
           </SearchModal>
           <ThemeToggle className="transition-transform hover:scale-[1.02]" />
+          <div className="flex items-center gap-2 pl-8">
+            <button
+              type="button"
+              aria-label="View profile"
+              className={cn(
+                "relative flex size-10 items-center justify-center rounded-full border-2 border-foreground/80 p-0.5",
+                "transition-all duration-150 hover:scale-[1.10] active:scale-95",
+              )}
+            >
+              <Image
+                src={avatarSrc}
+                alt={profileLabel}
+                width={40}
+                height={40}
+                className="size-8 rounded-full object-cover"
+              />
+            </button>
+            <Dropdown.Root
+              isOpen={isProfileMenuOpen}
+              onOpenChange={handleProfileMenuOpenChange}
+            >
+              <Dropdown.Trigger
+                aria-label={profileLabel}
+                aria-haspopup="menu"
+                aria-expanded={isProfileMenuOpen}
+                className="rounded-full p-1 transition hover:bg-foreground/5"
+                onClick={onProfileButtonClick}
+              >
+                <ChevronDown
+                  className={cn(
+                    "size-5 text-muted-foreground transition-transform duration-200",
+                    isProfileMenuOpen && "rotate-180",
+                  )}
+                />
+              </Dropdown.Trigger>
+              <Dropdown.Popover>
+                <Dropdown.Menu>
+                  <Dropdown.Item label="Share profile link" icon={LinkIcon} />
+                  <Dropdown.Item label="Show QR code" icon={QrCodeIcon} />
+                  <Dropdown.Separator />
+                  <Dropdown.Item label="Log out" />
+                </Dropdown.Menu>
+              </Dropdown.Popover>
+            </Dropdown.Root>
+          </div>
           <Sheet open={open} onOpenChange={setOpen}>
             <Button
               size="icon"
