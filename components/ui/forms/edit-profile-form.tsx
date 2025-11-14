@@ -29,14 +29,14 @@ export type EditableProfile = {
 };
 
 export const defaultProfile: EditableProfile = {
-  username: "hridyesh",
-  name: "Hridyesh Sharma",
+  username: "usename",
+  name: "name",
   birthday: "1998-09-15",
-  email: "hridyesh@example.com",
+  email: "username@example.com",
   bio: "Designing bookish experiences with a soft spot for cozy sci-fi and dragon politics.",
-  pronouns: ["He", "Him"],
-  links: "https://paperboxd.dev/hridyesh",
-  gender: "Male",
+  pronouns: ["", ""],
+  links: "",
+  gender: "",
   isPublic: true,
   avatar: "",
 };
@@ -49,10 +49,18 @@ const genderOptions = ["Female", "Male", "Non-binary", "Transgender", "Intersex"
 type EditProfileFormProps = {
   profile: EditableProfile;
   onProfileChange: (profile: EditableProfile) => void;
-  onSubmitProfile?: () => void;
+  onSubmitProfile?: () => Promise<void> | void;
+  isSubmitting?: boolean;
+  submitError?: string | null;
 };
 
-export function EditProfileForm({ profile, onProfileChange, onSubmitProfile }: EditProfileFormProps) {
+export function EditProfileForm({
+  profile,
+  onProfileChange,
+  onSubmitProfile,
+  isSubmitting = false,
+  submitError,
+}: EditProfileFormProps) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [avatarError, setAvatarError] = React.useState<string | null>(null);
   const [useCustomGender, setUseCustomGender] = React.useState(
@@ -153,9 +161,9 @@ export function EditProfileForm({ profile, onProfileChange, onSubmitProfile }: E
   }, [updateProfile]);
 
   const handleSubmit = React.useCallback(
-    (event: React.FormEvent<HTMLFormElement>) => {
+    async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      onSubmitProfile?.();
+      await onSubmitProfile?.();
     },
     [onSubmitProfile],
   );
@@ -393,13 +401,16 @@ export function EditProfileForm({ profile, onProfileChange, onSubmitProfile }: E
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-border/60 bg-background/90 p-4 shadow-sm">
         <div className="text-sm text-muted-foreground">
           Ready to share? Make sure your profile is public so that your friends can see what you're up to.
+          {submitError ? (
+            <p className="mt-1 text-xs.font-semibold text-destructive">{submitError}</p>
+          ) : null}
         </div>
         <div className="flex gap-3">
-          <Button variant="ghost" type="button" className="rounded-full px-6">
+          <Button variant="ghost" type="button" className="rounded-full px-6" disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" className="rounded-full px-6">
-            Save changes
+          <Button type="submit" className="rounded-full px-6" disabled={isSubmitting}>
+            {isSubmitting ? "Saving..." : "Save changes"}
           </Button>
         </div>
       </div>

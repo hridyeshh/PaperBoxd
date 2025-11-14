@@ -12,6 +12,7 @@ import {
   Loader2,
   MailCheck,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,11 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { PasswordInput } from "@/components/ui/password-input-2";
+import {
+  signInWithCredentials,
+  signInWithGoogle,
+  registerUser,
+} from "@/lib/auth-client";
 
 enum AuthView {
   SIGN_IN = "sign-in",
@@ -151,15 +157,18 @@ function AuthError({ message }: AuthErrorProps) {
 
 interface AuthSocialButtonsProps {
   isLoading: boolean;
+  onGoogleClick?: () => void;
 }
 
-function AuthSocialButtons({ isLoading }: AuthSocialButtonsProps) {
+function AuthSocialButtons({ isLoading, onGoogleClick }: AuthSocialButtonsProps) {
   return (
     <div data-slot="auth-social-buttons" className="mt-6 w-full">
       <Button
+        type="button"
         variant="outline"
         className="h-12 w-full border-border/50 bg-background/50"
         disabled={isLoading}
+        onClick={onGoogleClick}
       >
         <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
           <path
@@ -209,6 +218,7 @@ interface AuthSignInProps {
 }
 
 function AuthSignIn({ onForgotPassword, onSignUp }: AuthSignInProps) {
+  const router = useRouter();
   const [formState, setFormState] = React.useState<FormState>({
     isLoading: false,
     error: null,
@@ -227,15 +237,33 @@ function AuthSignIn({ onForgotPassword, onSignUp }: AuthSignInProps) {
   const onSubmit = async (data: SignInFormValues) => {
     setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const result = await signInWithCredentials(data.email, data.password);
+      
+      // Check if sign-in was successful
+      if (!result?.error) {
+        // Redirect to profile page after successful sign-in
+        window.location.href = "/profile";
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
       setFormState((prev) => ({
         ...prev,
-        error: "Invalid email or password",
+        error: error instanceof Error ? error.message : "Invalid email or password",
       }));
-    } catch {
+    } finally {
+      setFormState((prev) => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
+      await signInWithGoogle();
+    } catch (error) {
       setFormState((prev) => ({
         ...prev,
-        error: "An unexpected error occurred",
+        error: "Failed to sign in with Google",
       }));
     } finally {
       setFormState((prev) => ({ ...prev, isLoading: false }));
@@ -326,7 +354,7 @@ function AuthSignIn({ onForgotPassword, onSignUp }: AuthSignInProps) {
 
       <div className="mt-8 space-y-6">
         <AuthSeparator />
-        <AuthSocialButtons isLoading={formState.isLoading} />
+        <AuthSocialButtons isLoading={formState.isLoading} onGoogleClick={handleGoogleSignIn} />
         <p className="text-center text-sm text-muted-foreground">
           No account?{" "}
           <Button
@@ -348,6 +376,7 @@ interface AuthSignUpProps {
 }
 
 function AuthSignUp({ onSignIn }: AuthSignUpProps) {
+  const router = useRouter();
   const [formState, setFormState] = React.useState<FormState>({
     isLoading: false,
     error: null,
@@ -370,15 +399,36 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
   const onSubmit = async (data: SignUpFormValues) => {
     setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Register the user
+      await registerUser({
+        name: data.name,
+        email: data.email,
+        password: data.password,
+      });
+
+      // Automatically sign in after successful registration
+      await signInWithCredentials(data.email, data.password);
+      
+      // Always redirect to profile page after successful registration and sign-in
+      window.location.href = "/profile";
+    } catch (error) {
       setFormState((prev) => ({
         ...prev,
-        error: "Email already registered",
+        error: error instanceof Error ? error.message : "Registration failed. Please try again.",
       }));
-    } catch {
+    } finally {
+      setFormState((prev) => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
+      await signInWithGoogle();
+    } catch (error) {
       setFormState((prev) => ({
         ...prev,
-        error: "An unexpected error occurred",
+        error: "Failed to sign in with Google",
       }));
     } finally {
       setFormState((prev) => ({ ...prev, isLoading: false }));
@@ -464,11 +514,11 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
           <div className="flex items-start space-x-2">
             <Checkbox
               id="terms"
-              checked={terms}
-              onCheckedChange={(checked) =>
-                setValue("terms", checked === true, { shouldValidate: true })
+              isSelected={terms}
+              onChange={(isSelected) =>
+                setValue("terms", isSelected, { shouldValidate: true })
               }
-              disabled={formState.isLoading}
+              isDisabled={formState.isLoading}
             />
             <div className="space-y-1">
               <Label htmlFor="terms" className="text-sm">
@@ -506,7 +556,7 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
 
       <div className="mt-8 space-y-6">
         <AuthSeparator />
-        <AuthSocialButtons isLoading={formState.isLoading} />
+        <AuthSocialButtons isLoading={formState.isLoading} onGoogleClick={handleGoogleSignIn} />
         <p className="text-center text-sm text-muted-foreground">
           Have an account?{" "}
           <Button

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import React from "react";
 import { ChevronDown, Grid2x2PlusIcon, MenuIcon, SearchIcon, LinkIcon, QrCodeIcon } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { CommandItem, SearchModal } from "@/components/ui/search-modal";
 import { Sheet, SheetContent, SheetFooter } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Dropdown } from "@/components/ui/dropdown";
+import { signOut } from "@/lib/auth-client";
 
 const links = [
   { label: "Books", href: "#Books" },
@@ -65,8 +67,11 @@ export function Header({
 }: HeaderProps) {
   const [open, setOpen] = React.useState(false);
   const [internalProfileMenuOpen, setInternalProfileMenuOpen] = React.useState(false);
+  const { data: session, status } = useSession();
+  const isAuthenticated = status === "authenticated";
+  
   const avatarSrc =
-    profileAvatarSrc ??
+    profileAvatarSrc ?? session?.user?.image ??
     "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&q=80";
   const profileLabel = profileButtonLabel ?? "Open profile menu";
   const isProfileMenuOpen = profileMenuOpen ?? internalProfileMenuOpen;
@@ -74,6 +79,18 @@ export function Header({
   const handleProfileMenuOpenChange = (nextOpen: boolean) => {
     if (profileMenuOpen === undefined) {
       setInternalProfileMenuOpen(nextOpen);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      // signOut already redirects to /auth, but we can ensure it with window.location
+      window.location.href = "/auth";
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Fallback: redirect even if signOut fails
+      window.location.href = "/auth";
     }
   };
 
@@ -158,10 +175,19 @@ export function Header({
               </Dropdown.Trigger>
               <Dropdown.Popover>
                 <Dropdown.Menu>
-                  <Dropdown.Item label="Share profile link" icon={LinkIcon} />
-                  <Dropdown.Item label="Show QR code" icon={QrCodeIcon} />
-                  <Dropdown.Separator />
-                  <Dropdown.Item label="Log out" />
+                  {isAuthenticated ? (
+                    <>
+                      <Dropdown.Item label="Share profile link" icon={LinkIcon} />
+                      <Dropdown.Item label="Show QR code" icon={QrCodeIcon} />
+                      <Dropdown.Separator />
+                      <Dropdown.Item label="Log out" onClick={handleLogout} />
+                    </>
+                  ) : (
+                    <>
+                      <Dropdown.Item label="Sign in" onClick={() => { window.location.href = "/auth"; }} />
+                      <Dropdown.Item label="Create account" onClick={() => { window.location.href = "/auth"; }} />
+                    </>
+                  )}
                 </Dropdown.Menu>
               </Dropdown.Popover>
             </Dropdown.Root>

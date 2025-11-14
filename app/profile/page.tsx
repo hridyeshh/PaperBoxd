@@ -4,6 +4,7 @@ import Image from "next/image";
 import * as React from "react";
 import { UserRound, Users } from "lucide-react";
 
+import { signIn, useSession } from "next-auth/react";
 import { Dock, DockToggle } from "@/components/ui/dock";
 import { InteractiveHoverButton } from "@/components/ui/buttons";
 import {
@@ -39,6 +40,7 @@ type ActivityView = "Friends" | "Me";
 const BOOKSHELF_PAGE_SIZE = 12;
 const LIKES_PAGE_SIZE = 12;
 const TBR_PAGE_SIZE = 12;
+const AUTHORS_PAGE_SIZE = 12;
 
 type ActivityEntry = {
   id: string;
@@ -103,13 +105,26 @@ type AuthorStat = {
   cover: string;
 };
 
-function ProfileSummary({ profile, bookshelfCount, onEdit }: { profile: EditableProfile; bookshelfCount: number; onEdit: () => void }) {
+function ProfileSummary({
+  profile,
+  bookshelfCount,
+  onEdit,
+  canEdit,
+}: {
+  profile: EditableProfile;
+  bookshelfCount: number;
+  onEdit: () => void;
+  canEdit: boolean;
+}) {
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <div className="relative mx-auto h-28 w-28 sm:mx-0">
           <Image
-            src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&q=80"
+            src={
+              profile.avatar ||
+              "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&q=80"
+            }
             alt="Profile avatar"
             fill
             className="rounded-full border-4 border-background object-cover shadow-lg"
@@ -135,15 +150,31 @@ function ProfileSummary({ profile, bookshelfCount, onEdit }: { profile: Editable
           </div>
         </div>
       </div>
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <InteractiveHoverButton
-          text="Edit profile"
-          showIdleAccent
-          invert
-          className="w-full max-w-xs"
-          onClick={onEdit}
-        />
+      {canEdit ? (
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <InteractiveHoverButton
+            text="Edit profile"
+            showIdleAccent
+            invert
+            className="w-full max-w-xs"
+            onClick={onEdit}
+          />
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function AuthRequiredBanner({ onSignIn }: { onSignIn: () => void }) {
+  return (
+    <section className="flex flex-col items-center gap-4 rounded-3xl border border-border/70 bg-muted/20 p-10 text-center">
+      <div className="space-y-2">
+        <p className="text-lg font-semibold text-foreground">Sign in to explore this profile</p>
+        <p className="text-sm text-muted-foreground">
+          You can preview the basics, but you’ll need to log in to browse bookshelves, activity, and lists.
+        </p>
       </div>
+      <InteractiveHoverButton text="Sign in or create account" showIdleAccent className="w-full max-w-sm" onClick={onSignIn} />
     </section>
   );
 }
@@ -513,11 +544,102 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = React.useState<DockLabel>("Profile");
   const [activityView, setActivityView] = React.useState<ActivityView>("Friends");
   const [profileData, setProfileData] = React.useState<EditableProfile>(defaultProfile);
+  const [activeUsername, setActiveUsername] = React.useState(defaultProfile.username);
   const [bookshelfPage, setBookshelfPage] = React.useState(1);
   const [likesPage, setLikesPage] = React.useState(1);
   const [tbrPage, setTbrPage] = React.useState(1);
   const [isEditOpen, setIsEditOpen] = React.useState(false);
   const [authorsPage, setAuthorsPage] = React.useState(1);
+  const [isSavingProfile, setIsSavingProfile] = React.useState(false);
+  const [profileSaveError, setProfileSaveError] = React.useState<string | null>(null);
+  const { data: session, status } = useSession();
+  const isAuthenticated = status === "authenticated";
+  
+  // Track which username we've loaded to prevent duplicate loads
+  const loadedUsernameRef = React.useRef<string | null>(null);
+  
+  // Load profile data when authenticated
+  React.useEffect(() => {
+    // Wait for session to be loaded (not loading)
+    if (status === "loading") {
+      return; // Wait for session to load
+    }
+
+    if (isAuthenticated && session?.user?.username) {
+      const sessionUsername = session.user.username;
+      
+      // Always set activeUsername to session username
+      setActiveUsername(sessionUsername);
+      
+      // Load profile data if we haven't loaded it for this username yet
+      if (loadedUsernameRef.current !== sessionUsername) {
+        loadedUsernameRef.current = sessionUsername;
+        
+        console.log(`[Profile] Loading profile for username: ${sessionUsername}`);
+        
+        // Load profile data for the logged-in user
+        fetch(`/api/users/${encodeURIComponent(sessionUsername)}`)
+          .then((res) => {
+            if (!res.ok) {
+              if (res.status === 404) {
+                console.warn(`User not found: ${sessionUsername}. This might mean the user doesn't exist in the database yet.`);
+                // User doesn't exist - this shouldn't happen if they just logged in
+                // But we'll handle it gracefully by showing default profile
+                return null;
+              }
+              throw new Error(`Failed to fetch profile: ${res.status}`);
+            }
+            return res.json();
+          })
+          .then((data) => {
+            if (data?.user) {
+              setProfileData({
+                username: data.user.username || defaultProfile.username,
+                name: data.user.name || defaultProfile.name,
+                birthday: data.user.birthday ? new Date(data.user.birthday).toISOString().split("T")[0] : defaultProfile.birthday,
+                email: data.user.email || defaultProfile.email,
+                bio: data.user.bio || defaultProfile.bio,
+                pronouns: Array.isArray(data.user.pronouns) ? data.user.pronouns : defaultProfile.pronouns,
+                links: Array.isArray(data.user.links) ? data.user.links.join(", ") : (data.user.links || defaultProfile.links),
+                gender: data.user.gender || defaultProfile.gender,
+                isPublic: typeof data.user.isPublic === "boolean" ? data.user.isPublic : defaultProfile.isPublic,
+                avatar: data.user.avatar || defaultProfile.avatar,
+              });
+            } else {
+              // User not found - use session data as fallback
+              console.warn("User profile not found in database, using session data");
+              setProfileData({
+                username: sessionUsername,
+                name: session?.user?.name || defaultProfile.name,
+                email: session?.user?.email || defaultProfile.email,
+                bio: defaultProfile.bio,
+                pronouns: defaultProfile.pronouns,
+                links: defaultProfile.links,
+                gender: defaultProfile.gender,
+                isPublic: defaultProfile.isPublic,
+                avatar: session?.user?.image || defaultProfile.avatar,
+                birthday: defaultProfile.birthday,
+              });
+            }
+          })
+          .catch((err) => {
+            console.error("Failed to load user profile:", err);
+            // Reset ref so it can retry
+            loadedUsernameRef.current = null;
+          });
+      }
+    } else if (status === "unauthenticated") {
+      // Reset state when unauthenticated
+      loadedUsernameRef.current = null;
+      setActiveUsername(defaultProfile.username);
+      setProfileData(defaultProfile);
+    }
+  }, [isAuthenticated, status, session?.user?.username]);
+  
+  const isOwnProfile = isAuthenticated && session?.user?.username === activeUsername;
+  const handleAuthPrompt = React.useCallback(() => {
+    signIn();
+  }, []);
   const authorStats = React.useMemo<AuthorStat[]>(() => {
     const placeholderCover = "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
     const map = new Map<string, AuthorStat>();
@@ -547,6 +669,73 @@ export default function ProfilePage() {
     });
     return Array.from(map.values()).sort((a, b) => b.read + b.tbr - (a.read + a.tbr));
   }, []);
+
+  const handleProfileSave = React.useCallback(async () => {
+    try {
+      setIsSavingProfile(true);
+      setProfileSaveError(null);
+
+      const payload = {
+        username: profileData.username,
+        name: profileData.name,
+        bio: profileData.bio,
+        avatar: profileData.avatar,
+        birthday: profileData.birthday || null,
+        gender: profileData.gender,
+        // Ensure pronouns is always an array, never an empty string
+        pronouns: Array.isArray(profileData.pronouns) 
+          ? profileData.pronouns.filter((p) => p && typeof p === "string" && p.trim().length > 0)
+          : [],
+        links: profileData.links
+          ? profileData.links
+              .split(",")
+              .map((link) => link.trim())
+              .filter(Boolean)
+          : [],
+        isPublic: profileData.isPublic,
+      };
+
+      const response = await fetch(`/api/users/${activeUsername}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to update profile");
+      }
+
+      if (result.user) {
+        setProfileData((prev) => ({
+          ...prev,
+          username: result.user.username ?? prev.username,
+          name: result.user.name ?? prev.name,
+          bio: result.user.bio ?? prev.bio,
+          avatar: result.user.avatar ?? prev.avatar,
+          birthday: result.user.birthday ?? prev.birthday,
+          gender: result.user.gender ?? prev.gender,
+          pronouns: Array.isArray(result.user.pronouns) ? result.user.pronouns : prev.pronouns,
+          links: Array.isArray(result.user.links)
+            ? result.user.links.join(", ")
+            : result.user.links ?? prev.links,
+          isPublic:
+            typeof result.user.isPublic === "boolean" ? result.user.isPublic : prev.isPublic,
+        }));
+
+        if (result.user.username && result.user.username !== activeUsername) {
+          setActiveUsername(result.user.username);
+        }
+      }
+
+      setIsEditOpen(false);
+    } catch (error) {
+      setProfileSaveError(error instanceof Error ? error.message : "Failed to update profile");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  }, [profileData, activeUsername]);
   const dockItems = React.useMemo(
     () =>
       dockLabels.map((label) => ({
@@ -562,102 +751,111 @@ export default function ProfilePage() {
         <Header />
         <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-12 px-4 pb-16 pt-12 md:px-8">
           <header className="flex flex-col gap-6">
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,2.5fr)_minmax(0,3fr)]">
-              <div>
-                <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-                  Your saved ideas
-                </h1>
-                <p className="text-sm text-muted-foreground">All your boards, pins, and collages in one place.</p>
-              </div>
-              <ProfileSummary profile={profileData} bookshelfCount={bookshelfBooks.length} onEdit={() => setIsEditOpen(true)} />
+            <div className={`grid gap-6 ${isOwnProfile ? "lg:grid-cols-[minmax(0,2.5fr)_minmax(0,3fr)]" : ""}`}>
+              {isOwnProfile ? (
+                <div>
+                  <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+                    Your saved ideas
+                  </h1>
+                  <p className="text-sm text-muted-foreground">All your boards, pins, and collages in one place.</p>
+                </div>
+              ) : null}
+              <ProfileSummary
+                profile={profileData}
+                bookshelfCount={bookshelfBooks.length}
+                onEdit={() => {
+                  setProfileSaveError(null);
+                  setIsEditOpen(true);
+                }}
+                canEdit={Boolean(isOwnProfile)}
+              />
             </div>
             <Dock items={dockItems} activeLabel={activeTab} className="justify-start px-0" />
           </header>
 
-          {activeTab === "Profile" ? (
-            <div className="space-y-12">
-              <BookCarousel
-                title="Favourite books"
-                subtitle="A quick glance at the reads I can’t stop recommending."
-                books={topBooks}
-              />
-              <BookCarousel
-                title="Books that I love"
-                subtitle="Comfort stories and obsessions that always earn a re-read."
-                books={favoriteBooks}
-              />
-            </div>
-          ) : activeTab === "Activity" ? (
-            <div className="space-y-10">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-semibold text-foreground">Activity</h2>
-                  <p className="text-sm text-muted-foreground">See what friends are tracking or revisit your own updates.</p>
-                </div>
-                <DockToggle
-                  items={[
-                    {
-                      label: "Friends",
-                      icon: Users,
-                      isActive: activityView === "Friends",
-                      onClick: () => setActivityView("Friends"),
-                    },
-                    {
-                      label: "Me",
-                      icon: UserRound,
-                      isActive: activityView === "Me",
-                      onClick: () => setActivityView("Me"),
-                    },
-                  ]}
+          {isAuthenticated ? (
+            activeTab === "Profile" ? (
+              <div className="space-y-12">
+                <BookCarousel
+                  title="Favourite books"
+                  subtitle="A quick glance at the reads I can’t stop recommending."
+                  books={topBooks}
+                />
+                <BookCarousel
+                  title="Books that I love"
+                  subtitle="Comfort stories and obsessions that always earn a re-read."
+                  books={favoriteBooks}
                 />
               </div>
-              <div className="grid gap-6 md:grid-cols-2">
-                {activityFeed[activityView].map((entry) => (
-                  <article
-                    key={entry.id}
-                    className="flex gap-4 rounded-3xl border border-border/70 bg-background/90 p-4 shadow-sm transition hover:-translate-y-1"
-                  >
-                    <div className="relative h-24 w-24 overflow-hidden rounded-2xl bg-muted">
-                      <Image src={entry.cover} alt={entry.detail} fill className="object-cover" sizes="96px" />
-                    </div>
-                    <div className="flex flex-1 flex-col justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">{entry.timeAgo}</p>
-                        <p className="text-base font-semibold text-foreground">
-                          {entry.name} {entry.action}
-                        </p>
-                        <p className="text-sm text-muted-foreground">{entry.detail}</p>
+            ) : activeTab === "Activity" ? (
+              <div className="space-y-10">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-foreground">Activity</h2>
+                    <p className="text-sm text-muted-foreground">See what friends are tracking or revisit your own updates.</p>
+                  </div>
+                  <DockToggle
+                    items={[
+                      {
+                        label: "Friends",
+                        icon: Users,
+                        isActive: activityView === "Friends",
+                        onClick: () => setActivityView("Friends"),
+                      },
+                      {
+                        label: "Me",
+                        icon: UserRound,
+                        isActive: activityView === "Me",
+                        onClick: () => setActivityView("Me"),
+                      },
+                    ]}
+                  />
+                </div>
+                <div className="grid gap-6 md:grid-cols-2">
+                  {activityFeed[activityView].map((entry) => (
+                    <article
+                      key={entry.id}
+                      className="flex gap-4 rounded-3xl border border-border/70 bg-background/90 p-4 shadow-sm transition hover:-translate-y-1"
+                    >
+                      <div className="relative h-24 w-24 overflow-hidden rounded-2xl bg-muted">
+                        <Image src={entry.cover} alt={entry.detail} fill className="object-cover" sizes="96px" />
                       </div>
-                      <button className="text-sm font-semibold text-primary transition hover:text-primary/80">
-                        View details
-                      </button>
-                    </div>
-                  </article>
-                ))}
+                      <div className="flex flex-1 flex-col justify-between">
+                        <div>
+                          <p className="text-sm text-muted-foreground">{entry.timeAgo}</p>
+                          <p className="text-base font-semibold text-foreground">
+                            {entry.name} {entry.action}
+                          </p>
+                          <p className="text-sm text-muted-foreground">{entry.detail}</p>
+                        </div>
+                        <button className="text-sm font-semibold text-primary transition hover:text-primary/80">
+                          View details
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : activeTab === "Authors" ? (
-            <AuthorsSection authors={authorStats} page={authorsPage} pageSize={12} onPageChange={setAuthorsPage} />
-          ) : activeTab === "Bookshelf" ? (
-            <BookshelfSection
-              books={bookshelfBooks}
-              page={bookshelfPage}
-              pageSize={BOOKSHELF_PAGE_SIZE}
-              onPageChange={setBookshelfPage}
-            />
-          ) : activeTab === "Likes" ? (
-            <LikesSection
-              books={likedBooks}
-              page={likesPage}
-              pageSize={LIKES_PAGE_SIZE}
-              onPageChange={setLikesPage}
-            />
-          ) : activeTab === "Lists" ? (
-            <ListsCarousel lists={readingLists} />
-          ) : activeTab === "'to-be-read'" ? (
-            <TbrSection books={tbrBooks} page={tbrPage} pageSize={TBR_PAGE_SIZE} onPageChange={setTbrPage} />
+            ) : activeTab === "Authors" ? (
+              <AuthorsSection authors={authorStats} page={authorsPage} pageSize={AUTHORS_PAGE_SIZE} onPageChange={setAuthorsPage} />
+            ) : activeTab === "Bookshelf" ? (
+              <BookshelfSection
+                books={bookshelfBooks}
+                page={bookshelfPage}
+                pageSize={BOOKSHELF_PAGE_SIZE}
+                onPageChange={setBookshelfPage}
+              />
+            ) : activeTab === "Likes" ? (
+              <LikesSection books={likedBooks} page={likesPage} pageSize={LIKES_PAGE_SIZE} onPageChange={setLikesPage} />
+            ) : activeTab === "Lists" ? (
+              <ListsCarousel lists={readingLists} />
+            ) : activeTab === "'to-be-read'" ? (
+              <TbrSection books={tbrBooks} page={tbrPage} pageSize={TBR_PAGE_SIZE} onPageChange={setTbrPage} />
+            ) : (
+              <TabPlaceholder label={activeTab} />
+            )
           ) : (
-            <TabPlaceholder label={activeTab} />
+            <AuthRequiredBanner onSignIn={handleAuthPrompt} />
           )}
         </div>
         <Sheet open={isEditOpen} onOpenChange={setIsEditOpen}>
@@ -675,7 +873,9 @@ export default function ProfilePage() {
               <EditProfileForm
                 profile={profileData}
                 onProfileChange={setProfileData}
-                onSubmitProfile={() => setIsEditOpen(false)}
+                onSubmitProfile={handleProfileSave}
+                isSubmitting={isSavingProfile}
+                submitError={profileSaveError}
               />
             </div>
           </SheetContent>
