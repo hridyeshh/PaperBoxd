@@ -1,6 +1,6 @@
 "use client";
 
-import { InteractiveHoverButton } from "@/components/ui/shared/interactive-hover-button";
+import { InteractiveHoverButton } from "@/components/ui/buttons";
 
 function InteractiveHoverButtonDemo() {
   return (

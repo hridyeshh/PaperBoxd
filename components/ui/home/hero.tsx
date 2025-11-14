@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 
-import { InteractiveHoverButton } from "@/components/ui/shared/interactive-hover-button";
+import { InteractiveHoverButton } from "@/components/ui/buttons";
 
 function Hero() {
   const [titleNumber, setTitleNumber] = useState(0);
