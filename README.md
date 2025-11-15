@@ -541,6 +541,3 @@ paperboxd/
 ## Contributing
 
 PaperBoxd is open source, but contributions are managed through our internal development process.
----
-
-
