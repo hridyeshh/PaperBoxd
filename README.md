@@ -540,23 +540,7 @@ paperboxd/
 
 ## Contributing
 
-PaperBoxd is open source, but contributions are managed through our internal development process. If you're interested in contributing, please reach out through our official channels.
-
+PaperBoxd is open source, but contributions are managed through our internal development process.
 ---
 
-## License
 
-MIT License - See LICENSE file for details
-
----
-
-## Acknowledgments
-
-- Inspired by [Letterboxd](https://letterboxd.com/) for the social tracking concept
-- Built with [Next.js](https://nextjs.org/), [React](https://react.dev/), and the open-source community
-- Uses [Radix UI](https://www.radix-ui.com/) for accessible components
-- [Shadcn UI](https://ui.shadcn.com/) patterns for component architecture
-
----
-
-**Built with ❤️ for readers everywhere.**
