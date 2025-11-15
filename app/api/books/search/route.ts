@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/db/mongodb";
 import Book from "@/lib/db/models/Book";
+import {
+  searchOpenLibraryWithFallback,
+  transformOpenLibraryBook,
+} from "@/lib/api/open-library";
 
 /**
- * Search for books using Google Books API with database caching
+ * Search for books using Open Library API (primary) with Google Books API fallback
+ *
+ * Search Strategy:
+ * 1. Check database cache first
+ * 2. Try Open Library API
+ * 3. Fallback to Google Books API if Open Library fails or returns no results
  *
  * Query Parameters:
  * - q: Search query (required)
@@ -66,19 +75,58 @@ export async function GET(request: NextRequest) {
         kind: "books#volumes",
         totalItems: cachedBooks.length,
         items: cachedBooks.map((book) => ({
-          id: book.googleBooksId,
+          id: book.googleBooksId || book.openLibraryId,
           volumeInfo: book.volumeInfo,
           saleInfo: book.saleInfo,
+          apiSource: book.apiSource,
           fromCache: true,
         })),
       });
     }
 
-    // If not enough cached results, fetch from Google Books API
+    // Step 2: Try Open Library API first
+    console.log(`[Search] Trying Open Library for query: "${query}"`);
+    const openLibraryResult = await searchOpenLibraryWithFallback(
+      query,
+      maxResults,
+      startIndex
+    );
+
+    if (openLibraryResult.success && openLibraryResult.data) {
+      const transformedBooks = openLibraryResult.data.docs.map(transformOpenLibraryBook);
+
+      // Cache the results in our database
+      await Promise.all(
+        transformedBooks.map(async (book: any) => {
+          try {
+            await Book.findOrCreateFromOpenLibrary(book);
+          } catch (error) {
+            console.error(`Failed to cache Open Library book ${book.openLibraryId}:`, error);
+          }
+        })
+      );
+
+      console.log(`[Search] Open Library returned ${transformedBooks.length} results`);
+
+      return NextResponse.json({
+        kind: "books#volumes",
+        totalItems: openLibraryResult.data.numFound,
+        items: transformedBooks.map((book: any) => ({
+          id: book.openLibraryId,
+          volumeInfo: book.volumeInfo,
+          apiSource: "open_library",
+          fromCache: false,
+        })),
+      });
+    }
+
+    // Step 3: Fallback to Google Books API
+    console.log(`[Search] Open Library failed or returned no results. Falling back to Google Books API`);
+
     const apiKey = process.env.GOOGLE_BOOKS_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: "Google Books API key not configured" },
+        { error: "Google Books API key not configured and Open Library search failed" },
         { status: 500 }
       );
     }
@@ -108,8 +156,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    console.log(`[Search] Google Books returned ${data.items?.length || 0} results`);
+
     return NextResponse.json({
       ...data,
+      apiSource: "google_books",
       fromCache: false,
     });
   } catch (error) {

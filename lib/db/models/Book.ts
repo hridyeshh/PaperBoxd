@@ -63,19 +63,23 @@ export interface ISaleInfo {
 }
 
 export interface IBook extends Document {
-  // Google Books ID (primary identifier)
-  googleBooksId: string;
+  // Google Books ID (primary identifier for Google Books)
+  googleBooksId?: string;
 
-  // Volume Information (from Google Books API)
+  // Open Library ID (primary identifier for Open Library)
+  openLibraryId?: string;
+  openLibraryKey?: string; // e.g., "/works/OL45804W"
+
+  // Volume Information (normalized from either API)
   volumeInfo: IVolumeInfo;
 
-  // Sale Information
+  // Sale Information (Google Books only)
   saleInfo?: ISaleInfo;
 
   // Caching Metadata
   cachedAt: Date;
   lastUpdated: Date;
-  apiSource: "google_books";
+  apiSource: "google_books" | "open_library";
 
   // Usage Statistics (track how often this book is referenced)
   usageCount: number;
@@ -101,6 +105,7 @@ export interface IBook extends Document {
 // Model interface with static methods
 export interface IBookModel extends Model<IBook> {
   findOrCreateFromGoogleBooks(googleBooksData: any): Promise<IBook>;
+  findOrCreateFromOpenLibrary(openLibraryData: any): Promise<IBook>;
 }
 
 // =====================================================
@@ -157,13 +162,22 @@ const SaleInfoSchema = new Schema({
 
 const BookSchema = new Schema<IBook>(
   {
-    // Google Books ID (unique identifier)
+    // Google Books ID (unique identifier for Google Books)
     googleBooksId: {
       type: String,
-      required: true,
+      sparse: true, // Allow null/undefined while maintaining uniqueness
       unique: true,
       index: true,
     },
+
+    // Open Library ID (unique identifier for Open Library)
+    openLibraryId: {
+      type: String,
+      sparse: true, // Allow null/undefined while maintaining uniqueness
+      unique: true,
+      index: true,
+    },
+    openLibraryKey: { type: String }, // e.g., "/works/OL45804W"
 
     // Volume Information
     volumeInfo: {
@@ -171,13 +185,13 @@ const BookSchema = new Schema<IBook>(
       required: true,
     },
 
-    // Sale Information
+    // Sale Information (Google Books only)
     saleInfo: SaleInfoSchema,
 
     // Caching Metadata
     cachedAt: { type: Date, default: Date.now },
     lastUpdated: { type: Date, default: Date.now },
-    apiSource: { type: String, default: "google_books" },
+    apiSource: { type: String, enum: ["google_books", "open_library"], required: true },
 
     // Usage Statistics
     usageCount: { type: Number, default: 0 },
@@ -283,6 +297,43 @@ BookSchema.statics.findOrCreateFromGoogleBooks = async function (
       cachedAt: new Date(),
       lastUpdated: new Date(),
       apiSource: "google_books",
+    });
+  }
+
+  return book;
+};
+
+// Find or create book from Open Library data
+BookSchema.statics.findOrCreateFromOpenLibrary = async function (
+  openLibraryData: any
+) {
+  const openLibraryId = openLibraryData.openLibraryId;
+  const openLibraryKey = openLibraryData.key;
+
+  let book = await this.findOne({ openLibraryId });
+
+  if (book) {
+    // Update last accessed and usage count
+    book.usageCount += 1;
+    book.lastAccessed = new Date();
+
+    // Update cache if stale
+    if (book.isCacheStale()) {
+      book.volumeInfo = openLibraryData.volumeInfo;
+      book.openLibraryKey = openLibraryKey;
+      book.lastUpdated = new Date();
+    }
+
+    await book.save();
+  } else {
+    // Create new book entry
+    book = await this.create({
+      openLibraryId,
+      openLibraryKey,
+      volumeInfo: openLibraryData.volumeInfo,
+      cachedAt: new Date(),
+      lastUpdated: new Date(),
+      apiSource: "open_library",
     });
   }
 

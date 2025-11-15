@@ -28,11 +28,19 @@ export async function POST(
   try {
     const { username } = await context.params;
     const body = await request.json();
-    const { googleBooksId, type, ...additionalData } = body;
+    const { googleBooksId, openLibraryId, bookId, type, ...additionalData } = body;
 
-    if (!username || !googleBooksId || !type) {
+    if (!username || !type) {
       return NextResponse.json(
-        { error: "Username, googleBooksId, and type are required" },
+        { error: "Username and type are required" },
+        { status: 400 }
+      );
+    }
+
+    // Must provide at least one book identifier
+    if (!googleBooksId && !openLibraryId && !bookId) {
+      return NextResponse.json(
+        { error: "Either googleBooksId, openLibraryId, or bookId is required" },
         { status: 400 }
       );
     }
@@ -53,38 +61,64 @@ export async function POST(
     // Connect to database
     await connectDB();
 
-    // Find or create book in our database
-    const apiKey = process.env.GOOGLE_BOOKS_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "Google Books API key not configured" },
-        { status: 500 }
-      );
-    }
-
-    let book = await Book.findOne({ googleBooksId });
-
-    if (!book) {
-      // Fetch from Google Books API and cache
-      const googleBooksUrl = `https://www.googleapis.com/books/v1/volumes/${googleBooksId}?key=${apiKey}`;
-      const response = await fetch(googleBooksUrl);
-
-      if (!response.ok) {
-        return NextResponse.json(
-          { error: "Book not found in Google Books" },
-          { status: 404 }
-        );
-      }
-
-      const googleBooksData = await response.json();
-      await Book.findOrCreateFromGoogleBooks(googleBooksData);
+    // Find book by provided identifier
+    let book = null;
+    if (bookId) {
+      book = await Book.findById(bookId);
+    } else if (googleBooksId) {
       book = await Book.findOne({ googleBooksId });
+    } else if (openLibraryId) {
+      book = await Book.findOne({ openLibraryId });
+    }
+
+    // If book not found and we have googleBooksId, try to fetch from Google Books API
+    if (!book && googleBooksId) {
+      const apiKey = process.env.GOOGLE_BOOKS_API_KEY;
+      if (apiKey) {
+        try {
+          const googleBooksUrl = `https://www.googleapis.com/books/v1/volumes/${googleBooksId}?key=${apiKey}`;
+          const response = await fetch(googleBooksUrl);
+
+          if (response.ok) {
+            const googleBooksData = await response.json();
+            await Book.findOrCreateFromGoogleBooks(googleBooksData);
+            book = await Book.findOne({ googleBooksId });
+          }
+        } catch (error) {
+          console.error("Failed to fetch from Google Books:", error);
+        }
+      }
+    }
+
+    // If book not found and we have openLibraryId, try to fetch from Open Library API
+    if (!book && openLibraryId) {
+      try {
+        // Import Open Library functions
+        const { getOpenLibraryWork, transformOpenLibraryBook } = await import("@/lib/api/open-library");
+        const workData = await getOpenLibraryWork(openLibraryId);
+        const transformedData = transformOpenLibraryBook({
+          key: workData.key || `/works/${openLibraryId}`,
+          title: workData.title || "",
+          author_name: workData.authors?.map((a: any) => a.name) || [],
+          cover_i: undefined, // Will be handled in transformation
+          first_publish_year: workData.first_publish_year,
+          isbn: workData.isbn || [],
+          publisher: workData.publishers || [],
+          subject: workData.subjects || [],
+          ratings_average: workData.ratings_average,
+          ratings_count: workData.ratings_count,
+        });
+        await Book.findOrCreateFromOpenLibrary(transformedData);
+        book = await Book.findOne({ openLibraryId });
+      } catch (error) {
+        console.error("Failed to fetch from Open Library:", error);
+      }
     }
 
     if (!book) {
       return NextResponse.json(
-        { error: "Failed to load book information" },
-        { status: 500 }
+        { error: "Book not found. Please ensure the book exists in our database." },
+        { status: 404 }
       );
     }
 
@@ -96,20 +130,88 @@ export async function POST(
     }
 
     // Prepare book reference
-    const bookId = book._id as mongoose.Types.ObjectId;
+    const bookIdObj = book._id as mongoose.Types.ObjectId;
     const bookReference = {
-      bookId,
-      googleBooksId: book.googleBooksId,
+      bookId: bookIdObj,
+      googleBooksId: book.googleBooksId || undefined,
       title: book.volumeInfo.title,
       author: book.volumeInfo.authors[0] || "Unknown Author",
       cover:
         book.volumeInfo.imageLinks?.thumbnail ||
         book.volumeInfo.imageLinks?.smallThumbnail ||
+        book.volumeInfo.imageLinks?.medium ||
         "",
       mood: additionalData.mood,
     };
 
-    // Add to appropriate collection
+    // Helper function to check if book exists in collection
+    const findBookInCollection = (collection: any[]) => {
+      return collection.findIndex((item: any) => {
+        const itemBookId = item.bookId?.toString() || item.bookId;
+        const currentBookId = bookIdObj.toString();
+        return (
+          itemBookId === currentBookId ||
+          (book.googleBooksId && item.googleBooksId === book.googleBooksId) ||
+          (book.openLibraryId && item.openLibraryId === book.openLibraryId) ||
+          item.title?.toLowerCase() === book.volumeInfo.title?.toLowerCase()
+        );
+      });
+    };
+
+    // Check if book already exists and handle toggle (remove if exists, add if not)
+    let existingIndex = -1;
+    let isRemoving = false;
+
+    switch (type) {
+      case "bookshelf":
+        existingIndex = findBookInCollection(user.bookshelf);
+        break;
+      case "tbr":
+        existingIndex = findBookInCollection(user.tbrBooks);
+        break;
+      case "liked":
+        existingIndex = findBookInCollection(user.likedBooks);
+        break;
+      case "top":
+        existingIndex = findBookInCollection(user.topBooks);
+        break;
+      case "favorite":
+        existingIndex = findBookInCollection(user.favoriteBooks);
+        break;
+      case "currently_reading":
+        existingIndex = findBookInCollection(user.currentlyReading);
+        break;
+    }
+
+    // If book exists, remove it (toggle off)
+    if (existingIndex !== -1) {
+      isRemoving = true;
+      switch (type) {
+        case "bookshelf":
+          user.bookshelf.splice(existingIndex, 1);
+          user.totalBooksRead = Math.max(0, user.totalBooksRead - 1);
+          // Note: We don't decrement book stats here as other users might have the book
+          break;
+        case "tbr":
+          user.tbrBooks.splice(existingIndex, 1);
+          break;
+        case "liked":
+          user.likedBooks.splice(existingIndex, 1);
+          break;
+        case "top":
+          user.topBooks.splice(existingIndex, 1);
+          break;
+        case "favorite":
+          user.favoriteBooks.splice(existingIndex, 1);
+          break;
+        case "currently_reading":
+          user.currentlyReading.splice(existingIndex, 1);
+          break;
+      }
+    }
+
+    // If not removing, add to appropriate collection
+    if (!isRemoving) {
     switch (type) {
       case "bookshelf":
         user.bookshelf.push({
@@ -130,7 +232,7 @@ export async function POST(
         // Add activity
         user.activities.push({
           type: "read",
-          bookId,
+          bookId: bookIdObj,
           rating: additionalData.rating,
           timestamp: new Date(),
         });
@@ -148,7 +250,7 @@ export async function POST(
         // Add activity
         user.activities.push({
           type: "added_to_list",
-          bookId,
+          bookId: bookIdObj,
           timestamp: new Date(),
         });
         break;
@@ -164,7 +266,7 @@ export async function POST(
         // Add activity
         user.activities.push({
           type: "liked",
-          bookId,
+          bookId: bookIdObj,
           timestamp: new Date(),
         });
         break;
@@ -195,17 +297,21 @@ export async function POST(
         // Add activity
         user.activities.push({
           type: "started_reading",
-          bookId,
+          bookId: bookIdObj,
           timestamp: new Date(),
         });
         break;
+      }
     }
 
     await user.save();
 
     return NextResponse.json({
-      message: `Book added to ${type} successfully`,
+      message: isRemoving 
+        ? `Book removed from ${type} successfully`
+        : `Book added to ${type} successfully`,
       book: bookReference,
+      removed: isRemoving,
     });
   } catch (error) {
     console.error("Add book error:", error);

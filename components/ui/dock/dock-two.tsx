@@ -34,7 +34,7 @@ const DockButton = React.forwardRef<HTMLButtonElement, DockItem & { isActive?: b
   ({ label, onClick, className, isActive }, ref) => (
     <div
       className={cn(
-        "flex-1 transition-all duration-200 ease-out hover:mr-3",
+        "flex-1 transition-transform duration-200 ease-out hover:scale-[1.02]",
         className,
       )}
     >
@@ -44,13 +44,16 @@ const DockButton = React.forwardRef<HTMLButtonElement, DockItem & { isActive?: b
         onClick={onClick}
         showIdleAccent={false}
         hideIcon
+        invert={isActive}
+        accentColor="bg-foreground dark:bg-white"
+        hoverTextClass="text-background dark:text-zinc-950"
         aria-pressed={isActive}
         data-active={isActive ? "true" : "false"}
         className={cn(
           "w-full min-w-[110px] px-1 py-2 text-sm font-semibold transition-all duration-200 md:text-base",
           isActive
             ? "border-foreground/50 bg-foreground text-background hover:text-background dark:border-white/60 dark:bg-white dark:text-zinc-950 dark:hover:text-zinc-950"
-            : "border-transparent bg-transparent text-foreground hover:text-background hover:dark:text-zinc-950",
+            : "border-transparent bg-transparent text-foreground",
         )}
       />
     </div>
@@ -81,4 +84,3 @@ const Dock = React.forwardRef<HTMLDivElement, DockProps>(({ items, className, ac
 Dock.displayName = "Dock";
 
 export { Dock };
-

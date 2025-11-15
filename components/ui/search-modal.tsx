@@ -20,6 +20,7 @@ import { DockToggle } from '@/components/ui/dock';
 
 import { LucideIcon, SearchIcon, Loader2, BookOpen, User, BookMarked } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { createBookSlug } from '@/lib/utils/book-slug';
 
 export type CommandItem = {
 	id: string;
@@ -104,7 +105,13 @@ export function SearchModal({ children, data }: SearchModalProps) {
 
 				switch (searchType) {
 					case 'Books':
-						response = await fetch(`/api/books/search?q=${encodeURIComponent(query)}&maxResults=10`);
+						try {
+							response = await fetch(`/api/books/search?q=${encodeURIComponent(query)}&maxResults=10`);
+						} catch (fetchError) {
+							// Network error (connection failed, CORS, etc.)
+							throw new Error(`Network error: Unable to connect to search API. Please check your connection.`);
+						}
+						
 						if (!response.ok) {
 							let errorMessage = `Failed to search books (${response.status})`;
 							try {
@@ -115,7 +122,12 @@ export function SearchModal({ children, data }: SearchModalProps) {
 							}
 							throw new Error(errorMessage);
 						}
-						result = await response.json();
+						
+						try {
+							result = await response.json();
+						} catch (parseError) {
+							throw new Error(`Invalid response from search API. Please try again.`);
+						}
 						if (result.items && Array.isArray(result.items)) {
 							const books: BookSearchResult[] = result.items.map((item: any) => ({
 								id: item.id,
@@ -133,7 +145,12 @@ export function SearchModal({ children, data }: SearchModalProps) {
 						break;
 
 					case 'Author':
-						response = await fetch(`/api/authors/search?q=${encodeURIComponent(query)}&limit=10`);
+						try {
+							response = await fetch(`/api/authors/search?q=${encodeURIComponent(query)}&limit=10`);
+						} catch (fetchError) {
+							throw new Error(`Network error: Unable to connect to search API. Please check your connection.`);
+						}
+						
 						if (!response.ok) {
 							let errorMessage = `Failed to search authors (${response.status})`;
 							try {
@@ -144,7 +161,12 @@ export function SearchModal({ children, data }: SearchModalProps) {
 							}
 							throw new Error(errorMessage);
 						}
-						result = await response.json();
+						
+						try {
+							result = await response.json();
+						} catch (parseError) {
+							throw new Error(`Invalid response from search API. Please try again.`);
+						}
 						if (result.authors && Array.isArray(result.authors)) {
 							setAuthorResults(result.authors);
 							setBookResults([]);
@@ -155,7 +177,12 @@ export function SearchModal({ children, data }: SearchModalProps) {
 						break;
 
 					case 'User':
-						response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}&limit=10`);
+						try {
+							response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}&limit=10`);
+						} catch (fetchError) {
+							throw new Error(`Network error: Unable to connect to search API. Please check your connection.`);
+						}
+						
 						if (!response.ok) {
 							let errorMessage = `Failed to search users (${response.status})`;
 							try {
@@ -166,7 +193,12 @@ export function SearchModal({ children, data }: SearchModalProps) {
 							}
 							throw new Error(errorMessage);
 						}
-						result = await response.json();
+						
+						try {
+							result = await response.json();
+						} catch (parseError) {
+							throw new Error(`Invalid response from search API. Please try again.`);
+						}
 						if (result.users && Array.isArray(result.users)) {
 							setUserResults(result.users);
 							setBookResults([]);
@@ -277,28 +309,40 @@ export function SearchModal({ children, data }: SearchModalProps) {
 											const cover = book.imageLinks?.thumbnail || book.imageLinks?.smallThumbnail || '';
 											const authors = book.authors?.join(', ') || 'Unknown Author';
 											
+											const handleBookSelect = () => {
+												const slug = createBookSlug(book.title);
+												router.push(`/b/${slug}`);
+												setOpen(false);
+											};
+											
+											const handleClick = (e: React.MouseEvent) => {
+												e.stopPropagation();
+												handleBookSelect();
+											};
+											
 											return (
 												<CommandItem
 													key={book.id}
 													className="flex cursor-pointer items-center gap-3"
-													value={book.title}
-													onSelect={() => {
-														// TODO: Navigate to book detail page or add to collection
-														setOpen(false);
-													}}
+													value={`${book.id}-${book.title}`}
+													onSelect={handleBookSelect}
+													onClick={handleClick}
 												>
 													{cover ? (
-														<div className="relative size-12 flex-shrink-0 overflow-hidden rounded-md bg-muted">
+														<div className="relative size-12 flex-shrink-0 overflow-hidden rounded-md bg-muted pointer-events-none">
 															<Image
 																src={cover}
 																alt={book.title}
 																fill
-																className="object-cover"
+																className="object-cover pointer-events-none"
 																sizes="48px"
+																quality={100}
+																unoptimized={true}
+																priority={false}
 															/>
 														</div>
 													) : (
-														<div className="flex size-12 flex-shrink-0 items-center justify-center rounded-md bg-muted">
+														<div className="flex size-12 flex-shrink-0 items-center justify-center rounded-md bg-muted pointer-events-none">
 															<BookOpen className="size-5 text-muted-foreground" />
 														</div>
 													)}
@@ -313,28 +357,37 @@ export function SearchModal({ children, data }: SearchModalProps) {
 												</CommandItem>
 											);
 										})}
-										{searchType === 'Author' && authorResults.map((author) => (
-											<CommandItem
-												key={author.id}
-												className="flex cursor-pointer items-center gap-3"
-												value={author.name}
-												onSelect={() => {
-													// TODO: Navigate to author page
-													setOpen(false);
-												}}
-											>
+										{searchType === 'Author' && authorResults.map((author) => {
+											const handleAuthorSelect = () => {
+												// TODO: Navigate to author page
+												setOpen(false);
+											};
+											
+											const handleClick = (e: React.MouseEvent) => {
+												e.stopPropagation();
+												handleAuthorSelect();
+											};
+											
+											return (
+												<CommandItem
+													key={author.id}
+													className="flex cursor-pointer items-center gap-3"
+													value={`${author.id}-${author.name}`}
+													onSelect={handleAuthorSelect}
+													onClick={handleClick}
+												>
 												{author.cover ? (
-													<div className="relative size-12 flex-shrink-0 overflow-hidden rounded-md bg-muted">
+													<div className="relative size-12 flex-shrink-0 overflow-hidden rounded-md bg-muted pointer-events-none">
 														<Image
 															src={author.cover}
 															alt={author.name}
 															fill
-															className="object-cover"
+															className="object-cover pointer-events-none"
 															sizes="48px"
 														/>
 													</div>
 												) : (
-													<div className="flex size-12 flex-shrink-0 items-center justify-center rounded-md bg-muted">
+													<div className="flex size-12 flex-shrink-0 items-center justify-center rounded-md bg-muted pointer-events-none">
 														<BookMarked className="size-5 text-muted-foreground" />
 													</div>
 												)}
@@ -347,23 +400,33 @@ export function SearchModal({ children, data }: SearchModalProps) {
 													</p>
 												</div>
 											</CommandItem>
-										))}
-										{searchType === 'User' && userResults.map((user) => (
-											<CommandItem
-												key={user.id}
-												className="flex cursor-pointer items-center gap-3"
-												value={user.username}
-												onSelect={() => {
-													router.push(`/u/${encodeURIComponent(user.username)}`);
-													setOpen(false);
-												}}
-											>
-												<div className="relative size-12 flex-shrink-0 overflow-hidden rounded-full bg-muted">
+											);
+										})}
+										{searchType === 'User' && userResults.map((user) => {
+											const handleUserSelect = () => {
+												router.push(`/u/${encodeURIComponent(user.username)}`);
+												setOpen(false);
+											};
+											
+											const handleClick = (e: React.MouseEvent) => {
+												e.stopPropagation();
+												handleUserSelect();
+											};
+											
+											return (
+												<CommandItem
+													key={user.id}
+													className="flex cursor-pointer items-center gap-3"
+													value={`${user.id}-${user.username}`}
+													onSelect={handleUserSelect}
+													onClick={handleClick}
+												>
+												<div className="relative size-12 flex-shrink-0 overflow-hidden rounded-full bg-muted pointer-events-none">
 													<Image
 														src={user.avatar || defaultAvatar}
 														alt={user.username}
 														fill
-														className="object-cover"
+														className="object-cover pointer-events-none"
 														sizes="48px"
 													/>
 												</div>
@@ -376,7 +439,8 @@ export function SearchModal({ children, data }: SearchModalProps) {
 													</p>
 												</div>
 											</CommandItem>
-										))}
+											);
+										})}
 									</CommandGroup>
 								)}
 							</>

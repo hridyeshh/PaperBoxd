@@ -472,6 +472,8 @@ function BookCard({ title, author, cover, mood }: ProfileBook) {
           fill
           className="object-cover transition-transform duration-500 group-hover:scale-105"
           sizes="180px"
+          quality={100}
+          unoptimized={true}
         />
       </div>
       <div>
@@ -538,24 +540,25 @@ function BookshelfSection({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
         {paginatedBooks.map((book) => (
-          <div key={book.id} className="group flex flex-col gap-3">
-            <div className="relative aspect-[2/3] overflow-hidden rounded-3xl bg-muted shadow-sm">
+          <div key={book.id} className="group flex gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md">
+            <div className="relative aspect-[2/3] h-20 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-muted shadow-sm">
               <Image
                 src={book.cover}
                 alt={`${book.title} cover`}
                 fill
                 className="object-cover transition-transform duration-500 group-hover:scale-105"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+                sizes="56px"
+                quality={100}
+                unoptimized={true}
               />
             </div>
-            <div>
-              <h3 className="text-base font-semibold text-foreground">{book.title}</h3>
-              <p className="text-sm text-muted-foreground">{book.author}</p>
-              <p className="text-xs text-muted-foreground/80">{book.finishedOn}</p>
+            <div className="flex-1 min-w-0 space-y-1">
+              <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
+              <p className="text-xs text-muted-foreground truncate">{book.author}</p>
               {book.rating ? (
-                <p className="mt-1 text-sm text-yellow-500">
+                <p className="text-xs text-yellow-500">
                   {"★".repeat(book.rating)}
                   {"☆".repeat(5 - book.rating)}
                 </p>
@@ -645,6 +648,8 @@ function LikesSection({
                 fill
                 className="object-cover transition-transform duration-500 group-hover:scale-105"
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+                quality={100}
+                unoptimized={true}
               />
             </div>
             <div>
@@ -740,6 +745,8 @@ function TbrSection({
                 fill
                 className="object-cover transition-transform duration-500 group-hover:scale-105"
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+                quality={100}
+                unoptimized={true}
               />
             </div>
             <div>
@@ -907,6 +914,8 @@ function ListCard({
           fill
           className="object-cover transition-transform duration-500 group-hover:scale-105"
           sizes="200px"
+          quality={100}
+          unoptimized={true}
         />
       </div>
       <div className="relative">
@@ -1194,9 +1203,7 @@ export default function UserProfilePage() {
                   author: book.author || "Unknown Author",
                   cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
                   mood: book.mood,
-                  finishedOn: book.finishedOn 
-                    ? `Finished ${new Date(book.finishedOn).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`
-                    : "Finished",
+                  finishedOn: "", // Not displayed
                   format: book.format,
                   rating: book.rating,
                   thoughts: book.thoughts,
@@ -1712,7 +1719,15 @@ export default function UserProfilePage() {
                             className="flex gap-4 rounded-3xl border border-border/70 bg-background/90 p-4 shadow-sm transition hover:-translate-y-1"
                           >
                             <div className="relative h-24 w-24 overflow-hidden rounded-2xl bg-muted">
-                              <Image src={entry.cover} alt={entry.detail} fill className="object-cover" sizes="96px" />
+                              <Image
+                                src={entry.cover}
+                                alt={entry.detail}
+                                fill
+                                className="object-cover"
+                                sizes="96px"
+                                quality={100}
+                                unoptimized={true}
+                              />
                             </div>
                             <div className="flex flex-1 flex-col justify-between">
                               <div>
