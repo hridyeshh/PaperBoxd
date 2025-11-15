@@ -168,6 +168,9 @@ export function EditProfileForm({
     [onSubmitProfile],
   );
 
+  // Gray placeholder avatar as SVG data URI
+  const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%239ca3af'/%3E%3Cpath d='M50 30c-8.284 0-15 6.716-15 15 0 5.989 3.501 11.148 8.535 13.526C37.514 62.951 32 70.16 32 78.5h36c0-8.34-5.514-15.549-13.535-19.974C59.499 56.148 63 50.989 63 45c0-8.284-6.716-15-15-15z' fill='white' opacity='0.8'/%3E%3C/svg%3E";
+
   return (
     <form className="flex flex-col gap-8" onSubmit={handleSubmit}>
       <section className="flex flex-col gap-6 rounded-3xl border border-border/60 bg-muted/20 p-6 shadow-sm">
@@ -177,14 +180,7 @@ export function EditProfileForm({
         </div>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <div className="relative h-24 w-24 overflow-hidden rounded-2xl border border-border/70 bg-background">
-            {profile.avatar ? (
-              <Image src={profile.avatar} alt={profile.name} fill className="object-cover" sizes="96px" />
-            ) : (
-              <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground">
-                <UploadCloud className="h-5 w-5" />
-                <span className="text-xs font-medium">Upload</span>
-              </div>
-            )}
+            <Image src={profile.avatar || defaultAvatar} alt={profile.name} fill className="object-cover" sizes="96px" />
           </div>
           <div className="flex flex-col gap-3 text-sm text-muted-foreground">
             <p>Upload a square image (at least 400px). PNG or JPG works best.</p>
@@ -381,28 +377,13 @@ export function EditProfileForm({
             <p className="text-xs text-muted-foreground">Add your website, newsletter, or any place you share recommendations.</p>
           </div>
 
-          <div className="flex items-start justify-between gap-4 rounded-2xl border border-border/70 bg-muted/10 p-4">
-            <div>
-              <p className="text-sm font-semibold text-foreground">Public profile</p>
-              <p className="text-xs text-muted-foreground">
-                Toggle off to keep your profile private while you set things up.
-              </p>
-            </div>
-            <Switch
-              id="isPublic"
-              name="isPublic"
-              checked={profile.isPublic}
-            onCheckedChange={(checked) => updateProfile({ isPublic: checked })}
-            />
-          </div>
         </div>
       </section>
 
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-border/60 bg-background/90 p-4 shadow-sm">
         <div className="text-sm text-muted-foreground">
-          Ready to share? Make sure your profile is public so that your friends can see what you're up to.
           {submitError ? (
-            <p className="mt-1 text-xs.font-semibold text-destructive">{submitError}</p>
+            <p className="text-xs font-semibold text-destructive">{submitError}</p>
           ) : null}
         </div>
         <div className="flex gap-3">

@@ -23,14 +23,20 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
     const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)");
 
     const resolveInitialTheme = () => {
+      // Check if theme was already applied by the blocking script
+      const hasDarkClass = root.classList.contains("dark");
       const storedTheme = window.localStorage.getItem(STORAGE_KEY);
+      
       if (storedTheme === "dark" || storedTheme === "light") {
         return storedTheme === "dark";
       }
-      return systemPrefersDark.matches;
+      
+      // If no stored theme, use system preference or current class state
+      return hasDarkClass || systemPrefersDark.matches;
     };
 
     const initialIsDark = resolveInitialTheme();
+    // Ensure class is set (in case script didn't run)
     root.classList.toggle("dark", initialIsDark);
     setIsDark(initialIsDark);
     setMounted(true);

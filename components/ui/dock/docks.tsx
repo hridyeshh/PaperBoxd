@@ -25,11 +25,16 @@ const defaultItems: DockToggleItem[] = [
 
 export const Component = ({ items = defaultItems, className }: DockToggleProps) => {
   const resolvedItems = items.length ? items : defaultItems;
+  
+  // Check if justify-between or justify-evenly is in className (for equal spacing)
+  const hasJustifyClass = className?.includes('justify-between') || className?.includes('justify-evenly') || className?.includes('justify-around');
+  const shouldSpaceEvenly = hasJustifyClass;
 
   return (
     <div
       className={cn(
         "inline-flex overflow-hidden rounded-lg border border-gray-300 bg-white/20 shadow-lg shadow-black/20 backdrop-blur-md transition-colors duration-500 dark:border-black/60 dark:bg-black/40",
+        shouldSpaceEvenly && "flex",
         className,
       )}
     >
@@ -45,8 +50,9 @@ export const Component = ({ items = defaultItems, className }: DockToggleProps) 
             icon={Icon}
             onClick={item.onClick}
             isActive={item.isActive}
-            rounded={isFirst ? "left" : isLast ? "right" : "none"}
-            withDivider={!isLast}
+            rounded={shouldSpaceEvenly ? "none" : (isFirst ? "left" : isLast ? "right" : "none")}
+            withDivider={!shouldSpaceEvenly && !isLast}
+            className={shouldSpaceEvenly ? "flex-1" : undefined}
           />
         );
       })}

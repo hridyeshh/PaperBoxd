@@ -33,15 +33,23 @@ export async function GET(request: NextRequest) {
     await connectDB();
 
     // First, try to find books in our database using text search
-    const cachedBooks = await Book.find(
-      {
-        $text: { $search: query },
-      },
-      { score: { $meta: "textScore" } }
-    )
-      .sort({ score: { $meta: "textScore" } })
-      .limit(maxResults)
-      .skip(startIndex);
+    // If text index doesn't exist, this will fail gracefully and fall back to Google Books API
+    let cachedBooks: any[] = [];
+    try {
+      cachedBooks = await Book.find(
+        {
+          $text: { $search: query },
+        },
+        { score: { $meta: "textScore" } }
+      )
+        .sort({ score: { $meta: "textScore" } })
+        .limit(maxResults)
+        .skip(startIndex)
+        .exec();
+    } catch (textSearchError) {
+      // Text index might not exist - that's okay, we'll use Google Books API
+      console.log("Text search not available (index may not exist), using Google Books API:", textSearchError instanceof Error ? textSearchError.message : "Unknown error");
+    }
 
     // If we have enough cached results, return them
     if (cachedBooks.length >= maxResults) {

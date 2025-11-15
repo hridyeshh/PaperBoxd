@@ -1,5 +1,5 @@
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
-import { Header } from "@/components/ui/header-with-search";
+import { Header } from "@/components/ui/layout/header-with-search";
 import { Hero } from "@/components/ui/home/hero";
 
 export default function Home() {

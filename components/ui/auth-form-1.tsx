@@ -13,6 +13,7 @@ import {
   MailCheck,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -240,16 +241,35 @@ function AuthSignIn({ onForgotPassword, onSignUp }: AuthSignInProps) {
       const result = await signInWithCredentials(data.email, data.password);
       
       // Check if sign-in was successful
-      if (!result?.error) {
-        // Redirect to profile page after successful sign-in
+      if (result?.error) {
+        // Error should have been thrown already, but handle it just in case
+        const errorMessage = "Invalid email or password";
+        toast.error(errorMessage);
+        setFormState((prev) => ({
+          ...prev,
+          error: errorMessage,
+        }));
+        return;
+      }
+      
+      if (result?.ok) {
+        toast.success("Signed in successfully!");
+        // Redirect to profile page - it will redirect to /u/[username]
+        // We use /profile as an intermediary since we need to wait for the session to load
         window.location.href = "/profile";
-      } else {
-        throw new Error(result.error);
       }
     } catch (error) {
+      // Set error message from the caught error
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "Invalid email or password";
+      
+      // Show toast notification
+      toast.error(errorMessage);
+      
       setFormState((prev) => ({
         ...prev,
-        error: error instanceof Error ? error.message : "Invalid email or password",
+        error: errorMessage,
       }));
     } finally {
       setFormState((prev) => ({ ...prev, isLoading: false }));
@@ -261,9 +281,11 @@ function AuthSignIn({ onForgotPassword, onSignUp }: AuthSignInProps) {
       setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
       await signInWithGoogle();
     } catch (error) {
+      const errorMessage = "Failed to sign in with Google";
+      toast.error(errorMessage);
       setFormState((prev) => ({
         ...prev,
-        error: "Failed to sign in with Google",
+        error: errorMessage,
       }));
     } finally {
       setFormState((prev) => ({ ...prev, isLoading: false }));
@@ -410,11 +432,15 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
       await signInWithCredentials(data.email, data.password);
       
       // Always redirect to profile page after successful registration and sign-in
+      // It will redirect to /u/[username] once the session is loaded
+      toast.success("Account created successfully!");
       window.location.href = "/profile";
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Registration failed. Please try again.";
+      toast.error(errorMessage);
       setFormState((prev) => ({
         ...prev,
-        error: error instanceof Error ? error.message : "Registration failed. Please try again.",
+        error: errorMessage,
       }));
     } finally {
       setFormState((prev) => ({ ...prev, isLoading: false }));
@@ -426,9 +452,11 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
       setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
       await signInWithGoogle();
     } catch (error) {
+      const errorMessage = "Failed to sign in with Google";
+      toast.error(errorMessage);
       setFormState((prev) => ({
         ...prev,
-        error: "Failed to sign in with Google",
+        error: errorMessage,
       }));
     } finally {
       setFormState((prev) => ({ ...prev, isLoading: false }));

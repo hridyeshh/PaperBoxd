@@ -25,22 +25,43 @@ export async function GET(
     // Connect to database
     await connectDB();
 
-    // Find user by username
-    const user = await User.findOne({ username })
-      .select("-password") // Exclude password
-      .populate("readingLists.books", "volumeInfo.title volumeInfo.authors volumeInfo.imageLinks");
+    // Find user by username with optional populate
+    let user;
+    try {
+      user = await User.findOne({ username })
+        .select("-password") // Exclude password
+        .populate({
+          path: "readingLists.books",
+          select: "volumeInfo.title volumeInfo.authors volumeInfo.imageLinks",
+          model: "Book",
+        });
+    } catch (populateError) {
+      console.warn("Failed to populate readingLists.books, trying without populate:", populateError);
+      // Fallback: try without populate
+      user = await User.findOne({ username }).select("-password");
+    }
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     // Update last active
-    user.lastActive = new Date();
-    await user.save();
+    try {
+      user.lastActive = new Date();
+      await user.save();
+    } catch (saveError) {
+      console.warn("Failed to update lastActive:", saveError);
+      // Continue even if save fails - this is not critical
+    }
+
+    // Safely extract arrays and handle undefined values
+    const activities = Array.isArray(user.activities) ? user.activities : [];
+    const followers = Array.isArray(user.followers) ? user.followers : [];
+    const following = Array.isArray(user.following) ? user.following : [];
 
     return NextResponse.json({
       user: {
-        id: user._id,
+        id: user._id?.toString() || user._id,
         username: user.username,
         name: user.name,
         email: user.email,
@@ -48,31 +69,33 @@ export async function GET(
         bio: user.bio,
         birthday: user.birthday,
         gender: user.gender,
-        pronouns: user.pronouns,
-        links: user.links,
+        pronouns: Array.isArray(user.pronouns) ? user.pronouns : [],
+        links: Array.isArray(user.links) ? user.links : [],
         isPublic: user.isPublic,
 
         // Books & Reading
-        topBooks: user.topBooks,
-        favoriteBooks: user.favoriteBooks,
-        bookshelf: user.bookshelf,
-        likedBooks: user.likedBooks,
-        tbrBooks: user.tbrBooks,
-        currentlyReading: user.currentlyReading,
-        readingLists: user.readingLists,
+        topBooks: Array.isArray(user.topBooks) ? user.topBooks : [],
+        favoriteBooks: Array.isArray(user.favoriteBooks) ? user.favoriteBooks : [],
+        bookshelf: Array.isArray(user.bookshelf) ? user.bookshelf : [],
+        likedBooks: Array.isArray(user.likedBooks) ? user.likedBooks : [],
+        tbrBooks: Array.isArray(user.tbrBooks) ? user.tbrBooks : [],
+        currentlyReading: Array.isArray(user.currentlyReading) ? user.currentlyReading : [],
+        readingLists: Array.isArray(user.readingLists) ? user.readingLists : [],
 
         // Social
-        followersCount: user.followers.length,
-        followingCount: user.following.length,
+        followers: followers.map((id) => id.toString()),
+        following: following.map((id) => id.toString()),
+        followersCount: followers.length,
+        followingCount: following.length,
 
         // Stats
-        totalBooksRead: user.totalBooksRead,
-        totalPagesRead: user.totalPagesRead,
-        readingGoal: user.readingGoal,
-        authorsRead: user.authorsRead,
+        totalBooksRead: user.totalBooksRead ?? 0,
+        totalPagesRead: user.totalPagesRead ?? 0,
+        readingGoal: user.readingGoal ?? null,
+        authorsRead: Array.isArray(user.authorsRead) ? user.authorsRead : [],
 
         // Activity
-        recentActivities: user.activities.slice(-20).reverse(), // Last 20 activities
+        recentActivities: activities.slice(-20).reverse(), // Last 20 activities
 
         // Metadata
         createdAt: user.createdAt,
@@ -81,6 +104,10 @@ export async function GET(
     });
   } catch (error) {
     console.error("User fetch error:", error);
+    if (error instanceof Error) {
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+    }
     return NextResponse.json(
       {
         error: "Failed to fetch user",
@@ -168,22 +195,37 @@ export async function PATCH(
     }
 
     // Update allowed fields
-    const allowedFields = [
+    // TEMPORARILY DISABLED: Avatar storage to prevent cookie size issues
+    // TODO: Implement proper image upload/storage solution (e.g., Cloudinary, S3)
+    // if (body.avatar !== undefined) {
+    //   if (typeof body.avatar === "string" && body.avatar.trim().length > 0) {
+    //     // Save the avatar (base64 data URL or URL string)
+    //     user.avatar = body.avatar;
+    //   } else if (body.avatar === "" || body.avatar === null) {
+    //     // Empty string or null means remove avatar, set to undefined
+    //     user.avatar = undefined;
+    //   }
+    //   // If avatar is undefined in body, don't update (preserve existing)
+    // }
+
+    // Update other allowed fields
+    const otherAllowedFields = [
       "name",
       "bio",
-      "avatar",
       "birthday",
       "gender",
       "pronouns",
       "links",
-      "isPublic",
     ];
 
-    allowedFields.forEach((field) => {
+    otherAllowedFields.forEach((field) => {
       if (body[field] !== undefined) {
         (user as any)[field] = body[field];
       }
     });
+
+    // Always set isPublic to true (all profiles are public)
+    user.isPublic = true;
 
     await user.save();
 
@@ -194,7 +236,7 @@ export async function PATCH(
         username: user.username,
         name: user.name,
         bio: user.bio,
-        avatar: user.avatar,
+        avatar: user.avatar || undefined, // Return existing avatar or undefined
         birthday: user.birthday,
         gender: user.gender,
         pronouns: user.pronouns,
