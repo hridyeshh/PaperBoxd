@@ -193,12 +193,9 @@ export function UsernameSelection({
 
       toast.success("Username set successfully!");
       
-      if (onComplete) {
-        onComplete();
-      } else {
-        // Redirect to profile
-        router.push("/profile");
-      }
+      // Use window.location for a full page reload to ensure fresh session
+      // This ensures the onboarding page gets the latest session data
+      window.location.href = "/onboarding";
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to set username";

@@ -213,6 +213,8 @@ export async function searchAuthors(
     clearTimeout(timeoutId);
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[ISBNdb Author Search] API error ${response.status}:`, errorText);
       throw new Error(`ISBNdb API error: ${response.status} ${response.statusText}`);
     }
 

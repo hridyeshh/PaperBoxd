@@ -198,7 +198,7 @@ export function SearchModal({ children, data }: SearchModalProps) {
 				popoverProps={{ className: "max-w-2xl" }}
 			>
 				<ModalTitle className="sr-only">Search</ModalTitle>
-				<Command className="bg-background md:bg-card rounded-md md:border">
+				<Command className="bg-background md:bg-card rounded-md md:border" shouldFilter={false}>
 					<div className="flex flex-col gap-3 p-3 pb-2">
 						<CommandInput
 							className={cn(
@@ -230,6 +230,7 @@ export function SearchModal({ children, data }: SearchModalProps) {
 								},
 							]}
 							className="w-full flex justify-between"
+							buttonClassName="justify-center"
 						/>
 					</div>
 					<CommandList className="max-h-[380px] min-h-[380px] px-2 md:px-0">

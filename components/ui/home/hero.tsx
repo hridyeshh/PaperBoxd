@@ -6,7 +6,11 @@ import { motion } from "framer-motion";
 
 import { InteractiveHoverButton } from "@/components/ui/buttons";
 
-function Hero() {
+interface HeroProps {
+  showButton?: boolean;
+}
+
+function Hero({ showButton = true }: HeroProps) {
   const [titleNumber, setTitleNumber] = useState(0);
   const router = useRouter();
   const titles = useMemo(
@@ -73,15 +77,17 @@ function Hero() {
               PaperBoxd lets you save the books you've read
             </p>
           </div>
-          <div className="flex flex-row flex-wrap justify-center gap-3">
-            <InteractiveHoverButton
-              text="Start saving your books"
-              showIdleAccent={false}
-              invert
-              className="w-64 sm:w-72"
-              onClick={() => router.push("/auth")}
-            />
-          </div>
+          {showButton && (
+            <div className="flex flex-row flex-wrap justify-center gap-3">
+              <InteractiveHoverButton
+                text="Start saving your books"
+                showIdleAccent={false}
+                invert
+                className="w-64 sm:w-72"
+                onClick={() => router.push("/auth")}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

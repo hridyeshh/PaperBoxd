@@ -15,6 +15,7 @@ export type DockToggleItem = {
 export type DockToggleProps = {
   items?: DockToggleItem[];
   className?: string;
+  buttonClassName?: string;
 };
 
 const defaultItems: DockToggleItem[] = [
@@ -23,7 +24,7 @@ const defaultItems: DockToggleItem[] = [
   { label: "Settings", icon: Settings },
 ];
 
-export const Component = ({ items = defaultItems, className }: DockToggleProps) => {
+export const Component = ({ items = defaultItems, className, buttonClassName }: DockToggleProps) => {
   const resolvedItems = items.length ? items : defaultItems;
   
   // Check if justify-between or justify-evenly is in className (for equal spacing)
@@ -52,7 +53,7 @@ export const Component = ({ items = defaultItems, className }: DockToggleProps) 
             isActive={item.isActive}
             rounded={shouldSpaceEvenly ? "none" : (isFirst ? "left" : isLast ? "right" : "none")}
             withDivider={!shouldSpaceEvenly && !isLast}
-            className={shouldSpaceEvenly ? "flex-1" : undefined}
+            className={cn(shouldSpaceEvenly ? "flex-1" : undefined, buttonClassName)}
           />
         );
       })}

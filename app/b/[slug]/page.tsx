@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Header } from "@/components/ui/layout/header-with-search";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 import { stripHtmlTags } from "@/lib/utils";
+import { SignupPromptDialog } from "@/components/ui/signup-prompt-dialog";
+import { BookCarousel, BookCarouselBook } from "@/components/ui/home/book-carousel";
 
 interface BookDetails {
   id: string;
@@ -81,6 +83,15 @@ export default function BookDetailPage() {
   const [isInBookshelf, setIsInBookshelf] = React.useState(false);
   const [isInTBR, setIsInTBR] = React.useState(false);
   const [isUpdating, setIsUpdating] = React.useState(false);
+  
+  // Sign-up prompt dialog state
+  const [showSignupPrompt, setShowSignupPrompt] = React.useState(false);
+  const [signupAction, setSignupAction] = React.useState<"bookshelf" | "like" | "tbr" | "general">("general");
+  
+  // Carousel data
+  const [similarBooks, setSimilarBooks] = React.useState<BookCarouselBook[]>([]);
+  const [authorBooks, setAuthorBooks] = React.useState<BookCarouselBook[]>([]);
+  const [loadingCarousels, setLoadingCarousels] = React.useState(false);
 
   React.useEffect(() => {
     if (!slug) return;
@@ -206,6 +217,43 @@ export default function BookDetailPage() {
     checkBookStatus();
   }, [book, isAuthenticated, session?.user?.username]);
 
+  // Fetch carousel data when book is loaded
+  React.useEffect(() => {
+    if (!book || (!book._id && !book.bookId)) return;
+
+    const fetchCarousels = async () => {
+      try {
+        setLoadingCarousels(true);
+        const bookId = book._id || book.bookId;
+        const primaryAuthor = book.volumeInfo?.authors?.[0];
+
+        // Fetch similar books and books by author in parallel
+        const promises = [
+          fetch(`/api/recommendations/similar/${bookId}?limit=20`)
+            .then(res => res.ok ? res.json() : { books: [] })
+            .then(data => setSimilarBooks(data.books || [])),
+        ];
+
+        // Only fetch author books if we have an author
+        if (primaryAuthor) {
+          promises.push(
+            fetch(`/api/books/by-author?author=${encodeURIComponent(primaryAuthor)}&excludeBookId=${bookId}&limit=20`)
+              .then(res => res.ok ? res.json() : { books: [] })
+              .then(data => setAuthorBooks(data.books || []))
+          );
+        }
+
+        await Promise.all(promises);
+      } catch (err) {
+        console.error("Error fetching carousels:", err);
+      } finally {
+        setLoadingCarousels(false);
+      }
+    };
+
+    fetchCarousels();
+  }, [book]);
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -262,7 +310,7 @@ export default function BookDetailPage() {
       />
       <div className="relative z-10">
         <Header />
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 mt-16">
         <div className="flex flex-col gap-8 lg:flex-row lg:gap-12">
           {/* Left: Large Book Cover */}
           <div className="flex-shrink-0 w-full sm:w-64 lg:w-80">
@@ -286,144 +334,164 @@ export default function BookDetailPage() {
             </div>
             
             {/* Action Buttons Below Cover */}
-            {isAuthenticated && (
-              <div className="flex flex-col gap-2 mt-4">
-                <InteractiveHoverButton
-                  onClick={async () => {
-                    if (isUpdating || !session?.user?.username || !book) return;
-                    setIsUpdating(true);
-                    try {
-                      // Determine the correct ID type based on book.id format
-                      const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
-                      const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
-                      
-                      const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          type: "bookshelf",
-                          bookId: book._id || book.bookId,
-                          isbndbId: isISBN ? book.id : undefined,
-                          openLibraryId: isOpenLibraryId ? book.id : undefined,
-                          finishedOn: new Date().toISOString(),
-                        }),
-                      });
-                      
-                      if (response.ok) {
-                        const data = await response.json();
-                        const wasRemoved = data.removed || false;
-                        setIsInBookshelf(!wasRemoved);
-                        toast.success(wasRemoved ? "Removed from bookshelf!" : "Added to bookshelf!");
-                      } else {
-                        const error = await response.json().catch(() => ({}));
-                        toast.error(error.error || "Failed to update bookshelf");
-                      }
-                    } catch (err) {
-                      toast.error("Failed to update bookshelf");
-                    } finally {
-                      setIsUpdating(false);
+            <div className="flex flex-col gap-2 mt-4">
+              <InteractiveHoverButton
+                onClick={async () => {
+                  if (!isAuthenticated) {
+                    setSignupAction("bookshelf");
+                    setShowSignupPrompt(true);
+                    return;
+                  }
+                  if (isUpdating || !session?.user?.username || !book) return;
+                  setIsUpdating(true);
+                  try {
+                    // Determine the correct ID type based on book.id format
+                    const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
+                    const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
+                    
+                    const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        type: "bookshelf",
+                        bookId: book._id || book.bookId,
+                        isbndbId: isISBN ? book.id : undefined,
+                        openLibraryId: isOpenLibraryId ? book.id : undefined,
+                        finishedOn: new Date().toISOString(),
+                      }),
+                    });
+                    
+                    if (response.ok) {
+                      const data = await response.json();
+                      const wasRemoved = data.removed || false;
+                      setIsInBookshelf(!wasRemoved);
+                      toast.success(wasRemoved ? "Removed from bookshelf!" : "Added to bookshelf!");
+                    } else {
+                      const error = await response.json().catch(() => ({}));
+                      toast.error(error.error || "Failed to update bookshelf");
                     }
-                  }}
-                  text={isInBookshelf ? "In Bookshelf" : "Add to Bookshelf!"}
-                  showIdleAccent={true}
-                  accentColor="bg-amber-700"
-                  invert={true}
-                  hideIcon={true}
-                  className="w-full"
-                  disabled={isUpdating}
-                />
-                
-                <div className="flex gap-2">
-                <InteractiveHoverButton
-                  onClick={async () => {
-                    if (isUpdating || !session?.user?.username || !book) return;
-                    setIsUpdating(true);
-                    try {
-                      // Determine the correct ID type based on book.id format
-                      const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
-                      const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
-                      
-                      const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          type: "liked",
-                          bookId: book._id || book.bookId,
-                          isbndbId: isISBN ? book.id : undefined,
-                          openLibraryId: isOpenLibraryId ? book.id : undefined,
-                        }),
-                      });
-                      
-                      if (response.ok) {
-                        const data = await response.json();
-                        const wasRemoved = data.removed || false;
-                        setIsLiked(!wasRemoved);
-                        toast.success(wasRemoved ? "Removed from likes!" : "Added to likes!");
-                      } else {
-                        const error = await response.json().catch(() => ({}));
-                        toast.error(error.error || "Failed to update likes");
-                      }
-                    } catch (err) {
-                      toast.error("Failed to update likes");
-                    } finally {
-                      setIsUpdating(false);
+                  } catch (err) {
+                    toast.error("Failed to update bookshelf");
+                  } finally {
+                    setIsUpdating(false);
+                  }
+                }}
+                text={isAuthenticated && isInBookshelf ? "In Bookshelf" : "Add to Bookshelf!"}
+                showIdleAccent={true}
+                accentColor="bg-amber-700"
+                invert={true}
+                hideIcon={true}
+                className="w-full"
+                disabled={isUpdating}
+              />
+              
+              <div className="flex gap-2">
+              <InteractiveHoverButton
+                onClick={async () => {
+                  if (!isAuthenticated) {
+                    setSignupAction("like");
+                    setShowSignupPrompt(true);
+                    return;
+                  }
+                  if (isUpdating || !session?.user?.username || !book) return;
+                  setIsUpdating(true);
+                  try {
+                    // Determine the correct ID type based on book.id format
+                    const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
+                    const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
+                    
+                    const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        type: "liked",
+                        bookId: book._id || book.bookId,
+                        isbndbId: isISBN ? book.id : undefined,
+                        openLibraryId: isOpenLibraryId ? book.id : undefined,
+                      }),
+                    });
+                    
+                    if (response.ok) {
+                      const data = await response.json();
+                      const wasRemoved = data.removed || false;
+                      setIsLiked(!wasRemoved);
+                      toast.success(wasRemoved ? "Removed from likes!" : "Added to likes!");
+                    } else {
+                      const error = await response.json().catch(() => ({}));
+                      toast.error(error.error || "Failed to update likes");
                     }
-                  }}
-                  text={isLiked ? "Liked" : "Like"}
-                  showIdleAccent={true}
-                  invert={true}
-                  accentColor="#e31b23"
-                  hideIcon={true}
-                  className="flex-1"
-                  disabled={isUpdating}
-                />
-                
-                <InteractiveHoverButton
-                  onClick={async () => {
-                    if (isUpdating || !session?.user?.username || !book) return;
-                    setIsUpdating(true);
-                    try {
-                      // Determine the correct ID type based on book.id format
-                      const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
-                      const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
-                      
-                      const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          type: "tbr",
-                          bookId: book._id || book.bookId,
-                          isbndbId: isISBN ? book.id : undefined,
-                          openLibraryId: isOpenLibraryId ? book.id : undefined,
-                        }),
-                      });
-                      
-                      if (response.ok) {
-                        const data = await response.json();
-                        const wasRemoved = data.removed || false;
-                        setIsInTBR(!wasRemoved);
-                        toast.success(wasRemoved ? "Removed from TBR!" : "Added to TBR!");
-                      } else {
-                        const error = await response.json().catch(() => ({}));
-                        toast.error(error.error || "Failed to update TBR");
-                      }
-                    } catch (err) {
-                      toast.error("Failed to update TBR");
-                    } finally {
-                      setIsUpdating(false);
+                  } catch (err) {
+                    toast.error("Failed to update likes");
+                  } finally {
+                    setIsUpdating(false);
+                  }
+                }}
+                text={isAuthenticated && isLiked ? "Liked" : "Like"}
+                showIdleAccent={true}
+                invert={true}
+                accentColor="#e31b23"
+                hideIcon={true}
+                className="flex-1"
+                disabled={isUpdating}
+              />
+              
+              <InteractiveHoverButton
+                onClick={async () => {
+                  if (!isAuthenticated) {
+                    setSignupAction("tbr");
+                    setShowSignupPrompt(true);
+                    return;
+                  }
+                  if (isUpdating || !session?.user?.username || !book) return;
+                  setIsUpdating(true);
+                  try {
+                    // Determine the correct ID type based on book.id format
+                    const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
+                    const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
+                    
+                    const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        type: "tbr",
+                        bookId: book._id || book.bookId,
+                        isbndbId: isISBN ? book.id : undefined,
+                        openLibraryId: isOpenLibraryId ? book.id : undefined,
+                      }),
+                    });
+                    
+                    if (response.ok) {
+                      const data = await response.json();
+                      const wasRemoved = data.removed || false;
+                      setIsInTBR(!wasRemoved);
+                      toast.success(wasRemoved ? "Removed from TBR!" : "Added to TBR!");
+                    } else {
+                      const error = await response.json().catch(() => ({}));
+                      toast.error(error.error || "Failed to update TBR");
                     }
-                  }}
-                  text={isInTBR ? "In TBR" : "TBR"}
-                  showIdleAccent={true}
-                  accentColor="bg-green-700"
-                  invert={true}
-                  hideIcon={true}
-                  className="flex-1"
-                  disabled={isUpdating}
-                />
-                </div>
+                  } catch (err) {
+                    toast.error("Failed to update TBR");
+                  } finally {
+                    setIsUpdating(false);
+                  }
+                }}
+                text={isAuthenticated && isInTBR ? "In TBR" : "TBR"}
+                showIdleAccent={true}
+                accentColor="bg-green-700"
+                invert={true}
+                hideIcon={true}
+                className="flex-1"
+                disabled={isUpdating}
+              />
               </div>
-            )}
+            </div>
+            
+            {/* Sign-up Prompt Dialog */}
+            <SignupPromptDialog
+              open={showSignupPrompt}
+              onOpenChange={setShowSignupPrompt}
+              action={signupAction}
+            />
           </div>
 
           {/* Right: Book Details */}
@@ -570,6 +638,27 @@ export default function BookDetailPage() {
               </Button>
             </div>
           </div>
+        </div>
+        
+        {/* Carousels Section */}
+        <div className="mt-12 space-y-12">
+          {/* Similar Books Carousel */}
+          {similarBooks.length > 0 && (
+            <BookCarousel
+              title={`Similar to ${volumeInfo.title}`}
+              subtitle="Books you might also enjoy"
+              books={similarBooks}
+            />
+          )}
+          
+          {/* Books by Same Author Carousel */}
+          {authorBooks.length > 0 && volumeInfo.authors?.[0] && (
+            <BookCarousel
+              title={`More from ${volumeInfo.authors[0]}`}
+              subtitle="Other books by this author"
+              books={authorBooks}
+            />
+          )}
         </div>
       </div>
       </div>

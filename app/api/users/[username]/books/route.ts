@@ -134,12 +134,28 @@ export async function POST(
 
     // Prepare book reference
     const bookIdObj = book._id as mongoose.Types.ObjectId;
+    
+    // Extract author - handle various formats and edge cases
+    let author = "Unknown Author";
+    if (book.volumeInfo?.authors && Array.isArray(book.volumeInfo.authors) && book.volumeInfo.authors.length > 0) {
+      // Get first author, filter out empty strings
+      const authors = book.volumeInfo.authors.filter((a: string) => a && a.trim() !== '');
+      if (authors.length > 0) {
+        author = authors[0].trim();
+      }
+    }
+    
+    // Log warning if author is missing
+    if (author === "Unknown Author") {
+      console.warn(`[User Books] Book "${book.volumeInfo?.title || 'Unknown'}" added without author information`);
+    }
+    
     const bookReference = {
       bookId: bookIdObj,
       isbndbId: book.isbndbId || undefined,
       openLibraryId: book.openLibraryId || undefined,
       title: book.volumeInfo.title,
-      author: book.volumeInfo.authors[0] || "Unknown Author",
+      author: author,
       cover:
         book.volumeInfo.imageLinks?.thumbnail ||
         book.volumeInfo.imageLinks?.smallThumbnail ||

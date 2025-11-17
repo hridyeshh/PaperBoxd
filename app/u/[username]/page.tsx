@@ -1197,19 +1197,26 @@ export default function UserProfilePage() {
               : [];
             setFavoriteBooks(transformedFavoriteBooks);
             
-            // Bookshelf books
+            // Bookshelf books - sort by finishedOn date (newest first)
             const transformedBookshelf: BookshelfBook[] = Array.isArray(data.user.bookshelf)
-              ? data.user.bookshelf.map((book: any, idx: number) => ({
-                  id: book.bookId?.toString() || book._id?.toString() || `shelf-${idx}`,
-                  title: book.title || "Unknown Title",
-                  author: book.author || "Unknown Author",
-                  cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
-                  mood: book.mood,
-                  finishedOn: "", // Not displayed
-                  format: book.format,
-                  rating: book.rating,
-                  thoughts: book.thoughts,
-                }))
+              ? data.user.bookshelf
+                  .map((book: any, idx: number) => ({
+                    id: book.bookId?.toString() || book._id?.toString() || `shelf-${idx}`,
+                    title: book.title || "Unknown Title",
+                    author: book.author || "Unknown Author",
+                    cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                    mood: book.mood,
+                    finishedOn: book.finishedOn ? (typeof book.finishedOn === 'string' ? book.finishedOn : new Date(book.finishedOn).toISOString()) : "",
+                    format: book.format,
+                    rating: book.rating,
+                    thoughts: book.thoughts,
+                    _finishedOnDate: book.finishedOn ? (typeof book.finishedOn === 'string' ? new Date(book.finishedOn) : new Date(book.finishedOn)) : new Date(0),
+                  }))
+                  .sort((a: any, b: any) => {
+                    // Sort by finishedOn date in descending order (newest first)
+                    return b._finishedOnDate.getTime() - a._finishedOnDate.getTime();
+                  })
+                  .map(({ _finishedOnDate, ...book }: { _finishedOnDate: Date; [key: string]: any }) => book) // Remove the temporary sorting field
               : [];
             setBookshelfBooks(transformedBookshelf);
             
@@ -1615,7 +1622,7 @@ export default function UserProfilePage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8 mt-16">
         <div className="space-y-8">
           <div className="grid gap-6 lg:grid-cols-[1fr_2fr] lg:gap-12">
             <div>

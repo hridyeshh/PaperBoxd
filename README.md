@@ -86,13 +86,29 @@ All data operations flow through well-defined RESTful API routes (`/app/api/*`),
 │   ├── [username]/followers # Follower list
 │   ├── [username]/following # Following list
 │   ├── [username]/lists    # Custom reading lists
+│   ├── [username]/activities/check-new # Check for new friend activities
 │   ├── register            # User registration
-│   └── search              # User search
+│   ├── search              # User search
+│   └── check-username      # Username availability check
 ├── books/
 │   ├── [id]/               # Book details (with caching)
-│   └── search              # Book search (hybrid: DB + Google Books)
+│   ├── search              # Book search (hybrid: DB + Google Books)
+│   ├── public              # Public home page carousels (newly published, popular, trending)
+│   ├── personalized        # Personalized carousels for authenticated users
+│   └── by-author           # Books by a specific author
 ├── authors/
 │   └── search              # Author search from book database
+├── onboarding/
+│   ├── status              # Check onboarding completion status
+│   └── genres              # Get available genres for onboarding
+├── recommendations/
+│   ├── home                # Home page recommendations
+│   ├── similar/[bookId]    # Books similar to a specific book
+│   └── feedback            # Track recommendation interactions
+├── events/
+│   └── track               # Track user interaction events
+├── newsletter/
+│   └── subscribe           # Newsletter email subscription
 └── auth/
     └── [...nextauth]/      # NextAuth authentication routes
 ```
@@ -332,6 +348,8 @@ We use a **hybrid state management approach**:
 
 ### External APIs
 - **Google Books API** - Book metadata and search
+- **ISBNdb API** - Additional book metadata and search
+- **Open Library API** - Book metadata fallback
 
 ---
 
@@ -355,20 +373,28 @@ We use a **hybrid state management approach**:
 ### Book Management
 
 **Collections**:
-- **Bookshelf**: Books marked as "read" (3x4 grid with pagination)
+- **Bookshelf**: Books marked as "read" (3x4 grid with pagination, sorted by most recently finished)
 - **Likes**: Books marked as "liked" (same grid format)
 - **To-Be-Read**: Books marked as "pending" (labeled "The procrastination wall")
 
 **Search Integration**:
 - Hybrid search: MongoDB database first, Google Books API fallback
 - Debounced input (300ms delay) to reduce API calls
-- Category filtering: Books, Authors, Users
+- Category filtering: Books, Users (author search removed)
 - Cached results for instant subsequent searches
 
 **Book Data Model**:
 - Normalized storage: Books stored once, referenced by `ObjectId` in user collections
 - Google Books API data cached in MongoDB
 - Automatic cleanup of unused books (15+ days inactive)
+- Deduplication: Carousels ensure unique books (no duplicate editions)
+
+**Book Discovery**:
+- **Home Page Carousels**: 
+  - Public users: "Newly Published This Week", "People Love These", "Trending Now"
+  - Authenticated users: Personalized carousels based on preferences, favorites, authors, genres, and friend activity
+- **Book Detail Page**: "Similar to [book]" and "More from [author]" carousels
+- **Recommendation System**: Sophisticated rule-based engine with multi-signal learning, friend-based recommendations, and diversity injection
 
 ### Social Features
 
@@ -381,7 +407,8 @@ We use a **hybrid state management approach**:
 **Activity Feed**:
 - Dedicated `/activity` page for logged-in user's activity
 - Tracks book additions, list creations, profile updates
-- Filterable by "Friends" and "Me" (future: expanded social graph)
+- Filterable by "Friends" and "Me"
+- Real-time activity indicator in header when new friend activities are available
 
 **Reading Lists**:
 - Custom lists with name, cover image, description
@@ -389,13 +416,91 @@ We use a **hybrid state management approach**:
 - Dropdown menu for editing (name, cover) or deleting
 - Carousel layout similar to Pinterest-style boards
 
+### Recommendation System
+
+**Sophisticated Rule-Based Engine**:
+- Multi-signal learning from user interactions (ratings, likes, reads, searches)
+- Friend-based recommendations ("Your friends are liking these")
+- Genre and author matching based on user preferences
+- Diversity injection using Maximal Marginal Relevance (MMR)
+- Context-aware recommendations (time of day, reading velocity)
+- Explainable reasons for each recommendation
+- Caching with TTL for performance
+- A/B testing framework for algorithm variants
+
+**User Profile Building**:
+- Automatic preference computation from reading history
+- Genre weights and author weights
+- Reading velocity tracking
+- Diversity score calculation
+- Profile recomputation on significant actions
+
+**Recommendation Types**:
+- Personalized home page carousels
+- Similar books (based on genre and author)
+- Books by same author
+- Friend activity-based recommendations
+- Trending books in user's preferred genres
+
+### Home Page Experience
+
+**Public Home Page**:
+- Hero section with PaperBoxd branding
+- Diverse book carousels showcasing different genres
+- "Newly Published This Week" carousel
+- "People Love These" carousel
+- "Trending Now" carousel
+- Footer with newsletter subscription, quick links, and legal information
+
+**Authenticated Home Page**:
+- Personalized hero section (no "Start saving" button)
+- Personalized carousels:
+  - "Recommended for You"
+  - "Your Friends Are Liking These" (only shown if 5+ books available)
+  - "Based on Your Favorites"
+  - "From Your Favorite Authors"
+  - "Trending in Your Genres"
+  - "Continue Reading"
+- Footer with newsletter subscription and legal information
+
+**Loading States**:
+- Tetris loader for consistent loading experience
+- Single load per page visit (prevents re-fetching on re-renders)
+- Optimized data fetching with parallel API calls
+
+### Legal & Compliance
+
+**Footer Components**:
+- Newsletter subscription (email saved to database)
+- Quick links (Home, About Us, Discover Books, Contact)
+- Social media links (Twitter, Instagram, LinkedIn)
+- Legal links with dialog modals:
+  - **Privacy Policy**: Comprehensive privacy policy dialog
+  - **Terms of Service**: Terms of service dialog
+  - **Cookie Settings**: Cookie preferences dialog (only essential cookies used)
+  - **About Us**: About PaperBoxd dialog with mission and features
+
+**Privacy Features**:
+- Server-side tracking (no third-party analytics cookies)
+- Local storage for preferences (theme, cookie settings)
+- Essential cookies only (NextAuth session cookies)
+- GDPR-ready architecture
+
 ### Authentication Flow
 
 **Registration**:
 - Email/password with validation (Zod schemas)
 - Username uniqueness check (database validation)
 - Automatic sign-in after registration
-- Redirect to profile page
+- Redirect to username selection page
+
+**Onboarding**:
+- **Username Selection**: Required step after registration
+- **Questionnaire**: Multi-step onboarding to understand user preferences
+  - Genre selection (multiple genres)
+  - Reading habits and preferences
+  - Used to personalize recommendations
+- Smooth redirect flow: Registration → Username → Onboarding → Profile
 
 **Sign-In**:
 - Email/password with error handling (toast notifications)
@@ -419,15 +524,23 @@ paperboxd/
 │   ├── api/                      # API Routes (Server-side)
 │   │   ├── auth/                 # NextAuth routes
 │   │   ├── users/                # User CRUD & social features
-│   │   ├── books/                # Book search & details
+│   │   ├── books/                # Book search, details, carousels
 │   │   ├── authors/              # Author search
+│   │   ├── onboarding/           # Onboarding questionnaire
+│   │   ├── recommendations/      # Recommendation engine
+│   │   ├── events/               # Event tracking
+│   │   ├── newsletter/           # Newsletter subscription
 │   │   └── cleanup/              # Data cleanup endpoints
 │   ├── u/[username]/             # Dynamic user profile pages
+│   ├── b/[slug]/                 # Book detail pages with carousels
 │   ├── profile/                  # Profile redirect (auth check)
+│   ├── choose-username/          # Username selection page
+│   ├── onboarding/               # Onboarding questionnaire page
 │   ├── activity/                 # User activity feed
+│   ├── books/                    # Latest books page
 │   ├── auth/                     # Authentication pages
 │   ├── layout.tsx                # Root layout (theme script, providers)
-│   ├── page.tsx                  # Homepage
+│   ├── page.tsx                  # Homepage (public/authenticated)
 │   ├── not-found.tsx             # 404 page
 │   └── globals.css               # Global styles
 │
@@ -436,10 +549,19 @@ paperboxd/
 │       ├── buttons/              # Button variants
 │       ├── dock/                 # Tab navigation components
 │       ├── forms/                # Form components
-│       ├── layout/               # Layout components (Header)
-│       ├── home/                 # Homepage components
+│       ├── layout/               # Layout components (Header - fixed positioning)
+│       ├── home/                 # Homepage components (PublicHome, AuthenticatedHome, BookCarousel, Hero)
 │       ├── shared/               # Shared utilities (animations)
 │       ├── demos/                # Component demos
+│       ├── onboarding-questionnaire.tsx  # Onboarding questionnaire component
+│       ├── username-selection.tsx        # Username selection component
+│       ├── footer-section.tsx            # Footer with newsletter and legal dialogs
+│       ├── privacy-policy-dialog.tsx     # Privacy policy dialog
+│       ├── terms-of-service-dialog.tsx   # Terms of service dialog
+│       ├── cookie-settings-dialog.tsx    # Cookie settings dialog
+│       ├── about-us-dialog.tsx           # About us dialog
+│       ├── signup-prompt-dialog.tsx      # Sign-up prompt for non-authenticated users
+│       ├── tetris-loader.tsx             # Tetris loading animation
 │       └── [primitives]/         # Base UI components
 │
 ├── lib/                          # Utilities & Configurations
@@ -447,7 +569,20 @@ paperboxd/
 │   │   ├── mongodb.ts            # Connection management
 │   │   └── models/               # Mongoose schemas
 │   │       ├── User.ts           # User model
-│   │       └── Book.ts           # Book model
+│   │       ├── Book.ts           # Book model
+│   │       ├── Newsletter.ts     # Newsletter subscription model
+│   │       ├── UserPreference.ts # User preference model (for recommendations)
+│   │       ├── Event.ts          # Event tracking model
+│   │       ├── RecommendationCache.ts    # Recommendation cache model
+│   │       ├── RecommendationLog.ts      # Recommendation performance tracking
+│   │       └── AccountDeletion.ts        # Account deletion requests
+│   ├── services/                 # Business logic services
+│   │   ├── UserProfileBuilder.ts # Builds user preference profiles
+│   │   ├── EventTracker.ts       # Tracks user interactions
+│   │   ├── RecommendationService.ts      # Core recommendation engine
+│   │   └── FriendRecommendations.ts      # Friend-based recommendations
+│   ├── config/                   # Configuration files
+│   │   └── recommendation.config.ts      # Recommendation algorithm config
 │   ├── auth.ts                   # NextAuth configuration
 │   ├── auth-client.ts            # Client-side auth helpers
 │   └── utils.ts                  # Utility functions (cn, etc.)
@@ -523,18 +658,21 @@ paperboxd/
 
 ### Feature Expansion
 
-- **Book Reviews**: Full review system with ratings
-- **Recommendations**: ML-based book recommendations
+- **Book Reviews**: Full review system with ratings (infrastructure in place)
+- **Recommendations**: ✅ Implemented - Sophisticated rule-based recommendation system with multi-signal learning
 - **Social Groups**: Book clubs and reading groups
 - **Reading Challenges**: Annual/yearly reading goals
 - **Export Data**: Export reading history (CSV, JSON)
+- **Newsletter**: ✅ Implemented - Email subscription system
+- **Onboarding**: ✅ Implemented - User preference questionnaire
 
 ### Technical Debt
 
 - **Image Upload**: Currently disabled (base64 in MongoDB caused cookie size issues). Future: Cloudinary or S3 integration
 - **Rate Limiting**: Implement API rate limiting middleware
-- **Analytics**: Add privacy-respecting analytics (Plausible, PostHog)
+- **Analytics**: Server-side tracking implemented via EventTracker. Future: Optional privacy-respecting analytics (Plausible, PostHog) with user consent
 - **Testing**: Add unit tests (Vitest) and E2E tests (Playwright)
+- **Newsletter Email Service**: Currently stores emails in database. Future: Integrate with email service provider (SendGrid, Mailchimp, etc.)
 
 ---
 

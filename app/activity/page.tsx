@@ -302,7 +302,7 @@ export default function ActivityPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8 mt-16">
         <div className="space-y-10">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>

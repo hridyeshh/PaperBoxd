@@ -55,7 +55,8 @@ export default function ChooseUsernamePage() {
           name={session.user.name || "User"}
           email={session.user.email || undefined}
           onComplete={() => {
-            router.push("/profile");
+            // Use window.location for full page reload to ensure fresh session
+            window.location.href = "/onboarding";
           }}
         />
       </div>
