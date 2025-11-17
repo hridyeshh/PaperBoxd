@@ -2,10 +2,10 @@
 
 import Image from "next/image";
 import React from "react";
-import { ChevronDown, Grid2x2PlusIcon, MenuIcon, SearchIcon, LinkIcon, QrCodeIcon } from "lucide-react";
+import { ChevronDown, Grid2x2PlusIcon, MenuIcon, SearchIcon, LinkIcon, QrCodeIcon, Trash2 } from "lucide-react";
 import TetrisLoading from "@/components/ui/tetris-loader";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { Sheet, SheetContent, SheetFooter } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Dropdown } from "@/components/ui/dropdown";
 import { signOut } from "@/lib/auth-client";
+import { DeleteAccountDialog } from "@/components/ui/delete-account-dialog";
 
 // Links will be dynamic based on authentication status
 // We'll handle Activity link specially in the component
@@ -43,12 +44,6 @@ const searchItems: CommandItem[] = [
     description: "Keep favourite passages and insights in one place.",
     category: "Notes",
   },
-  {
-    id: "search-5",
-    title: "Find trending authors",
-    description: "See what PaperBoxd readers are loving right now.",
-    category: "Discover",
-  },
 ];
 
 interface HeaderProps {
@@ -69,9 +64,12 @@ export function Header({
   const [fetchedAvatar, setFetchedAvatar] = React.useState<string | null>(null);
   const [isLoadingAvatar, setIsLoadingAvatar] = React.useState(false);
   const [isNavigatingToProfile, setIsNavigatingToProfile] = React.useState(false);
+  const [isDeleteAccountOpen, setIsDeleteAccountOpen] = React.useState(false);
+  const [hasNewActivities, setHasNewActivities] = React.useState(false);
   const { data: session, status } = useSession();
   const isAuthenticated = status === "authenticated";
   const router = useRouter();
+  const pathname = usePathname();
   
   // Fetch logged-in user's profile avatar from database when authenticated
   // Always fetch the logged-in user's avatar, not the profile being viewed
@@ -107,21 +105,69 @@ export function Header({
       setIsLoadingAvatar(false);
     }
   }, [isAuthenticated, session?.user?.username]);
+
+  // Check for new friend activities periodically
+  React.useEffect(() => {
+    if (!isAuthenticated || !session?.user?.username) {
+      setHasNewActivities(false);
+      return;
+    }
+
+    const username = session.user.username;
+    const isOnActivityPage = pathname === "/activity";
+    
+    // If user is on activity page, clear the indicator and update timestamp
+    if (isOnActivityPage) {
+      const now = new Date().toISOString();
+      localStorage.setItem(`activity_last_viewed_${username}`, now);
+      setHasNewActivities(false);
+      return; // Don't check for new activities while on the page
+    }
+    
+    // Get last viewed timestamp from localStorage
+    const lastViewed = localStorage.getItem(`activity_last_viewed_${username}`);
+    
+    const checkNewActivities = async () => {
+      try {
+        const url = lastViewed
+          ? `/api/users/${encodeURIComponent(username)}/activities/check-new?lastViewed=${encodeURIComponent(lastViewed)}`
+          : `/api/users/${encodeURIComponent(username)}/activities/check-new`;
+        
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          setHasNewActivities(data.hasNewActivities || false);
+        }
+      } catch (error) {
+        console.warn("Failed to check for new activities:", error);
+      }
+    };
+
+    // Check immediately
+    checkNewActivities();
+
+    // Check every 30 seconds
+    const interval = setInterval(checkNewActivities, 30000);
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated, session?.user?.username, pathname]);
   
   // Gray placeholder avatar as SVG data URI
   const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%239ca3af'/%3E%3Cpath d='M50 30c-8.284 0-15 6.716-15 15 0 5.989 3.501 11.148 8.535 13.526C37.514 62.951 32 70.16 32 78.5h36c0-8.34-5.514-15.549-13.535-19.974C59.499 56.148 63 50.989 63 45c0-8.284-6.716-15-15-15z' fill='white' opacity='0.8'/%3E%3C/svg%3E";
 
   // Ensure avatarSrc is never an empty string
-  // Priority: fetchedAvatar (logged-in user) > session?.user?.image > default
+  // Priority: fetchedAvatar (logged-in user from database) > default
+  // Don't use session?.user?.image as it may contain Google profile images
   // Note: profileAvatarSrc prop is ignored - we always show logged-in user's avatar
   const avatarSrc = React.useMemo(() => {
-    const src = fetchedAvatar || session?.user?.image;
+    // Only use fetchedAvatar from database, not Google images from session
+    const src = fetchedAvatar;
     // Return fallback if empty string, null, or undefined
     if (!src || (typeof src === "string" && src.trim() === "")) {
       return defaultAvatar;
     }
     return src;
-  }, [fetchedAvatar, session?.user?.image]);
+  }, [fetchedAvatar]);
   
   const profileLabel = profileButtonLabel ?? "Open profile menu";
   const isProfileMenuOpen = profileMenuOpen ?? internalProfileMenuOpen;
@@ -231,35 +277,39 @@ export function Header({
         </button>
         <div className="flex items-center gap-2">
           <div className="hidden items-center gap-1 lg:flex">
-            <a
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                router.push("/books");
+              }}
               className={buttonVariants({
                 variant: "ghost",
                 className: "font-medium text-foreground/80 hover:text-foreground",
               })}
-              href="#Books"
             >
               Books
-            </a>
-            <a
-              className={buttonVariants({
-                variant: "ghost",
-                className: "font-medium text-foreground/80 hover:text-foreground",
-              })}
-              href="#Authors"
-            >
-              Authors
-            </a>
+            </button>
             {isAuthenticated && session?.user?.username ? (
               <button
-                onClick={() => {
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   router.push("/activity");
                 }}
-                className={buttonVariants({
-                  variant: "ghost",
-                  className: "font-medium text-foreground/80 hover:text-foreground",
-                })}
+                className={cn(
+                  buttonVariants({
+                    variant: "ghost",
+                    className: "font-medium text-foreground/80 hover:text-foreground relative",
+                  })
+                )}
               >
                 Activity
+                {hasNewActivities && (
+                  <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-red-500 border-2 border-background" />
+                )}
               </button>
             ) : null}
           </div>
@@ -320,6 +370,16 @@ export function Header({
                     <Dropdown.Item label="Share profile link" icon={LinkIcon} />
                     <Dropdown.Item label="Show QR code" icon={QrCodeIcon} />
                     <Dropdown.Separator />
+                    <Dropdown.Item 
+                      label="Delete account" 
+                      icon={Trash2}
+                      onClick={() => {
+                        setIsDeleteAccountOpen(true);
+                        setInternalProfileMenuOpen(false);
+                      }}
+                      className="text-destructive hover:text-destructive focus:text-destructive [&_svg]:text-destructive"
+                    />
+                    <Dropdown.Separator />
                     <Dropdown.Item label="Log out" onClick={handleLogout} />
                   </Dropdown.Menu>
                 </Dropdown.Popover>
@@ -373,24 +433,21 @@ export function Header({
                 </p>
               </button>
               <div className="grid gap-y-2 overflow-y-auto px-4 pb-6">
-                <a
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    router.push("/books");
+                    setOpen(false);
+                  }}
                   className={buttonVariants({
                     variant: "ghost",
                     className: "justify-start text-base",
                   })}
-                  href="#Books"
                 >
                   Books
-                </a>
-                <a
-                  className={buttonVariants({
-                    variant: "ghost",
-                    className: "justify-start text-base",
-                  })}
-                  href="#Authors"
-                >
-                  Authors
-                </a>
+                </button>
                 {isAuthenticated && session?.user?.username ? (
                   <button
                     onClick={() => {
@@ -417,6 +474,10 @@ export function Header({
         </div>
       </nav>
     </header>
+    <DeleteAccountDialog
+      open={isDeleteAccountOpen}
+      onOpenChange={setIsDeleteAccountOpen}
+    />
     </>
   );
 }

@@ -52,42 +52,20 @@ export async function POST(request: NextRequest) {
     }
     console.log("✅ [Register] Email is available");
 
-    // Generate username if not provided
-    if (!username) {
-      username = email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
-      console.log("🔧 [Register] Generated username from email:", username);
-    }
-
-    // Validate username length
-    if (username.length < 3 || username.length > 30) {
-      console.error("❌ [Register] Invalid username length:", username.length);
-      return NextResponse.json(
-        { error: "Username must be between 3 and 30 characters" },
-        { status: 400 }
-      );
-    }
-
-    // Ensure username is unique
-    console.log("🔍 [Register] Ensuring username uniqueness...");
-    let finalUsername = username;
-    let counter = 1;
-    while (await User.findOne({ username: finalUsername })) {
-      finalUsername = `${username}${counter}`;
-      counter++;
-    }
-    console.log("✅ [Register] Final username:", finalUsername);
+    // Don't set username during registration - user will choose it after sign-up
+    // Username is now optional and will be set in a separate step
 
     // Hash password
     console.log("🔐 [Register] Hashing password...");
     const hashedPassword = await bcrypt.hash(password, 10);
     console.log("✅ [Register] Password hashed");
 
-    // Create new user
+    // Create new user (without username - user will set it after sign-up)
     console.log("👤 [Register] Creating user in database...");
     const newUser = await User.create({
       email: email.toLowerCase(),
       password: hashedPassword,
-      username: finalUsername,
+      // username will be set later by user
       name,
       pronouns: [],
       isPublic: true,

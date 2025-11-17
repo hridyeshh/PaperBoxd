@@ -14,13 +14,21 @@ export default function ProfilePage() {
       return; // Wait for session to load
     }
 
-    if (status === "authenticated" && session?.user?.username) {
-      // Redirect to /u/[username] format
-      router.replace(`/u/${session.user.username}`);
-    } else {
+    if (status === "unauthenticated") {
       // Not authenticated, redirect to auth page
       router.replace("/auth");
-}
+      return;
+    }
+
+    if (status === "authenticated") {
+      if (session?.user?.username) {
+        // Has username, redirect to /u/[username] format
+        router.replace(`/u/${session.user.username}`);
+      } else {
+        // No username, redirect to choose username page
+        router.replace("/choose-username");
+      }
+    }
   }, [status, session?.user?.username, router]);
 
   // Show loading while redirecting

@@ -32,7 +32,7 @@ export async function DELETE(request: NextRequest) {
     // Find books that haven't been accessed in 15 days
     const booksToDelete = await Book.find({
       lastAccessed: { $lt: fifteenDaysAgo },
-    }).select("_id googleBooksId volumeInfo.title lastAccessed");
+    }).select("_id isbndbId openLibraryId volumeInfo.title lastAccessed");
 
     const deletedCount = booksToDelete.length;
 
@@ -54,7 +54,7 @@ export async function DELETE(request: NextRequest) {
       deletedCount: result.deletedCount,
       cutoffDate: fifteenDaysAgo.toISOString(),
       books: booksToDelete.map((book) => ({
-        id: book.googleBooksId,
+        id: book.isbndbId || book.openLibraryId,
         title: book.volumeInfo?.title,
         lastAccessed: book.lastAccessed,
       })),

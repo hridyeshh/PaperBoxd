@@ -13,6 +13,7 @@ import { InteractiveHoverButton } from "@/components/ui/buttons/interactive-hove
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/ui/layout/header-with-search";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
+import { stripHtmlTags } from "@/lib/utils";
 
 interface BookDetails {
   id: string;
@@ -89,7 +90,31 @@ export default function BookDetailPage() {
         setLoading(true);
         setError(null);
         
-        const response = await fetch(`/api/books/by-slug/${slug}`);
+        // Check if slug is actually an ID (ISBN or Open Library ID)
+        // ISBN format: 10 or 13 digits
+        // Open Library ID: starts with "OL" or "/works/"
+        const hasSpaces = slug.includes(" ");
+        const hasPlus = slug.includes("+");
+        const isISBN = /^(\d{10}|\d{13})$/.test(slug);
+        const isOpenLibraryId = slug.startsWith("OL") || slug.startsWith("/works/");
+        // If it doesn't have spaces or +, it could be another ID format
+        const looksLikeId = !hasSpaces && !hasPlus && /^[a-zA-Z0-9_-]+$/.test(slug);
+        
+        // If it looks like an ID (not a slug with + or spaces), try the ID endpoint first
+        // Otherwise, use the slug endpoint (which handles title+hex-id format)
+        let endpoint = looksLikeId || isISBN || isOpenLibraryId
+          ? `/api/books/${encodeURIComponent(slug)}`
+          : `/api/books/by-slug/${encodeURIComponent(slug)}`;
+        
+        let response = await fetch(endpoint);
+        
+        // If ID endpoint returns 404, try slug endpoint as fallback
+        // This handles cases where the ID format check might have been wrong
+        if (!response.ok && response.status === 404 && (isISBN || isOpenLibraryId || looksLikeId) && !hasPlus) {
+          console.log(`[Book Detail] ID endpoint failed, trying slug endpoint for: "${slug}"`);
+          endpoint = `/api/books/by-slug/${encodeURIComponent(slug)}`;
+          response = await fetch(endpoint);
+        }
         
         if (!response.ok) {
           if (response.status === 404) {
@@ -141,7 +166,7 @@ export default function BookDetailPage() {
             const bookId = book._id || book.bookId;
             return (
               (bookId && (b.bookId?.toString() === bookId.toString() || b.bookId === bookId)) ||
-              (book.id && (b.googleBooksId === book.id || b.openLibraryId === book.id)) ||
+              (book.id && (b.isbndbId === book.id || b.openLibraryId === book.id)) ||
               b.title?.toLowerCase() === book.volumeInfo.title?.toLowerCase()
             );
           });
@@ -154,7 +179,7 @@ export default function BookDetailPage() {
             const bookId = book._id || book.bookId;
             return (
               (bookId && (b.bookId?.toString() === bookId.toString() || b.bookId === bookId)) ||
-              (book.id && (b.googleBooksId === book.id || b.openLibraryId === book.id)) ||
+              (book.id && (b.isbndbId === book.id || b.openLibraryId === book.id)) ||
               b.title?.toLowerCase() === book.volumeInfo.title?.toLowerCase()
             );
           });
@@ -167,7 +192,7 @@ export default function BookDetailPage() {
             const bookId = book._id || book.bookId;
             return (
               (bookId && (b.bookId?.toString() === bookId.toString() || b.bookId === bookId)) ||
-              (book.id && (b.googleBooksId === book.id || b.openLibraryId === book.id)) ||
+              (book.id && (b.isbndbId === book.id || b.openLibraryId === book.id)) ||
               b.title?.toLowerCase() === book.volumeInfo.title?.toLowerCase()
             );
           });
@@ -195,18 +220,19 @@ export default function BookDetailPage() {
 
   const { volumeInfo, saleInfo, paperboxdStats } = book;
   // Prioritize larger images for detail page to ensure clarity
+  // All book cover images should be displayed at maximum quality without optimization
   const coverImage = volumeInfo.imageLinks?.extraLarge ||
-                     volumeInfo.imageLinks?.large || 
-                     volumeInfo.imageLinks?.medium || 
-                     volumeInfo.imageLinks?.thumbnail || 
-                     volumeInfo.imageLinks?.smallThumbnail || 
+                     volumeInfo.imageLinks?.large ||
+                     volumeInfo.imageLinks?.medium ||
+                     volumeInfo.imageLinks?.thumbnail ||
+                     volumeInfo.imageLinks?.smallThumbnail ||
                      "";
 
   // Format published date
   const formatPublishedDate = (dateStr?: string) => {
     if (!dateStr) return null;
     
-    // Google Books dates can be in formats: "2023", "2023-01", "2023-01-15"
+    // Published dates can be in formats: "2023", "2023-01", "2023-01-15"
     try {
       const parts = dateStr.split("-");
       if (parts.length === 1) {
@@ -239,7 +265,7 @@ export default function BookDetailPage() {
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-8 lg:flex-row lg:gap-12">
           {/* Left: Large Book Cover */}
-          <div className="flex-shrink-0 w-full sm:w-48 lg:w-64">
+          <div className="flex-shrink-0 w-full sm:w-64 lg:w-80">
             <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg border border-border bg-muted shadow-lg">
               {coverImage ? (
                 <Image
@@ -247,9 +273,10 @@ export default function BookDetailPage() {
                   alt={volumeInfo.title}
                   fill
                   className="object-cover"
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 192px, 256px"
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 256px, 320px"
                   priority
-                  quality={90}
+                  quality={100}
+                  unoptimized={true}
                 />
               ) : (
                 <div className="flex h-full items-center justify-center bg-muted">
@@ -266,14 +293,18 @@ export default function BookDetailPage() {
                     if (isUpdating || !session?.user?.username || !book) return;
                     setIsUpdating(true);
                     try {
+                      // Determine the correct ID type based on book.id format
+                      const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
+                      const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
+                      
                       const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                           type: "bookshelf",
                           bookId: book._id || book.bookId,
-                          googleBooksId: book.id?.startsWith("OL") ? undefined : book.id,
-                          openLibraryId: book.id?.startsWith("OL") ? book.id : undefined,
+                          isbndbId: isISBN ? book.id : undefined,
+                          openLibraryId: isOpenLibraryId ? book.id : undefined,
                           finishedOn: new Date().toISOString(),
                         }),
                       });
@@ -308,14 +339,18 @@ export default function BookDetailPage() {
                     if (isUpdating || !session?.user?.username || !book) return;
                     setIsUpdating(true);
                     try {
+                      // Determine the correct ID type based on book.id format
+                      const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
+                      const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
+                      
                       const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                           type: "liked",
                           bookId: book._id || book.bookId,
-                          googleBooksId: book.id?.startsWith("OL") ? undefined : book.id,
-                          openLibraryId: book.id?.startsWith("OL") ? book.id : undefined,
+                          isbndbId: isISBN ? book.id : undefined,
+                          openLibraryId: isOpenLibraryId ? book.id : undefined,
                         }),
                       });
                       
@@ -348,14 +383,18 @@ export default function BookDetailPage() {
                     if (isUpdating || !session?.user?.username || !book) return;
                     setIsUpdating(true);
                     try {
+                      // Determine the correct ID type based on book.id format
+                      const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
+                      const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
+                      
                       const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                           type: "tbr",
                           bookId: book._id || book.bookId,
-                          googleBooksId: book.id?.startsWith("OL") ? undefined : book.id,
-                          openLibraryId: book.id?.startsWith("OL") ? book.id : undefined,
+                          isbndbId: isISBN ? book.id : undefined,
+                          openLibraryId: isOpenLibraryId ? book.id : undefined,
                         }),
                       });
                       
@@ -472,13 +511,13 @@ export default function BookDetailPage() {
               )}
             </div>
 
-            {/* Google Books Rating */}
+            {/* Average Rating */}
             {volumeInfo.averageRating && volumeInfo.ratingsCount && (
               <div className="flex items-center gap-2">
                 <Star className="size-4 fill-yellow-400 text-yellow-400" />
                 <span className="text-sm text-muted-foreground">
                   <span className="font-medium text-foreground">{volumeInfo.averageRating.toFixed(1)}</span> 
-                  {" "}from <span className="font-medium text-foreground">{volumeInfo.ratingsCount.toLocaleString()}</span> Google Books ratings
+                  {" "}from <span className="font-medium text-foreground">{volumeInfo.ratingsCount.toLocaleString()}</span> ratings
                 </span>
               </div>
             )}
@@ -488,7 +527,7 @@ export default function BookDetailPage() {
               <div className="space-y-2">
                 <h2 className="text-lg font-semibold">Description</h2>
                 <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
-                  {volumeInfo.description}
+                  {stripHtmlTags(volumeInfo.description)}
                 </p>
               </div>
             )}

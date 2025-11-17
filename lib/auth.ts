@@ -143,23 +143,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         let existingUser = await User.findOne({ email: user.email });
 
         if (!existingUser) {
-          // Create new user from Google profile
-          const username = user.email?.split("@")[0] || `user${Date.now()}`;
-
-          // Ensure username is unique
-          let finalUsername = username;
-          let counter = 1;
-          while (await User.findOne({ username: finalUsername })) {
-            finalUsername = `${username}${counter}`;
-            counter++;
-          }
-
+          // Create new user from Google profile (without username - user will set it after sign-up)
           existingUser = await User.create({
             email: user.email,
             password: await bcrypt.hash(Math.random().toString(36), 10), // Random password for OAuth users
-            username: finalUsername,
-            name: user.name || finalUsername,
-            avatar: user.image,
+            // username will be set later by user
+            name: user.name || user.email?.split("@")[0] || "User",
+            // Don't use Google profile image - user can set their own avatar later
+            avatar: undefined,
             pronouns: [],
             isPublic: true,
             topBooks: [],
@@ -192,22 +183,36 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id;
-        token.username = user.username;
+        token.username = user.username; // Can be undefined for new users
         token.email = user.email;
         token.name = user.name;
-        // Never store base64 images in JWT - they're too large for cookies
-        // Only store image if it's a URL (not base64) and not too long
-        if (user.image && 
-            !user.image.startsWith("data:") && 
-            user.image.length < 500) { // Limit URL length too
-          token.picture = user.image;
-        } else {
-          // Explicitly remove picture to prevent cookie size issues
-          token.picture = undefined;
+        // Don't store Google profile images - user avatars are stored in database only
+        token.picture = undefined;
+      } else if (token && token.email) {
+        // On subsequent requests, fetch latest user data from database to get updated username
+        try {
+          await connectDB();
+          const dbUser = await User.findOne({ email: token.email }).select("username name avatar");
+          if (dbUser) {
+            token.username = dbUser.username; // Update username if it was set
+            token.name = dbUser.name;
+            // Only store avatar if it's a data URI (user-uploaded) and not too large
+            // Don't store Google image URLs
+            if (dbUser.avatar && 
+                dbUser.avatar.startsWith("data:") && 
+                dbUser.avatar.length < 50000) { // Allow data URIs up to 50KB
+              token.picture = dbUser.avatar;
+            } else {
+              token.picture = undefined;
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching user in JWT callback:", error);
+          // Continue with existing token data if fetch fails
         }
-      } else if (token) {
-        // On subsequent requests, ensure picture is still not a base64 string
-        if (token.picture && typeof token.picture === "string" && token.picture.startsWith("data:")) {
+        
+        // On subsequent requests, ensure we're not storing Google image URLs
+        if (token.picture && typeof token.picture === "string" && !token.picture.startsWith("data:")) {
           token.picture = undefined;
         }
       }

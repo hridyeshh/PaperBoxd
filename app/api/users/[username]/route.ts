@@ -59,6 +59,43 @@ export async function GET(
     const followers = Array.isArray(user.followers) ? user.followers : [];
     const following = Array.isArray(user.following) ? user.following : [];
 
+    // Filter out any search-related activities if they exist
+    const filteredActivities = activities.filter((activity: any) => 
+      activity.type !== "search"
+    );
+
+    // Populate activities with book information
+    const activitiesWithBooks = await Promise.all(
+      filteredActivities.slice(-20).reverse().map(async (activity: any) => {
+        // Ensure timestamp is preserved (don't default to new Date() as it creates "Just now")
+        const activityData: any = {
+          _id: activity._id,
+          type: activity.type,
+          bookId: activity.bookId,
+          timestamp: activity.timestamp || activity.createdAt || undefined,
+          rating: activity.rating,
+        };
+        
+        if (activity.bookId) {
+          try {
+            // Convert bookId to ObjectId if it's a string
+            const bookId = activity.bookId?.toString ? activity.bookId.toString() : activity.bookId;
+            const book = await Book.findById(bookId).lean();
+            if (book) {
+              activityData.bookTitle = book.volumeInfo?.title || undefined;
+              activityData.bookCover = book.volumeInfo?.imageLinks?.thumbnail || 
+                        book.volumeInfo?.imageLinks?.smallThumbnail ||
+                        book.volumeInfo?.imageLinks?.medium ||
+                        undefined;
+            }
+          } catch (error) {
+            console.warn(`Failed to fetch book for activity ${activity._id}:`, error);
+          }
+        }
+        return activityData;
+      })
+    );
+
     return NextResponse.json({
       user: {
         id: user._id?.toString() || user._id,
@@ -94,8 +131,8 @@ export async function GET(
         readingGoal: user.readingGoal ?? null,
         authorsRead: Array.isArray(user.authorsRead) ? user.authorsRead : [],
 
-        // Activity
-        recentActivities: activities.slice(-20).reverse(), // Last 20 activities
+        // Activity - with populated book information
+        recentActivities: activitiesWithBooks,
 
         // Metadata
         createdAt: user.createdAt,

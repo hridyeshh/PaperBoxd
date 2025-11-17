@@ -3,13 +3,23 @@ import mongoose from "mongoose";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
 import Book from "@/lib/db/models/Book";
+import {
+  getBookByISBN,
+  transformISBNdbBook,
+} from "@/lib/api/isbndb";
+import {
+  getOpenLibraryWork,
+  transformOpenLibraryBook,
+} from "@/lib/api/open-library";
 
 /**
  * Add a book to user's collection (bookshelf, TBR, liked, etc.)
  *
  * POST /api/users/[username]/books
  * Body: {
- *   googleBooksId: string,
+ *   isbndbId?: string,        // ISBN-10 or ISBN-13 (ISBNdb ID)
+ *   openLibraryId?: string,   // Open Library ID
+ *   bookId?: string,          // MongoDB _id
  *   type: "bookshelf" | "tbr" | "liked" | "top" | "favorite" | "currently_reading",
  *   // Additional data based on type
  *   finishedOn?: Date,
@@ -28,7 +38,7 @@ export async function POST(
   try {
     const { username } = await context.params;
     const body = await request.json();
-    const { googleBooksId, openLibraryId, bookId, type, ...additionalData } = body;
+    const { isbndbId, openLibraryId, bookId, type, ...additionalData } = body;
 
     if (!username || !type) {
       return NextResponse.json(
@@ -38,9 +48,9 @@ export async function POST(
     }
 
     // Must provide at least one book identifier
-    if (!googleBooksId && !openLibraryId && !bookId) {
+    if (!isbndbId && !openLibraryId && !bookId) {
       return NextResponse.json(
-        { error: "Either googleBooksId, openLibraryId, or bookId is required" },
+        { error: "Either isbndbId, openLibraryId, or bookId is required" },
         { status: 400 }
       );
     }
@@ -61,40 +71,33 @@ export async function POST(
     // Connect to database
     await connectDB();
 
-    // Find book by provided identifier
+    // Find book by provided identifier (priority: bookId > isbndbId > openLibraryId)
     let book = null;
     if (bookId) {
       book = await Book.findById(bookId);
-    } else if (googleBooksId) {
-      book = await Book.findOne({ googleBooksId });
+    } else if (isbndbId) {
+      book = await Book.findOne({ isbndbId });
     } else if (openLibraryId) {
       book = await Book.findOne({ openLibraryId });
     }
 
-    // If book not found and we have googleBooksId, try to fetch from Google Books API
-    if (!book && googleBooksId) {
-      const apiKey = process.env.GOOGLE_BOOKS_API_KEY;
-      if (apiKey) {
-        try {
-          const googleBooksUrl = `https://www.googleapis.com/books/v1/volumes/${googleBooksId}?key=${apiKey}`;
-          const response = await fetch(googleBooksUrl);
-
-          if (response.ok) {
-            const googleBooksData = await response.json();
-            await Book.findOrCreateFromGoogleBooks(googleBooksData);
-            book = await Book.findOne({ googleBooksId });
-          }
-        } catch (error) {
-          console.error("Failed to fetch from Google Books:", error);
-        }
+    // If book not found, try to fetch from APIs (ISBNdb first)
+    if (!book && isbndbId) {
+      console.log(`[User Books] Trying ISBNdb for ISBN: "${isbndbId}"`);
+      try {
+        const isbndbBook = await getBookByISBN(isbndbId);
+        const transformedData = transformISBNdbBook(isbndbBook);
+        await Book.findOrCreateFromISBNdb(transformedData);
+        book = await Book.findOne({ isbndbId });
+      } catch (error) {
+        console.error("Failed to fetch from ISBNdb:", error);
       }
     }
 
-    // If book not found and we have openLibraryId, try to fetch from Open Library API
+    // Fallback to Open Library if ISBNdb fails or not available
     if (!book && openLibraryId) {
+      console.log(`[User Books] Trying Open Library for ID: "${openLibraryId}"`);
       try {
-        // Import Open Library functions
-        const { getOpenLibraryWork, transformOpenLibraryBook } = await import("@/lib/api/open-library");
         const workData = await getOpenLibraryWork(openLibraryId);
         const transformedData = transformOpenLibraryBook({
           key: workData.key || `/works/${openLibraryId}`,
@@ -133,7 +136,8 @@ export async function POST(
     const bookIdObj = book._id as mongoose.Types.ObjectId;
     const bookReference = {
       bookId: bookIdObj,
-      googleBooksId: book.googleBooksId || undefined,
+      isbndbId: book.isbndbId || undefined,
+      openLibraryId: book.openLibraryId || undefined,
       title: book.volumeInfo.title,
       author: book.volumeInfo.authors[0] || "Unknown Author",
       cover:
@@ -151,7 +155,7 @@ export async function POST(
         const currentBookId = bookIdObj.toString();
         return (
           itemBookId === currentBookId ||
-          (book.googleBooksId && item.googleBooksId === book.googleBooksId) ||
+          (book.isbndbId && item.isbndbId === book.isbndbId) ||
           (book.openLibraryId && item.openLibraryId === book.openLibraryId) ||
           item.title?.toLowerCase() === book.volumeInfo.title?.toLowerCase()
         );

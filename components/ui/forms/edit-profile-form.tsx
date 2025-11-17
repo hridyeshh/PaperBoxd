@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import * as React from "react";
-import { Check, ChevronDown, LinkIcon, MailIcon, UploadCloud, UserIcon } from "lucide-react";
+import { Check, ChevronDown, LinkIcon, MailIcon, UploadCloud, UserIcon, X, Loader2 } from "lucide-react";
 import type { Selection } from "react-aria-components";
 import { format as formatDate } from "date-fns";
 
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 export type EditableProfile = {
   username: string;
@@ -67,6 +68,11 @@ export function EditProfileForm({
     () => profile.gender.length > 0 && !genderOptions.includes(profile.gender),
   );
   const [genderDropdownOpen, setGenderDropdownOpen] = React.useState(false);
+  const [usernameAvailability, setUsernameAvailability] = React.useState<{
+    available: boolean | null;
+    checking: boolean;
+  }>({ available: null, checking: false });
+  const originalUsername = React.useRef(profile.username);
   const pronounSelection = React.useMemo<Selection>(() => new Set(profile.pronouns), [profile.pronouns]);
   const genderSelection = React.useMemo<Selection>(() => {
     if (useCustomGender) {
@@ -82,6 +88,49 @@ export function EditProfileForm({
   React.useEffect(() => {
     setUseCustomGender(profile.gender.length > 0 && !genderOptions.includes(profile.gender));
   }, [profile.gender]);
+
+  // Check username availability when it changes (and it's different from original)
+  React.useEffect(() => {
+    const currentUsername = profile.username?.trim();
+    const original = originalUsername.current?.trim();
+
+    // Only check if username changed and is valid
+    if (!currentUsername || currentUsername === original) {
+      setUsernameAvailability({ available: null, checking: false });
+      return;
+    }
+
+    // Validate format first
+    const usernameRegex = /^[a-zA-Z0-9_]{3,30}$/;
+    if (!usernameRegex.test(currentUsername)) {
+      setUsernameAvailability({ available: false, checking: false });
+      return;
+    }
+
+    // Debounce the check
+    const timeoutId = setTimeout(async () => {
+      setUsernameAvailability({ available: null, checking: true });
+      try {
+        const response = await fetch(
+          `/api/users/check-username?username=${encodeURIComponent(currentUsername)}`
+        );
+        const data = await response.json();
+
+        if (response.ok) {
+          setUsernameAvailability({
+            available: data.available,
+            checking: false,
+          });
+        } else {
+          setUsernameAvailability({ available: false, checking: false });
+        }
+      } catch (error) {
+        setUsernameAvailability({ available: false, checking: false });
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [profile.username]);
 
   const updateProfile = React.useCallback(
     (patch: Partial<EditableProfile>) => {
@@ -227,10 +276,39 @@ export function EditProfileForm({
                 value={profile.username}
                 onChange={handleChange}
                 placeholder="Unique handle"
-                className="pl-9"
+                className={cn(
+                  "pl-9 pr-10",
+                  profile.username !== originalUsername.current && 
+                    usernameAvailability.available === true && 
+                    "border-green-500",
+                  profile.username !== originalUsername.current && 
+                    usernameAvailability.available === false && 
+                    "border-destructive"
+                )}
               />
               <UserIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              {profile.username !== originalUsername.current && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  {usernameAvailability.checking ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                  ) : usernameAvailability.available === true ? (
+                    <Check className="w-4 h-4 text-green-500" />
+                  ) : usernameAvailability.available === false ? (
+                    <X className="w-4 h-4 text-destructive" />
+                  ) : null}
+                </div>
+              )}
             </div>
+            {profile.username !== originalUsername.current && (
+              <>
+                {usernameAvailability.available === true && (
+                  <p className="text-sm text-green-600">Username is available!</p>
+                )}
+                {usernameAvailability.available === false && (
+                  <p className="text-sm text-destructive">Username is already taken</p>
+                )}
+              </>
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

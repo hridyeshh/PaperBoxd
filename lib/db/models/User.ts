@@ -16,7 +16,8 @@ if (typeof process !== "undefined" && typeof process.emitWarning !== "function")
 
 export interface IBookReference {
   bookId: mongoose.Types.ObjectId; // Reference to Book collection
-  googleBooksId?: string; // Google Books API ID
+  isbndbId?: string; // ISBNdb ID
+  openLibraryId?: string; // Open Library ID
   title: string;
   author: string;
   cover: string;
@@ -71,7 +72,7 @@ export interface IUser extends Document {
   // Authentication & Basic Profile
   email: string;
   password: string; // Hashed
-  username: string;
+  username?: string; // Optional - user must set it after sign-up
   name: string;
 
   // Profile Information
@@ -125,7 +126,8 @@ export interface IUser extends Document {
 
 const BookReferenceSchema = new Schema({
   bookId: { type: Schema.Types.ObjectId, ref: "Book", required: true },
-  googleBooksId: { type: String },
+  isbndbId: { type: String },
+  openLibraryId: { type: String },
   title: { type: String, required: true },
   author: { type: String, required: true },
   cover: { type: String, required: true },
@@ -196,11 +198,18 @@ const UserSchema = new Schema<IUser>(
     password: { type: String, required: true },
     username: {
       type: String,
-      required: true,
+      required: false, // Optional - user sets it after sign-up
       unique: true,
+      sparse: true, // Allow multiple nulls
       trim: true,
-      minlength: 3,
-      maxlength: 30,
+      validate: {
+        validator: function(v: string | undefined) {
+          // Only validate if value is provided
+          if (!v) return true; // Allow undefined/null
+          return v.length >= 3 && v.length <= 30;
+        },
+        message: "Username must be between 3 and 30 characters",
+      },
     },
     name: { type: String, required: true, trim: true },
 

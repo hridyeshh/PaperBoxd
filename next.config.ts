@@ -23,6 +23,18 @@ const nextConfig: NextConfig = {
         protocol: "http",
         hostname: "covers.openlibrary.org",
       },
+      {
+        protocol: "https",
+        hostname: "images.isbndb.com",
+      },
+      {
+        protocol: "https",
+        hostname: "covers.isbndb.com",
+      },
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+      },
     ],
     // Disable image optimization for external book covers to prevent blur
     // Book cover images from APIs are already optimized and small

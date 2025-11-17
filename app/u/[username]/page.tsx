@@ -473,7 +473,7 @@ function BookCard({ title, author, cover, mood }: ProfileBook) {
           className="object-cover transition-transform duration-500 group-hover:scale-105"
           sizes="180px"
           quality={100}
-          unoptimized={true}
+          unoptimized={cover?.includes('isbndb.com') || cover?.includes('images.isbndb.com') || cover?.includes('covers.isbndb.com') || true}
         />
       </div>
       <div>
@@ -551,7 +551,7 @@ function BookshelfSection({
                 className="object-cover transition-transform duration-500 group-hover:scale-105"
                 sizes="56px"
                 quality={100}
-                unoptimized={true}
+                unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
               />
             </div>
             <div className="flex-1 min-w-0 space-y-1">
@@ -649,7 +649,7 @@ function LikesSection({
                 className="object-cover transition-transform duration-500 group-hover:scale-105"
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
                 quality={100}
-                unoptimized={true}
+                unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
               />
             </div>
             <div>
@@ -746,7 +746,7 @@ function TbrSection({
                 className="object-cover transition-transform duration-500 group-hover:scale-105"
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
                 quality={100}
-                unoptimized={true}
+                unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
               />
             </div>
             <div>
@@ -841,6 +841,8 @@ function AuthorsSection({
                 fill
                 className="object-cover transition-transform duration-500 group-hover:scale-105"
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+                quality={100}
+                unoptimized={author.cover?.includes('isbndb.com') || author.cover?.includes('images.isbndb.com') || author.cover?.includes('covers.isbndb.com') || true}
               />
             </div>
             <div>
@@ -915,7 +917,7 @@ function ListCard({
           className="object-cover transition-transform duration-500 group-hover:scale-105"
           sizes="200px"
           quality={100}
-          unoptimized={true}
+          unoptimized={list.cover?.includes('isbndb.com') || list.cover?.includes('images.isbndb.com') || list.cover?.includes('covers.isbndb.com') || true}
         />
       </div>
       <div className="relative">
@@ -1682,7 +1684,16 @@ export default function UserProfilePage() {
                           label: "Friends",
                           icon: Users,
                           isActive: activityView === "Friends",
-                          onClick: () => setActivityView("Friends"),
+                          onClick: () => {
+                            setActivityView("Friends");
+                            // Update last viewed timestamp to clear red dot in header
+                            if (isAuthenticated && session?.user?.username) {
+                              localStorage.setItem(
+                                `activity_last_viewed_${session.user.username}`,
+                                new Date().toISOString()
+                              );
+                            }
+                          },
                         },
                         {
                           label: "Me",
@@ -1726,7 +1737,7 @@ export default function UserProfilePage() {
                                 className="object-cover"
                                 sizes="96px"
                                 quality={100}
-                                unoptimized={true}
+                                unoptimized={entry.cover?.includes('isbndb.com') || entry.cover?.includes('images.isbndb.com') || entry.cover?.includes('covers.isbndb.com') || true}
                               />
                             </div>
                             <div className="flex flex-1 flex-col justify-between">

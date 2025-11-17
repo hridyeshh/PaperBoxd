@@ -30,11 +30,22 @@ export async function GET(request: NextRequest) {
     // Connect to database
     await connectDB();
 
-    // Search for users by username or name (case-insensitive)
+    // Normalize query for better matching
+    const normalizedQuery = query.trim().toLowerCase();
+    
+    // Search for users by username or name (case-insensitive, partial match)
+    // Using word boundaries and flexible matching to catch partial matches
+    const escapedQuery = normalizedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regexPattern = escapedQuery.split(/\s+/).join('.*'); // Match words in any order
+    
     const users = await User.find({
       $or: [
-        { username: { $regex: query.trim(), $options: "i" } },
-        { name: { $regex: query.trim(), $options: "i" } },
+        { username: { $regex: escapedQuery, $options: "i" } },
+        { name: { $regex: escapedQuery, $options: "i" } },
+        // Also try matching words in any order for names
+        ...(normalizedQuery.includes(' ') ? [
+          { name: { $regex: regexPattern, $options: "i" } }
+        ] : []),
       ],
     })
       .select("username name avatar")

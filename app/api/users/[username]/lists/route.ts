@@ -9,7 +9,7 @@ import User from "@/lib/db/models/User";
  * Body: {
  *   title: string,
  *   description?: string,
- *   books?: string[], // Array of Google Books IDs
+ *   books?: string[], // Array of book IDs (ISBNdb IDs or Open Library IDs)
  *   isPublic?: boolean
  * }
  */

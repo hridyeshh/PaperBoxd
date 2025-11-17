@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/db/mongodb";
 import Book from "@/lib/db/models/Book";
+import {
+  getBookByISBN,
+  transformISBNdbBook,
+} from "@/lib/api/isbndb";
+import {
+  getOpenLibraryWork,
+  transformOpenLibraryBook,
+} from "@/lib/api/open-library";
 
 /**
- * Get a specific book by Google Books ID with database caching
+ * Get a specific book by ID (ISBNdb ID or Open Library ID) with database caching
  *
- * Example: /api/books/abc123
+ * Example: /api/books/9780747532699 (ISBN-13)
+ * Example: /api/books/OL45804W (Open Library ID)
  */
 export async function GET(
   request: NextRequest,
@@ -24,39 +33,81 @@ export async function GET(
     // Connect to database
     await connectDB();
 
-    // First, try to find the book in our database
-    let book = await Book.findOne({ googleBooksId: id });
+    // First, try to find the book in our database by any ID type
+    // Check if it's a MongoDB ObjectId (24 hex characters)
+    const isMongoObjectId = /^[0-9a-fA-F]{24}$/.test(id);
+    
+    let book = await Book.findOne(
+      isMongoObjectId
+        ? { _id: id } // Search by MongoDB ObjectId
+        : {
+            $or: [
+              { isbndbId: id },
+              { openLibraryId: id },
+              { isbn: id },
+              { isbn13: id },
+            ],
+          }
+    );
 
     if (book) {
       // Update access statistics
       book.usageCount += 1;
       book.lastAccessed = new Date();
+      
+      const apiSource = book.apiSource || (book.isbndbId ? "isbndb" : "open_library");
+      console.log(`[Book by ID] ✅ Found in database (ID: "${id}", Source: ${apiSource})`);
 
       // Check if cache is stale (older than 30 days)
       if (book.isCacheStale()) {
-        // Fetch fresh data from Google Books API
-        const apiKey = process.env.GOOGLE_BOOKS_API_KEY;
-        if (apiKey) {
+        console.log(`[Book by ID] Cache is stale, updating from ${apiSource}...`);
+        // Try ISBNdb first
+        if (book.isbndbId) {
           try {
-            const googleBooksUrl = `https://www.googleapis.com/books/v1/volumes/${id}?key=${apiKey}`;
-            const response = await fetch(googleBooksUrl);
-
-            if (response.ok) {
-              const data = await response.json();
-              book.volumeInfo = data.volumeInfo;
-              book.saleInfo = data.saleInfo;
-              book.lastUpdated = new Date();
-            }
+            console.log(`[Book by ID] 🔄 Updating stale cache from ISBNdb (ISBN: ${book.isbndbId})`);
+            const isbndbBook = await getBookByISBN(book.isbndbId);
+            const transformedData = transformISBNdbBook(isbndbBook);
+            book.volumeInfo = transformedData.volumeInfo;
+            book.lastUpdated = new Date();
+            console.log(`[Book by ID] ✅ Successfully updated from ISBNdb`);
           } catch (error) {
-            console.error("Failed to update stale cache:", error);
+            console.error(`[Book by ID] ❌ Failed to update stale cache from ISBNdb:`, error);
+          }
+        } else if (book.openLibraryId) {
+          // Fetch fresh data from Open Library API
+          try {
+            console.log(`[Book by ID] 🔄 Updating stale cache from Open Library (ID: ${book.openLibraryId})`);
+            const workData = await getOpenLibraryWork(book.openLibraryId);
+            const transformedData = transformOpenLibraryBook({
+              key: workData.key || book.openLibraryId,
+              title: workData.title || "",
+              author_name: workData.authors?.map((a: any) => a.name) || [],
+              cover_i: undefined,
+              first_publish_year: workData.first_publish_year,
+              isbn: workData.isbn || [],
+              publisher: workData.publishers || [],
+              subject: workData.subjects || [],
+              ratings_average: workData.ratings_average,
+              ratings_count: workData.ratings_count,
+            });
+            book.volumeInfo = transformedData.volumeInfo;
+            book.lastUpdated = new Date();
+            console.log(`[Book by ID] ✅ Successfully updated from Open Library`);
+          } catch (error) {
+            console.error(`[Book by ID] ❌ Failed to update stale cache from Open Library:`, error);
           }
         }
       }
 
-      await book.save();
+      await book.save().catch((saveError) => {
+        // Don't fail the request if save fails
+        console.warn("[Book by ID] ⚠️ Failed to save book stats:", saveError);
+      });
 
       return NextResponse.json({
-        id: book.googleBooksId,
+        id: book.isbndbId || book.openLibraryId || book.isbn13 || book.isbn || book._id.toString(),
+        _id: book._id.toString(),
+        bookId: book._id.toString(),
         volumeInfo: book.volumeInfo,
         saleInfo: book.saleInfo,
         paperboxdStats: {
@@ -67,44 +118,95 @@ export async function GET(
           totalTBR: book.totalTBR,
         },
         fromCache: true,
+        apiSource: apiSource,
       });
     }
 
-    // If not in database, fetch from Google Books API
-    const apiKey = process.env.GOOGLE_BOOKS_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "Google Books API key not configured" },
-        { status: 500 }
-      );
-    }
+    // Book not found in database - try external APIs
+    console.log(`[Book by ID] 📚 Book not found in database for ID: "${id}"`);
 
-    const googleBooksUrl = `https://www.googleapis.com/books/v1/volumes/${id}?key=${apiKey}`;
-    const response = await fetch(googleBooksUrl);
+    // If not in database, try ISBNdb API first (check if ID looks like an ISBN)
+    const isISBN = /^(\d{10}|\d{13})$/.test(id);
+    
+    if (isISBN) {
+      console.log(`[Book by ID] 🔍 Attempting ISBNdb API for ISBN: "${id}"`);
+      try {
+        const isbndbBook = await getBookByISBN(id);
+        const transformedData = transformISBNdbBook(isbndbBook);
+        
+        // Cache the book in our database
+        const createdBook = await Book.findOrCreateFromISBNdb(transformedData);
+        
+        console.log(`[Book by ID] ✅ SUCCESS: Book found via ISBNdb API (ISBN: ${id}, Title: ${createdBook.volumeInfo?.title || 'N/A'})`);
 
-    if (!response.ok) {
-      if (response.status === 404) {
-        return NextResponse.json({ error: "Book not found" }, { status: 404 });
+        return NextResponse.json({
+          id: createdBook.isbndbId || id,
+          _id: createdBook._id.toString(),
+          bookId: createdBook._id.toString(),
+          volumeInfo: createdBook.volumeInfo,
+          paperboxdStats: {
+            rating: createdBook.paperboxdRating,
+            ratingsCount: createdBook.paperboxdRatingsCount,
+            totalReads: createdBook.totalReads,
+            totalLikes: createdBook.totalLikes,
+            totalTBR: createdBook.totalTBR,
+          },
+          apiSource: "isbndb",
+          fromCache: false,
+        });
+      } catch (error) {
+        console.error(`[Book by ID] ❌ ISBNdb API failed for ISBN "${id}":`, error instanceof Error ? error.message : "Unknown error");
+        // Continue to fallback APIs
       }
-      throw new Error(`Google Books API error: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    // Try Open Library API (if ID looks like Open Library ID)
+    if (id.startsWith("OL") || id.startsWith("/works/")) {
+      console.log(`[Book by ID] 🔍 Attempting Open Library API for ID: "${id}"`);
+      try {
+        const workData = await getOpenLibraryWork(id);
+        const transformedData = transformOpenLibraryBook({
+          key: workData.key || id,
+          title: workData.title || "",
+          author_name: workData.authors?.map((a: any) => a.name) || [],
+          cover_i: undefined,
+          first_publish_year: workData.first_publish_year,
+          isbn: workData.isbn || [],
+          publisher: workData.publishers || [],
+          subject: workData.subjects || [],
+          ratings_average: workData.ratings_average,
+          ratings_count: workData.ratings_count,
+        });
+        const createdBook = await Book.findOrCreateFromOpenLibrary(transformedData);
+        
+        console.log(`[Book by ID] ✅ SUCCESS: Book found via Open Library API (ID: ${id}, Title: ${createdBook.volumeInfo?.title || 'N/A'})`);
 
-    // Cache the book in our database
-    const createdBook = await Book.findOrCreateFromGoogleBooks(data);
+        return NextResponse.json({
+          id: createdBook.openLibraryId || id,
+          _id: createdBook._id.toString(),
+          bookId: createdBook._id.toString(),
+          volumeInfo: createdBook.volumeInfo,
+          paperboxdStats: {
+            rating: createdBook.paperboxdRating,
+            ratingsCount: createdBook.paperboxdRatingsCount,
+            totalReads: createdBook.totalReads,
+            totalLikes: createdBook.totalLikes,
+            totalTBR: createdBook.totalTBR,
+          },
+          apiSource: "open_library",
+          fromCache: false,
+        });
+      } catch (error) {
+        console.error(`[Book by ID] ❌ Open Library API failed for ID "${id}":`, error instanceof Error ? error.message : "Unknown error");
+      }
+    }
 
-    return NextResponse.json({
-      ...data,
-      paperboxdStats: {
-        rating: createdBook.paperboxdRating,
-        ratingsCount: createdBook.paperboxdRatingsCount,
-        totalReads: createdBook.totalReads,
-        totalLikes: createdBook.totalLikes,
-        totalTBR: createdBook.totalTBR,
-      },
-      fromCache: false,
-    });
+    // No results from ISBNdb or Open Library
+    console.log(`[Book by ID] ❌ Book not found in ISBNdb or Open Library APIs for ID: "${id}"`);
+    return NextResponse.json(
+      { error: "Book not found in ISBNdb or Open Library APIs" },
+      { status: 404 }
+    );
   } catch (error) {
     console.error("Book fetch error:", error);
     return NextResponse.json(

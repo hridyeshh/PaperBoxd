@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/command';
 import { DockToggle } from '@/components/ui/dock';
 
-import { LucideIcon, SearchIcon, Loader2, BookOpen, User, BookMarked } from 'lucide-react';
+import { LucideIcon, SearchIcon, Loader2, BookOpen, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createBookSlug } from '@/lib/utils/book-slug';
 
@@ -42,12 +42,6 @@ type BookSearchResult = {
 	};
 };
 
-type AuthorSearchResult = {
-	id: string;
-	name: string;
-	cover?: string;
-};
-
 type UserSearchResult = {
 	id: string;
 	username: string;
@@ -55,7 +49,7 @@ type UserSearchResult = {
 	avatar?: string;
 };
 
-type SearchType = 'Books' | 'Author' | 'User';
+type SearchType = 'Books' | 'User';
 
 type SearchModalProps = {
 	children: React.ReactNode;
@@ -69,7 +63,6 @@ export function SearchModal({ children, data }: SearchModalProps) {
 	const [query, setQuery] = React.useState('');
 	const [searchType, setSearchType] = React.useState<SearchType>('Books');
 	const [bookResults, setBookResults] = React.useState<BookSearchResult[]>([]);
-	const [authorResults, setAuthorResults] = React.useState<AuthorSearchResult[]>([]);
 	const [userResults, setUserResults] = React.useState<UserSearchResult[]>([]);
 	const [isSearching, setIsSearching] = React.useState(false);
 	const [searchError, setSearchError] = React.useState<string | null>(null);
@@ -89,7 +82,6 @@ export function SearchModal({ children, data }: SearchModalProps) {
 	React.useEffect(() => {
 		if (!query.trim()) {
 			setBookResults([]);
-			setAuthorResults([]);
 			setUserResults([]);
 			setSearchError(null);
 			return;
@@ -113,12 +105,12 @@ export function SearchModal({ children, data }: SearchModalProps) {
 						}
 						
 						if (!response.ok) {
-							let errorMessage = `Failed to search books (${response.status})`;
+							let errorMessage = `Failed to search books`;
 							try {
 								const errorData = await response.json();
-								errorMessage = errorData?.error || errorData?.details || errorMessage;
+								errorMessage = errorData?.error || errorData?.details || `Failed to search books (${response.status})`;
 							} catch {
-								errorMessage = response.statusText || errorMessage;
+								errorMessage = response.statusText || `Failed to search books (${response.status})`;
 							}
 							throw new Error(errorMessage);
 						}
@@ -137,42 +129,9 @@ export function SearchModal({ children, data }: SearchModalProps) {
 								imageLinks: item.volumeInfo?.imageLinks || {},
 							}));
 							setBookResults(books);
-							setAuthorResults([]);
 							setUserResults([]);
 						} else {
 							setBookResults([]);
-						}
-						break;
-
-					case 'Author':
-						try {
-							response = await fetch(`/api/authors/search?q=${encodeURIComponent(query)}&limit=10`);
-						} catch (fetchError) {
-							throw new Error(`Network error: Unable to connect to search API. Please check your connection.`);
-						}
-						
-						if (!response.ok) {
-							let errorMessage = `Failed to search authors (${response.status})`;
-							try {
-								const errorData = await response.json();
-								errorMessage = errorData?.error || errorData?.details || errorMessage;
-							} catch {
-								errorMessage = response.statusText || errorMessage;
-							}
-							throw new Error(errorMessage);
-						}
-						
-						try {
-							result = await response.json();
-						} catch (parseError) {
-							throw new Error(`Invalid response from search API. Please try again.`);
-						}
-						if (result.authors && Array.isArray(result.authors)) {
-							setAuthorResults(result.authors);
-							setBookResults([]);
-							setUserResults([]);
-						} else {
-							setAuthorResults([]);
 						}
 						break;
 
@@ -202,7 +161,6 @@ export function SearchModal({ children, data }: SearchModalProps) {
 						if (result.users && Array.isArray(result.users)) {
 							setUserResults(result.users);
 							setBookResults([]);
-							setAuthorResults([]);
 						} else {
 							setUserResults([]);
 						}
@@ -213,21 +171,21 @@ export function SearchModal({ children, data }: SearchModalProps) {
 				const errorMessage = error instanceof Error 
 					? error.message 
 					: `Failed to search ${searchType.toLowerCase()}`;
+				// Set error message to be displayed in the UI
 				setSearchError(errorMessage);
+				// Clear all results on error
 				setBookResults([]);
-				setAuthorResults([]);
 				setUserResults([]);
 			} finally {
 				setIsSearching(false);
 			}
-		}, 500); // 500ms debounce
+		}, 300); // 300ms debounce for better real-time feel
 
 		return () => clearTimeout(timeoutId);
 	}, [query, searchType]);
 
 	const currentResults = 
 		searchType === 'Books' ? bookResults :
-		searchType === 'Author' ? authorResults :
 		userResults;
 
 	const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%239ca3af'/%3E%3Cpath d='M50 30c-8.284 0-15 6.716-15 15 0 5.989 3.501 11.148 8.535 13.526C37.514 62.951 32 70.16 32 78.5h36c0-8.34-5.514-15.549-13.535-19.974C59.499 56.148 63 50.989 63 45c0-8.284-6.716-15-15-15z' fill='white' opacity='0.8'/%3E%3C/svg%3E";
@@ -248,7 +206,13 @@ export function SearchModal({ children, data }: SearchModalProps) {
 							)}
 							placeholder={`Search ${searchType.toLowerCase()}...`}
 							value={query}
-							onValueChange={setQuery}
+							onValueChange={(value) => {
+								setQuery(value);
+								// Clear error when user starts typing again
+								if (searchError) {
+									setSearchError(null);
+								}
+							}}
 						/>
 						<DockToggle
 							items={[
@@ -257,12 +221,6 @@ export function SearchModal({ children, data }: SearchModalProps) {
 									icon: BookOpen,
 									isActive: searchType === 'Books',
 									onClick: () => setSearchType('Books'),
-								},
-								{
-									label: 'Author',
-									icon: BookMarked,
-									isActive: searchType === 'Author',
-									onClick: () => setSearchType('Author'),
 								},
 								{
 									label: 'User',
@@ -305,13 +263,34 @@ export function SearchModal({ children, data }: SearchModalProps) {
 									</CommandEmpty>
 								) : (
 									<CommandGroup>
-										{searchType === 'Books' && bookResults.map((book) => {
+										{searchType === 'Books' && bookResults.map((book, index) => {
 											const cover = book.imageLinks?.thumbnail || book.imageLinks?.smallThumbnail || '';
 											const authors = book.authors?.join(', ') || 'Unknown Author';
 											
 											const handleBookSelect = () => {
-												const slug = createBookSlug(book.title);
-												router.push(`/b/${slug}`);
+												// Use the book ID directly if it's an ISBN or valid ID
+												// Otherwise, create a slug from the title
+												if (book.id) {
+													// Check if book.id is an ISBN (10 or 13 digits)
+													const isISBN = /^(\d{10}|\d{13})$/.test(book.id);
+													// Check if it looks like an Open Library ID
+													const isOpenLibraryId = book.id.startsWith("OL") || book.id.startsWith("/works/");
+													// Check if it's a valid ID format (alphanumeric, no spaces, no +)
+													const isValidId = /^[a-zA-Z0-9_-]+$/.test(book.id) && !book.id.includes(" ") && !book.id.includes("+");
+													
+													if (isISBN || isOpenLibraryId || isValidId) {
+														// Use ID directly
+														router.push(`/b/${book.id}`);
+													} else {
+														// Create slug if ID format is unexpected
+														const slug = createBookSlug(book.title, book.id, book.id);
+														router.push(`/b/${slug}`);
+													}
+												} else {
+													// No ID, create slug from title
+													const slug = createBookSlug(book.title);
+													router.push(`/b/${slug}`);
+												}
 												setOpen(false);
 											};
 											
@@ -320,24 +299,27 @@ export function SearchModal({ children, data }: SearchModalProps) {
 												handleBookSelect();
 											};
 											
+											// Create unique key: use book.id if available, otherwise use index with title
+											const uniqueKey = book.id ? `${book.id}-${index}` : `book-${index}-${book.title}`;
+											
 											return (
 												<CommandItem
-													key={book.id}
+													key={uniqueKey}
 													className="flex cursor-pointer items-center gap-3"
 													value={`${book.id}-${book.title}`}
 													onSelect={handleBookSelect}
 													onClick={handleClick}
 												>
 													{cover ? (
-														<div className="relative size-12 flex-shrink-0 overflow-hidden rounded-md bg-muted pointer-events-none">
+														<div className="relative size-14 flex-shrink-0 overflow-hidden rounded-md bg-muted pointer-events-none">
 															<Image
 																src={cover}
 																alt={book.title}
 																fill
 																className="object-cover pointer-events-none"
-																sizes="48px"
+																sizes="56px"
 																quality={100}
-																unoptimized={true}
+																unoptimized={cover.includes('isbndb.com') || cover.includes('images.isbndb.com') || cover.includes('covers.isbndb.com')}
 																priority={false}
 															/>
 														</div>
@@ -357,52 +339,7 @@ export function SearchModal({ children, data }: SearchModalProps) {
 												</CommandItem>
 											);
 										})}
-										{searchType === 'Author' && authorResults.map((author) => {
-											const handleAuthorSelect = () => {
-												// TODO: Navigate to author page
-												setOpen(false);
-											};
-											
-											const handleClick = (e: React.MouseEvent) => {
-												e.stopPropagation();
-												handleAuthorSelect();
-											};
-											
-											return (
-												<CommandItem
-													key={author.id}
-													className="flex cursor-pointer items-center gap-3"
-													value={`${author.id}-${author.name}`}
-													onSelect={handleAuthorSelect}
-													onClick={handleClick}
-												>
-												{author.cover ? (
-													<div className="relative size-12 flex-shrink-0 overflow-hidden rounded-md bg-muted pointer-events-none">
-														<Image
-															src={author.cover}
-															alt={author.name}
-															fill
-															className="object-cover pointer-events-none"
-															sizes="48px"
-														/>
-													</div>
-												) : (
-													<div className="flex size-12 flex-shrink-0 items-center justify-center rounded-md bg-muted pointer-events-none">
-														<BookMarked className="size-5 text-muted-foreground" />
-													</div>
-												)}
-												<div className="flex flex-1 flex-col min-w-0">
-													<p className="max-w-[250px] truncate text-sm font-medium">
-														{author.name}
-													</p>
-													<p className="text-muted-foreground text-xs truncate">
-														Author
-													</p>
-												</div>
-											</CommandItem>
-											);
-										})}
-										{searchType === 'User' && userResults.map((user) => {
+										{searchType === 'User' && userResults.map((user, index) => {
 											const handleUserSelect = () => {
 												router.push(`/u/${encodeURIComponent(user.username)}`);
 												setOpen(false);
@@ -413,9 +350,12 @@ export function SearchModal({ children, data }: SearchModalProps) {
 												handleUserSelect();
 											};
 											
+											// Create unique key: use user.id if available, otherwise use username with index
+											const uniqueKey = user.id ? `${user.id}-${index}` : `user-${index}-${user.username}`;
+											
 											return (
 												<CommandItem
-													key={user.id}
+													key={uniqueKey}
 													className="flex cursor-pointer items-center gap-3"
 													value={`${user.id}-${user.username}`}
 													onSelect={handleUserSelect}

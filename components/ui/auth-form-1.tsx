@@ -431,10 +431,9 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
       // Automatically sign in after successful registration
       await signInWithCredentials(data.email, data.password);
       
-      // Always redirect to profile page after successful registration and sign-in
-      // It will redirect to /u/[username] once the session is loaded
+      // Redirect to choose username page after successful registration
       toast.success("Account created successfully!");
-      window.location.href = "/profile";
+      window.location.href = "/choose-username";
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Registration failed. Please try again.";
       toast.error(errorMessage);
