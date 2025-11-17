@@ -10,12 +10,12 @@ import { RecommendationService } from '@/lib/services/RecommendationService';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { bookId: string } }
+  { params }: { params: Promise<{ bookId: string }> }
 ) {
   try {
     await connectDB();
 
-    const { bookId } = params;
+    const { bookId } = await params;
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '20');
 

@@ -31,11 +31,21 @@ const cached: MongooseCache = globalForMongoose.mongoose;
 /**
  * Connect to MongoDB Atlas using Mongoose
  * Uses connection pooling and caching for optimal performance
+ * Handles reconnection automatically
  */
 async function connectDB(): Promise<typeof mongoose> {
-  if (cached.conn) {
+  // Check if connection is already established and ready
+  // Only check readyState if mongoose.connection exists (not in Edge Runtime)
+  if (cached.conn && mongoose.connection && mongoose.connection.readyState === 1) {
     console.log("🔌 Using cached MongoDB connection");
     return cached.conn;
+  }
+
+  // If connection exists but is not ready, reset it
+  if (cached.conn && mongoose.connection && mongoose.connection.readyState !== 1) {
+    console.log("⚠️ Connection not ready, resetting...");
+    cached.conn = null;
+    cached.promise = null;
   }
 
   if (!cached.promise) {
@@ -44,15 +54,63 @@ async function connectDB(): Promise<typeof mongoose> {
       maxPoolSize: 10,
       minPoolSize: 2,
       socketTimeoutMS: 45000,
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 30000, // Increased to 30 seconds
+      connectTimeoutMS: 30000, // Connection timeout
+      heartbeatFrequencyMS: 10000, // Keep connection alive
+      retryWrites: true,
+      retryReads: true,
     };
 
-    console.log("🔌 Creating new MongoDB connection to:", MONGODB_URI.split("@")[1]?.split("/")[0]);
+    // Set up connection event handlers for better error handling (only once)
+    // Only set up event handlers in Node.js runtime (not Edge Runtime)
+    const isNodeRuntime = typeof process !== 'undefined' && process.versions?.node;
+    
+    if (isNodeRuntime && mongoose.connection && mongoose.connection.listeners) {
+      if (mongoose.connection.listeners('connected').length === 0) {
+        mongoose.connection.on('connected', () => {
+          console.log('✅ MongoDB connected');
+        });
+
+        mongoose.connection.on('error', (err) => {
+          console.error('❌ MongoDB connection error:', err);
+          // Reset cached connection on error
+          cached.conn = null;
+          cached.promise = null;
+        });
+
+        mongoose.connection.on('disconnected', () => {
+          console.warn('⚠️ MongoDB disconnected');
+          // Reset cached connection on disconnect
+          cached.conn = null;
+          cached.promise = null;
+        });
+
+        // Handle process termination (only register once, only in Node.js runtime)
+        if (typeof process !== 'undefined' && process.on && process.listeners) {
+          if (process.listeners('SIGINT').length === 0) {
+            process.on('SIGINT', async () => {
+              await mongoose.connection.close();
+              console.log('MongoDB connection closed through app termination');
+              process.exit(0);
+            });
+          }
+        }
+      }
+    }
+
+    const dbHost = MONGODB_URI.split("@")[1]?.split("/")[0] || "MongoDB Atlas";
+    console.log("🔌 Creating new MongoDB connection to:", dbHost);
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
       console.log("✅ Connected to MongoDB Atlas successfully");
       console.log("📊 Database:", mongoose.connection.db?.databaseName);
+      console.log("🔗 Connection state:", mongoose.connection.readyState === 1 ? "Connected" : "Not connected");
       return mongoose;
+    }).catch((error) => {
+      // Clear promise on error so we can retry
+      cached.promise = null;
+      console.error("❌ Failed to connect to MongoDB:", error.message);
+      throw error;
     });
   }
 
@@ -60,6 +118,7 @@ async function connectDB(): Promise<typeof mongoose> {
     cached.conn = await cached.promise;
   } catch (e) {
     cached.promise = null;
+    cached.conn = null;
     console.error("❌ MongoDB connection error:", e);
     throw e;
   }
