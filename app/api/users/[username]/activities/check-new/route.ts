@@ -61,13 +61,14 @@ export async function GET(
     const followedUsers = await User.find({
       _id: { $in: followingIds },
     })
-      .select("_id username name activities")
+      .select("_id username name activities diaryEntries")
       .lean();
 
     // Collect all activities from followed users
     const allActivities: any[] = [];
 
     followedUsers.forEach((followedUser: any) => {
+      // Add regular activities
       const activities = Array.isArray(followedUser.activities) ? followedUser.activities : [];
       // Filter out search-related activities
       const filteredActivities = activities.filter((activity: any) => 
@@ -92,6 +93,27 @@ export async function GET(
         allActivities.push({
           ...activity,
           timestamp: activityTimestamp,
+        });
+      });
+
+      // Add diary entries as activities
+      const diaryEntries = Array.isArray(followedUser.diaryEntries) ? followedUser.diaryEntries : [];
+      diaryEntries.forEach((entry: any) => {
+        const entryDate = entry.updatedAt ? new Date(entry.updatedAt) : (entry.createdAt ? new Date(entry.createdAt) : new Date());
+        const entryTimestamp = entryDate.getTime();
+        
+        // If lastViewed is provided, only count entries newer than that
+        if (lastViewed) {
+          const lastViewedTime = new Date(lastViewed).getTime();
+          if (entryTimestamp <= lastViewedTime) {
+            return; // Skip this entry, it's not new
+          }
+        }
+        
+        allActivities.push({
+          type: "diary_entry",
+          timestamp: entryTimestamp,
+          _id: entry._id,
         });
       });
     });

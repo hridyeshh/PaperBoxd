@@ -302,9 +302,9 @@ export async function POST(
         break;
 
       case "favorite":
-        if (user.favoriteBooks.length >= 12) {
+        if (user.favoriteBooks.length >= 4) {
           return NextResponse.json(
-            { error: "Maximum 12 favorite books allowed" },
+            { error: "Maximum 4 favorite books allowed" },
             { status: 400 }
           );
         }
@@ -419,6 +419,81 @@ export async function GET(
     return NextResponse.json(
       {
         error: "Failed to get books",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Reorder favorite books
+ *
+ * PUT /api/users/[username]/books
+ * Body: {
+ *   type: "favorite",
+ *   bookIds: string[]  // Array of book IDs in the new order
+ * }
+ */
+export async function PUT(
+  request: NextRequest,
+  context: { params: Promise<{ username: string }> }
+) {
+  try {
+    const { username } = await context.params;
+    const body = await request.json();
+    const { type, bookIds } = body;
+
+    if (!username || !type || !Array.isArray(bookIds)) {
+      return NextResponse.json(
+        { error: "Username, type, and bookIds array are required" },
+        { status: 400 }
+      );
+    }
+
+    if (type !== "favorite") {
+      return NextResponse.json(
+        { error: "Reordering is only supported for favorite books" },
+        { status: 400 }
+      );
+    }
+
+    await connectDB();
+
+    const user = await User.findOne({ username });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Validate that all bookIds exist in user's favoriteBooks
+    const existingBookIds = user.favoriteBooks.map((b: any) => b.bookId?.toString());
+    const validBookIds = bookIds.filter((id: string) => existingBookIds.includes(id));
+
+    if (validBookIds.length !== bookIds.length || validBookIds.length !== user.favoriteBooks.length) {
+      return NextResponse.json(
+        { error: "Invalid book IDs or count mismatch" },
+        { status: 400 }
+      );
+    }
+
+    // Reorder favoriteBooks based on bookIds array
+    const reorderedBooks = bookIds.map((id: string) => {
+      return user.favoriteBooks.find((b: any) => b.bookId?.toString() === id);
+    }).filter(Boolean);
+
+    user.favoriteBooks = reorderedBooks;
+    await user.save();
+
+    return NextResponse.json({
+      message: "Favorite books reordered successfully",
+      books: reorderedBooks,
+    });
+  } catch (error) {
+    console.error("Reorder books error:", error);
+    return NextResponse.json(
+      {
+        error: "Failed to reorder books",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }

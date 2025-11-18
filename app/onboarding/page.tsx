@@ -50,7 +50,20 @@ export default function OnboardingPage() {
               return;
             }
             
-            // User has username but hasn't completed onboarding - show questionnaire
+            // User has username but hasn't completed onboarding
+            // Only show questionnaire for new users, not existing users logging in
+            if (!data.isNewUser) {
+              // Existing user - skip onboarding and redirect to profile
+              const username = data.username || session?.user?.username;
+              if (username) {
+                router.replace(`/u/${username}`);
+              } else {
+                router.replace("/profile");
+              }
+              return;
+            }
+            
+            // New user - show questionnaire
             setCheckingOnboarding(false);
           } else {
             // If API fails, still show questionnaire (better UX than blocking)

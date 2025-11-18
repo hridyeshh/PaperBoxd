@@ -66,6 +66,7 @@ export function SearchModal({ children, data }: SearchModalProps) {
 	const [userResults, setUserResults] = React.useState<UserSearchResult[]>([]);
 	const [isSearching, setIsSearching] = React.useState(false);
 	const [searchError, setSearchError] = React.useState<string | null>(null);
+	const [favoriteMode, setFavoriteMode] = React.useState<{ mode: string; maxBooks: number; currentBooks: string[] } | null>(null);
 
 	React.useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
@@ -77,6 +78,29 @@ export function SearchModal({ children, data }: SearchModalProps) {
 		window.addEventListener('keydown', handleKeyDown);
 		return () => window.removeEventListener('keydown', handleKeyDown);
 	}, []);
+
+	// Listen for open-search-modal event
+	React.useEffect(() => {
+		const handleOpenSearch = (event: CustomEvent) => {
+			if (event.detail?.mode === 'favorite-books') {
+				setFavoriteMode(event.detail);
+				setOpen(true);
+				setSearchType('Books');
+			}
+		};
+
+		window.addEventListener('open-search-modal' as any, handleOpenSearch as EventListener);
+		return () => {
+			window.removeEventListener('open-search-modal' as any, handleOpenSearch as EventListener);
+		};
+	}, []);
+
+	// Reset favorite mode when modal closes
+	React.useEffect(() => {
+		if (!open) {
+			setFavoriteMode(null);
+		}
+	}, [open]);
 
 	// Debounced search based on search type
 	React.useEffect(() => {
@@ -98,7 +122,7 @@ export function SearchModal({ children, data }: SearchModalProps) {
 				switch (searchType) {
 					case 'Books':
 						try {
-							response = await fetch(`/api/books/search?q=${encodeURIComponent(query)}&maxResults=10`);
+							response = await fetch(`/api/books/search?q=${encodeURIComponent(query)}&maxResults=10&forceFresh=true`);
 						} catch (fetchError) {
 							// Network error (connection failed, CORS, etc.)
 							throw new Error(`Network error: Unable to connect to search API. Please check your connection.`);
@@ -120,6 +144,7 @@ export function SearchModal({ children, data }: SearchModalProps) {
 						} catch (parseError) {
 							throw new Error(`Invalid response from search API. Please try again.`);
 						}
+						// Handle both Google Books format (result.items) and database format (result.books)
 						if (result.items && Array.isArray(result.items)) {
 							const books: BookSearchResult[] = result.items.map((item: any) => ({
 								id: item.id,
@@ -127,6 +152,21 @@ export function SearchModal({ children, data }: SearchModalProps) {
 								authors: item.volumeInfo?.authors || [],
 								description: item.volumeInfo?.description || '',
 								imageLinks: item.volumeInfo?.imageLinks || {},
+								// Store full item for favorite mode
+								_raw: item,
+							}));
+							setBookResults(books);
+							setUserResults([]);
+						} else if (result.books && Array.isArray(result.books)) {
+							// Database format
+							const books: BookSearchResult[] = result.books.map((item: any) => ({
+								id: item._id?.toString() || item.id,
+								title: item.volumeInfo?.title || item.title || 'Unknown Title',
+								authors: item.volumeInfo?.authors || item.authors || [],
+								description: item.volumeInfo?.description || item.description || '',
+								imageLinks: item.volumeInfo?.imageLinks || item.imageLinks || {},
+								// Store full item for favorite mode
+								_raw: item,
 							}));
 							setBookResults(books);
 							setUserResults([]);
@@ -269,6 +309,23 @@ export function SearchModal({ children, data }: SearchModalProps) {
 											const authors = book.authors?.join(', ') || 'Unknown Author';
 											
 											const handleBookSelect = () => {
+												// If in favorite mode, dispatch event instead of navigating
+												if (favoriteMode) {
+													const rawBook = (book as any)._raw || book;
+													// Check if already added
+													const isAlreadyAdded = favoriteMode.currentBooks.some(
+														(id: string) => id === book.id || id === rawBook._id?.toString()
+													);
+													if (!isAlreadyAdded && favoriteMode.currentBooks.length < favoriteMode.maxBooks) {
+														// Dispatch event with full book data
+														const event = new CustomEvent('favorite-book-selected', { detail: rawBook });
+														window.dispatchEvent(event);
+														setOpen(false);
+													}
+													return;
+												}
+
+												// Normal navigation behavior
 												// Use the book ID directly if it's an ISBN or valid ID
 												// Otherwise, create a slug from the title
 												if (book.id) {

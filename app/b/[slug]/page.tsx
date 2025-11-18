@@ -16,6 +16,7 @@ import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-patter
 import { stripHtmlTags } from "@/lib/utils";
 import { SignupPromptDialog } from "@/components/ui/signup-prompt-dialog";
 import { BookCarousel, BookCarouselBook } from "@/components/ui/home/book-carousel";
+import { DiaryEditorDialog } from "@/components/ui/diary-editor-dialog";
 
 interface BookDetails {
   id: string;
@@ -88,6 +89,10 @@ export default function BookDetailPage() {
   const [showSignupPrompt, setShowSignupPrompt] = React.useState(false);
   const [signupAction, setSignupAction] = React.useState<"bookshelf" | "like" | "tbr" | "general">("general");
   
+  // Diary editor dialog state
+  const [showDiaryEditor, setShowDiaryEditor] = React.useState(false);
+  const [existingDiaryContent, setExistingDiaryContent] = React.useState<string>("");
+  
   // Carousel data
   const [similarBooks, setSimilarBooks] = React.useState<BookCarouselBook[]>([]);
   const [authorBooks, setAuthorBooks] = React.useState<BookCarouselBook[]>([]);
@@ -151,12 +156,13 @@ export default function BookDetailPage() {
     fetchBook();
   }, [slug]);
 
-  // Check if book is in user's collections
+  // Check if book is in user's collections and if there's a diary entry
   React.useEffect(() => {
     if (!book || !isAuthenticated || !session?.user?.username) {
       setIsLiked(false);
       setIsInBookshelf(false);
       setIsInTBR(false);
+      setExistingDiaryContent("");
       return;
     }
 
@@ -214,7 +220,9 @@ export default function BookDetailPage() {
       }
     };
 
-    checkBookStatus();
+    checkBookStatus().catch((error) => {
+      console.error("Unhandled error in checkBookStatus:", error);
+    });
   }, [book, isAuthenticated, session?.user?.username]);
 
   // Fetch carousel data when book is loaded
@@ -231,7 +239,11 @@ export default function BookDetailPage() {
         const promises = [
           fetch(`/api/recommendations/similar/${bookId}?limit=20`)
             .then(res => res.ok ? res.json() : { books: [] })
-            .then(data => setSimilarBooks(data.books || [])),
+            .then(data => setSimilarBooks(data.books || []))
+            .catch((err) => {
+              console.error("Error fetching similar books:", err);
+              setSimilarBooks([]);
+            }),
         ];
 
         // Only fetch author books if we have an author
@@ -240,6 +252,10 @@ export default function BookDetailPage() {
             fetch(`/api/books/by-author?author=${encodeURIComponent(primaryAuthor)}&excludeBookId=${bookId}&limit=20`)
               .then(res => res.ok ? res.json() : { books: [] })
               .then(data => setAuthorBooks(data.books || []))
+              .catch((err) => {
+                console.error("Error fetching author books:", err);
+                setAuthorBooks([]);
+              })
           );
         }
 
@@ -251,7 +267,10 @@ export default function BookDetailPage() {
       }
     };
 
-    fetchCarousels();
+    fetchCarousels().catch((error) => {
+      console.error("Unhandled error in fetchCarousels:", error);
+      setLoadingCarousels(false);
+    });
   }, [book]);
 
   if (loading) {
@@ -492,6 +511,42 @@ export default function BookDetailPage() {
               onOpenChange={setShowSignupPrompt}
               action={signupAction}
             />
+            {book && session?.user?.username && (
+              <DiaryEditorDialog
+                open={showDiaryEditor}
+                onOpenChange={setShowDiaryEditor}
+                bookId={(book._id || book.bookId || book.id) as string}
+                bookTitle={book.volumeInfo.title}
+                bookAuthor={book.volumeInfo.authors?.[0] || "Unknown Author"}
+                bookCover={
+                  book.volumeInfo.imageLinks?.thumbnail ||
+                  book.volumeInfo.imageLinks?.smallThumbnail ||
+                  book.volumeInfo.imageLinks?.medium
+                }
+                initialContent={existingDiaryContent}
+                username={session.user.username}
+                onSave={() => {
+                  // Refresh diary content after save
+                  if (session?.user?.username) {
+                    fetch(`/api/users/${encodeURIComponent(session.user.username)}/diary`)
+                      .then((res) => res.json())
+                      .then((data) => {
+                        const bookId = book._id || book.bookId || book.id;
+                        const existingEntry = data.entries?.find((entry: any) => {
+                          return (
+                            entry.bookId?.toString() === bookId?.toString() ||
+                            (book.id && entry.bookId === book.id)
+                          );
+                        });
+                        if (existingEntry) {
+                          setExistingDiaryContent(existingEntry.content || "");
+                        }
+                      })
+                      .catch((err) => console.error("Error refreshing diary:", err));
+                  }
+                }}
+              />
+            )}
           </div>
 
           {/* Right: Book Details */}
@@ -604,13 +659,17 @@ export default function BookDetailPage() {
             <div className="flex gap-3">
               <Button
                 onClick={() => {
-                  // TODO: Implement write about it functionality
-                  toast.info("Write about it feature coming soon!");
+                  if (!isAuthenticated) {
+                    setSignupAction("general");
+                    setShowSignupPrompt(true);
+                    return;
+                  }
+                  setShowDiaryEditor(true);
                 }}
                 variant="default"
               >
                 <PenTool className="mr-2 size-4" />
-                Write about it
+                {existingDiaryContent ? "Edit your notes" : "Write about it"}
               </Button>
               
               <Button
@@ -642,7 +701,7 @@ export default function BookDetailPage() {
         </div>
         
         {/* Carousels Section - Full Width */}
-        <div className="mt-12 space-y-12 w-full px-4 pb-16">
+        <div className="mt-12 space-y-12 w-full px-8 md:px-12 lg:px-16 xl:px-20 pb-16">
           {/* Similar Books Carousel */}
           {similarBooks.length > 0 && (
             <BookCarousel

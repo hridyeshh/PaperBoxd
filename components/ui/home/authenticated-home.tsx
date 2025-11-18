@@ -66,6 +66,7 @@ export function AuthenticatedHome() {
     }
 
     const fetchCarousels = async () => {
+      try {
       setLoading(true);
       const data: Record<string, BookCarouselBook[]> = {};
       const errs: Record<string, string> = {};
@@ -93,9 +94,16 @@ export function AuthenticatedHome() {
       setErrors(errs);
       setLoading(false);
       hasLoadedRef.current = true;
+      } catch (error) {
+        console.error("Error in fetchCarousels:", error);
+        setLoading(false);
+        hasLoadedRef.current = true;
+      }
     };
 
-    fetchCarousels();
+    fetchCarousels().catch((error) => {
+      console.error("Unhandled error in fetchCarousels:", error);
+    });
   }, [session?.user]);
 
   // Show loading state only if we're actually loading and don't have data yet
@@ -115,7 +123,7 @@ export function AuthenticatedHome() {
       <Hero showButton={false} />
 
       {/* Personalized Book Carousels - Below Hero */}
-      <div className="w-full px-4 pb-16 space-y-12">
+      <div className="w-full px-8 md:px-12 lg:px-16 xl:px-20 pb-16 space-y-12">
         {carousels.map((carousel) => {
           const books = carouselData[carousel.type] || [];
           

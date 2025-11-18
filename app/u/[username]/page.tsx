@@ -28,8 +28,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Edit, Image as ImageIcon, MoreVertical, Trash2 } from "lucide-react";
+import { Edit, Image as ImageIcon, MoreVertical, Trash2, Plus, X, Heart } from "lucide-react";
 import TetrisLoading from "@/components/ui/tetris-loader";
+import { createBookSlug } from "@/lib/utils/book-slug";
 import {
   type BookshelfBook,
   type LikedBook,
@@ -37,8 +38,9 @@ import {
   type ReadingList,
   type ProfileBook,
 } from "@/lib/mock/profileBooks";
+import { DiaryEntryDialog } from "@/components/ui/diary-entry-dialog";
 
-const dockLabels = ["Profile", "Bookshelf", "Authors", "Lists", "'to-be-read'", "Likes"] as const;
+const dockLabels = ["Profile", "Bookshelf", "Diary", "Authors", "Lists", "'to-be-read'", "Likes"] as const;
 type DockLabel = (typeof dockLabels)[number] | "Activity";
 type ActivityView = "Friends" | "Me";
 const BOOKSHELF_PAGE_SIZE = 12;
@@ -53,6 +55,16 @@ type ActivityEntry = {
   detail: string;
   timeAgo: string;
   cover: string;
+  type?: string; // Activity type: "diary_entry", "read", "rated", etc.
+  diaryEntryId?: string; // For diary entries
+  bookId?: string; // For diary entries
+  bookTitle?: string; // For diary entries
+  bookAuthor?: string; // For diary entries
+  content?: string; // For diary entries
+  createdAt?: string; // For diary entries
+  updatedAt?: string; // For diary entries
+  isLiked?: boolean; // For diary entries
+  likesCount?: number; // For diary entries
 };
 
 
@@ -83,7 +95,11 @@ function AuthPromptDialog({
 
   const handleSignIn = React.useCallback(() => {
     onOpenChange(false);
+    try {
     router.push("/auth");
+    } catch (error) {
+      console.error("Error in handleSignIn:", error);
+    }
   }, [onOpenChange, router]);
 
   return (
@@ -245,7 +261,11 @@ function FollowersFollowingDialog({
                       type="button"
                       onClick={() => {
                         setOpen(false);
+                        try {
                         router.push(`/u/${encodeURIComponent(user.username)}`);
+                        } catch (error) {
+                          console.error("Error navigating to user profile:", error);
+                        }
                       }}
                       className="flex w-full items-center gap-3 rounded-lg p-3 text-left hover:bg-muted/50 transition-colors"
                     >
@@ -499,6 +519,59 @@ function BookCard({ title, author, cover, mood }: ProfileBook) {
   );
 }
 
+// Favorite book card - only shows cover, no text, with remove button on hover
+function FavoriteBookCard({ 
+  cover, 
+  title, 
+  onRemove,
+  isRemoving,
+  onClick
+}: { 
+  cover: string; 
+  title: string;
+  onRemove?: () => void;
+  isRemoving?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <div className="group relative flex w-[180px] flex-shrink-0">
+      <div 
+        className="relative aspect-[2/3] w-full overflow-visible rounded-3xl bg-muted shadow-sm cursor-pointer"
+        onClick={onClick}
+      >
+        <div className="relative aspect-[2/3] w-full overflow-hidden rounded-3xl">
+          <Image
+            src={cover}
+            alt={`${title} cover`}
+            fill
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            sizes="180px"
+            quality={100}
+            unoptimized={cover?.includes('isbndb.com') || cover?.includes('images.isbndb.com') || cover?.includes('covers.isbndb.com') || true}
+          />
+        </div>
+        {onRemove && (
+          <button
+            type="button"
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await onRemove();
+              } catch (error) {
+                console.error("Error in onRemove:", error);
+              }
+            }}
+            disabled={isRemoving}
+            className="absolute right-1 top-1 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background shadow-lg transition-all opacity-0 group-hover:opacity-100 hover:bg-muted disabled:opacity-50"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function BookCarousel({
   title,
   subtitle,
@@ -523,6 +596,665 @@ function BookCarousel({
           <BookCard key={book.id} {...book} />
         ))}
       </div>
+    </section>
+  );
+}
+
+function FavoriteBookSearchDialog({
+  open,
+  onOpenChange,
+  onBookSelect,
+  currentBooks,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onBookSelect: (book: any) => void;
+  currentBooks: string[];
+}) {
+  const [query, setQuery] = React.useState("");
+  const [bookResults, setBookResults] = React.useState<any[]>([]);
+  const [isSearching, setIsSearching] = React.useState(false);
+  
+  // Ensure currentBooks is always an array
+  const safeCurrentBooks: string[] = Array.isArray(currentBooks) ? currentBooks : [];
+
+  // Debounced search
+  React.useEffect(() => {
+    if (!query.trim() || !open) {
+      setBookResults([]);
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const response = await fetch(`/api/books/search?q=${encodeURIComponent(query)}&maxResults=10&forceFresh=true`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log("[FavoriteBookSearchDialog] Search response:", data);
+          
+          // Handle both Google Books format (data.items) and database format (data.books)
+          const books = Array.isArray(data.books) ? data.books : (Array.isArray(data.items) ? data.items : []);
+          console.log("[FavoriteBookSearchDialog] Extracted books:", books.length, books);
+          
+          // Ensure all books are valid objects - be more lenient with the filter
+          const validBooks = books.filter((book: any) => {
+            if (!book || typeof book !== 'object') {
+              console.log("[FavoriteBookSearchDialog] Filtered out invalid book:", book);
+              return false;
+            }
+            // Check if book has at least a title or volumeInfo
+            const hasTitle = book.title || book.volumeInfo?.title;
+            if (!hasTitle) {
+              console.log("[FavoriteBookSearchDialog] Filtered out book without title:", book);
+              return false;
+            }
+            return true;
+          });
+          console.log("[FavoriteBookSearchDialog] Valid books after filtering:", validBooks.length, validBooks);
+          setBookResults(validBooks);
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          console.error("Search API error:", response.status, response.statusText, errorData);
+          setBookResults([]);
+        }
+      } catch (error) {
+        console.error("Search error:", error);
+        setBookResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [query, open]);
+
+  // Reset query when dialog closes
+  React.useEffect(() => {
+    if (!open) {
+      setQuery("");
+      setBookResults([]);
+    }
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col bg-white dark:bg-background/95 backdrop-blur-xl border-border/50 shadow-2xl rounded-3xl">
+        <DialogHeader className="space-y-3 pb-4 border-b border-border/30">
+          <DialogTitle className="text-2xl font-bold text-foreground">Add favorite book</DialogTitle>
+          <DialogDescription className="text-base text-muted-foreground">
+            Search and add books to your favorites (maximum 4 books)
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-hidden flex flex-col gap-6 py-6">
+          {/* Search Input */}
+          <div className="relative">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by title, author, or ISBN..."
+              className="w-full rounded-2xl border-2 border-gray-300 dark:border-border/60 bg-white dark:bg-background/50 backdrop-blur-sm px-6 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none transition-all shadow-sm"
+              autoFocus
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            )}
+          </div>
+
+          {/* Results Container */}
+          <div className="flex-1 overflow-y-auto px-1 -mx-1">
+            {isSearching ? (
+              <div className="flex items-center justify-center py-16">
+                <TetrisLoading size="md" speed="fast" loadingText="Searching books..." />
+              </div>
+            ) : bookResults.length === 0 && query.trim() ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="rounded-full bg-muted/50 p-6 mb-4">
+                  <svg className="w-12 h-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                  </svg>
+                </div>
+                <p className="text-lg font-semibold text-foreground mb-1">No books found</p>
+                <p className="text-sm text-muted-foreground">Try searching with a different term</p>
+              </div>
+            ) : query.trim() === "" ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="rounded-full bg-muted/50 p-6 mb-4">
+                  <svg className="w-12 h-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <p className="text-lg font-semibold text-foreground mb-1">Start searching</p>
+                <p className="text-sm text-muted-foreground">Enter a book title, author, or ISBN to begin</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {bookResults
+                  .filter((book) => {
+                    // Filter out null/undefined books
+                    if (!book || typeof book !== 'object') return false;
+                    // Allow books even without IDs - we'll generate a key from title/index
+                    return true;
+                  })
+                  .map((book, index) => {
+                    const cover =
+                      book.imageLinks?.thumbnail ||
+                      book.imageLinks?.smallThumbnail ||
+                      book.volumeInfo?.imageLinks?.thumbnail ||
+                      book.volumeInfo?.imageLinks?.smallThumbnail ||
+                      "";
+                    const title = book.title || book.volumeInfo?.title || "Unknown Title";
+                    const authors = book.authors || book.volumeInfo?.authors || [];
+                    const author = Array.isArray(authors) ? authors.join(", ") : (authors || "Unknown Author");
+                    // Extract bookId - API returns id at top level, or _id for database results
+                    // Handle empty string IDs by using _id or generating a fallback
+                    const bookId = (book.id && book.id !== '') 
+                      ? book.id 
+                      : (book._id?.toString() || book.volumeInfo?.id || `${title}-${index}`);
+                    const isAlreadyAdded = bookId && bookId !== `${title}-${index}` ? safeCurrentBooks.some(
+                      (id: string) => {
+                        // Compare IDs - handle both string and ObjectId comparisons
+                        const idStr = id;
+                        const bookIdStr = typeof bookId === 'string' ? bookId : String(bookId);
+                        return idStr === bookIdStr || idStr === book._id?.toString();
+                      }
+                    ) : false;
+                    
+                    return (
+                      <button
+                        key={book._id?.toString() || book.id || `${title}-${index}`}
+                        type="button"
+                        onClick={() => {
+                          if (!isAlreadyAdded && book) {
+                            // Ensure book has the correct structure for the handler
+                            const bookToAdd = {
+                              ...book,
+                              id: (book.id && book.id !== '') 
+                                ? book.id 
+                                : (book._id?.toString() || `${title}-${index}`),
+                              _id: book._id?.toString() || book._id,
+                              volumeInfo: book.volumeInfo || {
+                                title: book.title,
+                                authors: book.authors,
+                                imageLinks: book.imageLinks,
+                              },
+                            };
+                            onBookSelect(bookToAdd);
+                            onOpenChange(false);
+                          }
+                        }}
+                        disabled={isAlreadyAdded}
+                        className="w-full flex gap-4 rounded-2xl border border-border/60 bg-white/80 dark:bg-background/80 backdrop-blur-sm p-4 text-left transition-all hover:bg-white dark:hover:bg-background hover:border-primary/50 hover:shadow-lg hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-none group"
+                      >
+                      {cover ? (
+                        <div className="relative h-24 w-16 flex-shrink-0 overflow-hidden rounded-xl bg-muted shadow-md group-hover:shadow-xl transition-shadow">
+                          <Image
+                            src={cover}
+                            alt={`${title} cover`}
+                            fill
+                            className="object-cover"
+                            sizes="64px"
+                            unoptimized
+                          />
+                        </div>
+                      ) : (
+                        <div className="relative h-24 w-16 flex-shrink-0 overflow-hidden rounded-xl bg-muted shadow-md flex items-center justify-center">
+                          <svg className="w-8 h-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                          </svg>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0 flex flex-col justify-center">
+                        <h4 className="font-semibold text-foreground line-clamp-2 mb-1 group-hover:text-primary transition-colors">
+                          {title}
+                        </h4>
+                        <p className="text-sm text-muted-foreground line-clamp-1 mb-1">
+                          {author}
+                        </p>
+                        {isAlreadyAdded && (
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                            <p className="text-xs font-medium text-green-600 dark:text-green-400">Already in favorites</p>
+                          </div>
+                        )}
+                      </div>
+                      {!isAlreadyAdded && (
+                        <div className="flex items-center">
+                          <div className="rounded-full bg-primary/10 p-2 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                            <Plus className="h-5 w-5" />
+                          </div>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditableFavoriteBooksCarousel({
+  title,
+  subtitle,
+  books,
+  username,
+  canEdit,
+  onUpdate,
+}: {
+  title: string;
+  subtitle: string;
+  books: ProfileBook[];
+  username: string;
+  canEdit: boolean;
+  onUpdate: () => void;
+}) {
+  const router = useRouter();
+  const [isRemoving, setIsRemoving] = React.useState<string | null>(null);
+  const [isSearchOpen, setIsSearchOpen] = React.useState(false);
+  const [bookToReplace, setBookToReplace] = React.useState<string | null>(null);
+  const [draggedBookId, setDraggedBookId] = React.useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = React.useState<number | null>(null);
+  const [localBooks, setLocalBooks] = React.useState<ProfileBook[]>(books);
+  const justDraggedRef = React.useRef(false);
+
+  // Navigate to book page
+  const handleBookClick = React.useCallback((book: ProfileBook) => {
+    try {
+      // Priority: isbndbId > openLibraryId > bookId (MongoDB _id) > create slug from title
+      const bookId = book.isbndbId || book.openLibraryId || book.bookId || book.id;
+      
+      if (bookId) {
+        // Check if it's an ISBN (10 or 13 digits)
+        const isISBN = /^(\d{10}|\d{13})$/.test(bookId);
+        // Check if it's an Open Library ID
+        const isOpenLibraryId = bookId.startsWith("OL") || bookId.startsWith("/works/");
+        // Check if it's a MongoDB ObjectId (24 hex characters)
+        const isMongoObjectId = /^[0-9a-fA-F]{24}$/.test(bookId);
+        // Check if it's a valid ID format (alphanumeric, no spaces, no +)
+        const isValidId = /^[a-zA-Z0-9_-]+$/.test(bookId) && !bookId.includes(" ") && !bookId.includes("+");
+        
+        // Use ID directly if it's a recognized format
+        if (isISBN || isOpenLibraryId || isMongoObjectId || isValidId) {
+          try {
+            router.push(`/b/${bookId}`);
+          } catch (error) {
+            console.error("Navigation error:", error);
+          }
+        } else {
+          // Create slug from title for unrecognized formats
+          const slug = createBookSlug(book.title, book.isbndbId, bookId);
+          try {
+            router.push(`/b/${slug}`);
+          } catch (error) {
+            console.error("Navigation error:", error);
+          }
+        }
+      } else {
+        // Fallback to slug if no ID available
+        const slug = createBookSlug(book.title);
+        try {
+          router.push(`/b/${slug}`);
+        } catch (error) {
+          console.error("Navigation error:", error);
+        }
+      }
+    } catch (error) {
+      console.error("Error in handleBookClick:", error);
+    }
+  }, [router]);
+
+  const handleAddBook = React.useCallback(async (book: any, replaceBookId?: string) => {
+    if (!book || (typeof book !== 'object')) {
+      console.error("Invalid book data:", book);
+      alert("Invalid book data");
+      return;
+    }
+
+    try {
+      // If replacing, remove the old book first
+      if (replaceBookId) {
+        const response = await fetch(`/api/users/${encodeURIComponent(username)}/books`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "favorite",
+            bookId: replaceBookId,
+            remove: true,
+          }),
+        });
+        if (!response.ok) {
+          alert("Failed to replace book");
+          return;
+        }
+      } else if (books.length >= 4) {
+        alert("Maximum 4 favorite books allowed");
+        return;
+      }
+
+      // Add the new book
+      // Extract identifiers - book.id from search API might be isbndbId or openLibraryId, not MongoDB _id
+      const mongoDbId = book._id?.toString(); // MongoDB _id (if from cache)
+      const searchApiId = book.id; // This could be isbndbId, openLibraryId, or MongoDB _id
+      
+      // Extract isbndbId and openLibraryId
+      let isbndbId = book.isbndbId || book.volumeInfo?.isbndbId;
+      let openLibraryId = book.openLibraryId || book.volumeInfo?.openLibraryId;
+      
+      // If searchApiId looks like an ISBN (10 or 13 digits), it's likely an isbndbId
+      if (!isbndbId && searchApiId && /^(\d{10}|\d{13})$/.test(searchApiId)) {
+        isbndbId = searchApiId;
+      }
+      
+      // If searchApiId looks like an Open Library ID (starts with OL or /works/), it's likely an openLibraryId
+      if (!openLibraryId && searchApiId && (searchApiId.startsWith('OL') || searchApiId.startsWith('/works/'))) {
+        openLibraryId = searchApiId;
+      }
+      
+      // Check if searchApiId is a MongoDB ObjectId (24 hex characters)
+      const isMongoDbId = mongoDbId || (searchApiId && /^[0-9a-fA-F]{24}$/.test(searchApiId));
+      const bookId = isMongoDbId ? (mongoDbId || searchApiId) : undefined;
+      
+      // Must have at least one identifier
+      if (!bookId && !isbndbId && !openLibraryId) {
+        console.error("Book missing all identifiers:", book);
+        alert("Book data is missing required information");
+        return;
+      }
+
+      console.log("[handleAddBook] Adding book with:", { bookId, isbndbId, openLibraryId, apiSource: book.apiSource });
+      
+      const response = await fetch(`/api/users/${encodeURIComponent(username)}/books`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "favorite",
+          ...(bookId && { bookId }), // Only include if it's a MongoDB _id
+          ...(isbndbId && { isbndbId }),
+          ...(openLibraryId && { openLibraryId }),
+          volumeInfo: book.volumeInfo || {
+            title: book.title,
+            authors: book.authors,
+            imageLinks: book.imageLinks,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        // Handle onUpdate properly - it might be async
+        try {
+          await onUpdate();
+        } catch (updateError) {
+          console.error("Error in onUpdate:", updateError);
+        }
+      } else {
+        const error = await response.json().catch(() => ({}));
+        console.error("[handleAddBook] API error:", error);
+        alert(error.error || error.details || "Failed to add book");
+      }
+    } catch (error) {
+      console.error("Add error:", error);
+      alert(error instanceof Error ? error.message : "Failed to add book");
+    }
+  }, [books.length, username, onUpdate]);
+
+  const handleRemoveBook = async (bookId: string) => {
+    if (isRemoving) return;
+    setIsRemoving(bookId);
+    try {
+      const book = books.find((b) => b.id === bookId);
+      if (!book) {
+        setIsRemoving(null);
+        return;
+      }
+
+      const response = await fetch(`/api/users/${encodeURIComponent(username)}/books`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "favorite",
+          bookId: bookId,
+          remove: true,
+        }),
+      });
+
+      if (response.ok) {
+        // Handle onUpdate properly - it might be async
+        try {
+          await onUpdate();
+        } catch (updateError) {
+          console.error("Error in onUpdate:", updateError);
+        }
+      } else {
+        const error = await response.json().catch(() => ({}));
+        console.error("[handleRemoveBook] API error:", error);
+      }
+    } catch (error) {
+      console.error("Remove error:", error);
+    } finally {
+      setIsRemoving(null);
+    }
+  };
+
+  // Update localBooks when books prop changes
+  React.useEffect(() => {
+    setLocalBooks(books);
+  }, [books]);
+
+  // Handle drag and drop reordering
+  const handleDragStart = (e: React.DragEvent, bookId: string) => {
+    if (!canEdit) return;
+    setDraggedBookId(bookId);
+    justDraggedRef.current = false;
+    e.dataTransfer.effectAllowed = "move";
+    // Set drag image to be the book cover for better UX
+    const target = e.currentTarget as HTMLElement;
+    if (target) {
+      e.dataTransfer.setDragImage(target, target.offsetWidth / 2, target.offsetHeight / 2);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    if (!canEdit || !draggedBookId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
+    if (!canEdit || !draggedBookId) return;
+    e.preventDefault();
+    justDraggedRef.current = true;
+    
+    const draggedIndex = localBooks.findIndex(b => b.id === draggedBookId);
+    if (draggedIndex === -1 || draggedIndex === dropIndex) {
+      setDraggedBookId(null);
+      setDragOverIndex(null);
+      justDraggedRef.current = false;
+      return;
+    }
+
+    // Reorder books locally for immediate feedback
+    const newBooks = [...localBooks];
+    const [draggedBook] = newBooks.splice(draggedIndex, 1);
+    newBooks.splice(dropIndex, 0, draggedBook);
+    setLocalBooks(newBooks);
+    setDraggedBookId(null);
+    setDragOverIndex(null);
+
+    // Save new order to server
+    try {
+      const bookIds = newBooks.map(b => b.id);
+      const response = await fetch(`/api/users/${encodeURIComponent(username)}/books`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "favorite",
+          bookIds: bookIds,
+        }),
+      });
+
+      if (!response.ok) {
+        // Revert on error
+        setLocalBooks(books);
+        const error = await response.json().catch(() => ({}));
+        console.error("[handleDrop] API error:", error);
+        alert(error.error || "Failed to reorder books");
+      } else {
+        // Refresh to get latest data
+        try {
+          await onUpdate();
+        } catch (updateError) {
+          console.error("Error in onUpdate:", updateError);
+        }
+      }
+    } catch (error) {
+      // Revert on error
+      setLocalBooks(books);
+      console.error("Reorder error:", error);
+      alert("Failed to reorder books");
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedBookId(null);
+    setDragOverIndex(null);
+    // Reset the flag after a short delay to prevent click after drag
+    setTimeout(() => {
+      justDraggedRef.current = false;
+    }, 200);
+  };
+
+  // Create array of 4 slots (books + placeholders) - only if canEdit
+  const slots = React.useMemo(() => {
+    if (!canEdit) {
+      return localBooks; // For non-owners, just show existing books
+    }
+    const result: (ProfileBook | null)[] = [...localBooks];
+    while (result.length < 4) {
+      result.push(null); // null represents an empty slot
+    }
+    return result;
+  }, [localBooks, canEdit]);
+
+  // Show banner if no books and can't edit
+  if (!canEdit && books.length === 0) {
+    return (
+      <section className="space-y-4">
+        <div>
+          <h3 className="text-xl font-semibold text-foreground">{title}</h3>
+          <p className="text-sm text-muted-foreground">{subtitle}</p>
+        </div>
+        <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
+          <p className="text-lg font-semibold text-foreground">They didn't select yet</p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <h3 className="text-xl font-semibold text-foreground">{title}</h3>
+        <p className="text-sm text-muted-foreground">{subtitle}</p>
+      </div>
+      <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+        {slots.map((book, index) => {
+          if (book) {
+            // Both owner and non-owner can click to navigate to book page
+            const isDragging = draggedBookId === book.id;
+            const isDragOver = dragOverIndex === index;
+            
+              return (
+              <div
+                  key={book.id}
+                draggable={canEdit}
+                onDragStart={(e) => handleDragStart(e, book.id)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                className={`group relative flex w-[180px] flex-shrink-0 transition-all ${
+                  isDragging ? "opacity-50 scale-95" : ""
+                } ${isDragOver ? "scale-105" : ""} ${canEdit ? "cursor-move" : ""}`}
+              >
+                <div onClick={(e) => {
+                  // Prevent click if we just finished dragging
+                  if (!justDraggedRef.current) {
+                    handleBookClick(book);
+                  }
+                }}>
+                  <FavoriteBookCard 
+                    cover={book.cover} 
+                    title={book.title}
+                    onClick={() => {}}
+                    onRemove={canEdit ? () => handleRemoveBook(book.id) : undefined}
+                    isRemoving={canEdit ? isRemoving === book.id : undefined}
+                  />
+                </div>
+                {isDragOver && canEdit && (
+                  <div className="absolute inset-0 border-2 border-primary rounded-3xl pointer-events-none z-10" />
+                )}
+                </div>
+              );
+          } else {
+            // Empty slot - show plus sign (only if canEdit)
+            if (!canEdit) return null;
+            const isDragOver = dragOverIndex === index;
+            return (
+              <div
+                key={`empty-${index}`}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+                className={`group relative flex w-[180px] flex-shrink-0 ${isDragOver ? "scale-105" : ""}`}
+              >
+                <button
+                type="button"
+                onClick={() => {
+                  setBookToReplace(null);
+                  setIsSearchOpen(true);
+                }}
+                  className="relative aspect-[2/3] w-full overflow-hidden rounded-3xl border-2 border-dashed border-border bg-muted/20 transition-colors hover:bg-muted/40 flex items-center justify-center"
+              >
+                  <Plus className="h-12 w-12 text-muted-foreground group-hover:text-foreground transition-colors" />
+              </button>
+                {isDragOver && draggedBookId && (
+                  <div className="absolute inset-0 border-2 border-primary rounded-3xl pointer-events-none z-10 bg-primary/10" />
+                )}
+              </div>
+            );
+          }
+        })}
+      </div>
+      {canEdit && (
+        <FavoriteBookSearchDialog
+          open={isSearchOpen}
+          onOpenChange={(open) => {
+            setIsSearchOpen(open);
+            if (!open) {
+              setBookToReplace(null);
+            }
+          }}
+          onBookSelect={(book) => handleAddBook(book, bookToReplace || undefined)}
+          currentBooks={books.map(b => b.id)}
+        />
+      )}
     </section>
   );
 }
@@ -1037,9 +1769,184 @@ function TabPlaceholder({ label }: { label: string }) {
   );
 }
 
+function DiarySection({ entries, isOwnProfile, username, onEntryClick, onRefresh }: { 
+  entries: any[]; 
+  isOwnProfile: boolean;
+  username: string;
+  onEntryClick?: (entry: any) => void;
+  onRefresh?: () => void;
+}) {
+  const { data: session } = useSession();
+  const [selectedEntry, setSelectedEntry] = React.useState<any | null>(null);
+
+  // Update selectedEntry when entries change (to keep it in sync)
+  const selectedEntryId = selectedEntry?.id || null;
+  const selectedEntryIsLiked = selectedEntry?.isLiked;
+  const selectedEntryLikesCount = selectedEntry?.likesCount;
+  
+  React.useEffect(() => {
+    if (selectedEntryId) {
+      const updatedEntry = entries.find(e => e.id === selectedEntryId);
+      if (updatedEntry &&
+          (updatedEntry.isLiked !== selectedEntryIsLiked ||
+           updatedEntry.likesCount !== selectedEntryLikesCount)) {
+        setSelectedEntry(updatedEntry);
+      }
+    }
+  }, [entries, selectedEntryId, selectedEntryIsLiked, selectedEntryLikesCount]);
+
+  if (entries.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
+        <p className="text-lg font-semibold text-foreground">No diary entries yet</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {isOwnProfile 
+            ? "Start writing about books you've read to see your entries here." 
+            : "This user hasn't written any diary entries yet."}
+        </p>
+      </div>
+    );
+  }
+
+  // Helper function to strip HTML and truncate text
+  const truncateContent = (html: string, maxLines: number = 2) => {
+    // Create a temporary div to parse HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    const text = tempDiv.textContent || tempDiv.innerText || '';
+    // For now, just return the HTML with line-clamp CSS
+    return html;
+  };
+
+  const handleEntryClick = (entry: any) => {
+    setSelectedEntry(entry);
+    if (onEntryClick) {
+      onEntryClick(entry);
+    }
+  };
+
+  return (
+    <>
+      <div className="space-y-6">
+        <div className="mb-4">
+          <h2 className="text-xl font-semibold text-foreground">Diary</h2>
+          <p className="text-sm text-muted-foreground">Thoughts and reflections on books</p>
+        </div>
+        <div className="space-y-8">
+          {entries.map((entry) => {
+            const isLiked = entry.isLiked || false;
+            const likesCount = entry.likesCount || 0;
+
+            return (
+              <div
+                key={entry.id}
+                onClick={() => handleEntryClick(entry)}
+                className="group flex gap-6 rounded-3xl border border-border/70 bg-muted/20 p-6 transition-all hover:bg-muted/40 cursor-pointer"
+              >
+                {/* Book Cover - only show if book exists */}
+                {entry.bookCover && (
+                  <div className="relative h-32 w-20 flex-shrink-0 overflow-hidden rounded-lg">
+                    <Image
+                      src={entry.bookCover}
+                      alt={entry.bookTitle ? `${entry.bookTitle} cover` : "Book cover"}
+                      fill
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      sizes="80px"
+                      quality={100}
+                      unoptimized={entry.bookCover?.includes('isbndb.com') || entry.bookCover?.includes('images.isbndb.com') || entry.bookCover?.includes('covers.isbndb.com') || true}
+                    />
+                  </div>
+                )}
+                
+                {/* Entry Content */}
+                <div className="flex-1 min-w-0 space-y-2">
+                  <div>
+                    {entry.bookTitle ? (
+                      <>
+                        <h3 className="text-lg font-semibold text-foreground">{entry.bookTitle}</h3>
+                        {entry.bookAuthor && <p className="text-sm text-muted-foreground">{entry.bookAuthor}</p>}
+                      </>
+                    ) : (
+                      <>
+                        <h3 className="text-lg font-semibold text-foreground">
+                          {(entry.subject && entry.subject.trim()) ? entry.subject : "Diary Entry"}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">You</p>
+                      </>
+                    )}
+                    {entry.updatedAt && (
+                      <p className="text-xs text-muted-foreground/80 mt-1">
+                        {entry.updatedAt !== entry.createdAt ? `Updated ${entry.updatedAt}` : entry.createdAt}
+                      </p>
+                    )}
+                  </div>
+                  <div
+                    className="prose prose-sm dark:prose-invert max-w-none text-foreground/90 line-clamp-2 overflow-hidden"
+                    dangerouslySetInnerHTML={{ __html: entry.content }}
+                    style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  />
+                  {likesCount > 0 && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
+                      <Heart className={`h-3 w-3 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                      <span>{likesCount}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      
+      {selectedEntry && (
+        <DiaryEntryDialog
+          open={!!selectedEntry}
+          onOpenChange={(open) => {
+            if (!open) setSelectedEntry(null);
+          }}
+          entry={selectedEntry}
+          username={username}
+          isOwnProfile={isOwnProfile}
+          onLikeChange={async () => {
+            // Refresh entries list view after like change
+            if (onEntryClick && selectedEntry) {
+              try {
+                await onEntryClick(selectedEntry);
+              } catch (error) {
+                console.error("Error in onEntryClick callback:", error);
+              }
+            }
+            // Also refresh the diary entries list via onRefresh if available
+            if (onRefresh) {
+              try {
+                await onRefresh();
+              } catch (error) {
+                console.error("Error refreshing diary entries:", error);
+              }
+            }
+          }}
+          onDelete={async () => {
+            // Refresh entries list after deletion
+            setSelectedEntry(null);
+            if (onRefresh) {
+              await onRefresh();
+            }
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 export default function UserProfilePage() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const username = typeof params.username === "string" ? params.username : null;
   
   // Check if tab is specified in URL params
@@ -1072,9 +1979,67 @@ export default function UserProfilePage() {
   const [likedBooks, setLikedBooks] = React.useState<LikedBook[]>([]);
   const [tbrBooks, setTbrBooks] = React.useState<TbrBook[]>([]);
   const [readingLists, setReadingLists] = React.useState<ReadingList[]>([]);
+  const [diaryEntries, setDiaryEntries] = React.useState<any[]>([]);
   
   // Activities from API
   const [activities, setActivities] = React.useState<ActivityEntry[]>([]);
+  const [selectedActivityDiaryEntry, setSelectedActivityDiaryEntry] = React.useState<any | null>(null);
+  
+  // Function to fetch diary entries
+  const fetchDiaryEntries = React.useCallback(async (username: string) => {
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(username)}/diary`);
+      if (response.ok) {
+        const data = await response.json();
+        const transformedEntries: any[] = Array.isArray(data.entries)
+          ? data.entries
+              .map((entry: any, idx: number) => {
+                const isGeneralEntry = !entry.bookId && !entry.bookTitle;
+                console.log('[DiarySection] Entry data:', {
+                  idx,
+                  id: entry._id?.toString() || entry.id,
+                  subject: entry.subject,
+                  bookTitle: entry.bookTitle,
+                  bookId: entry.bookId,
+                  isGeneralEntry,
+                  rawEntry: entry,
+                });
+                return {
+                  id: entry._id?.toString() || entry.id || entry.bookId?.toString() || `diary-${idx}`,
+                  bookId: entry.bookId?.toString() || entry.bookId,
+                  bookTitle: entry.bookTitle || null,
+                  bookAuthor: entry.bookAuthor || null,
+                  bookCover: entry.bookCover || null,
+                  subject: entry.subject || null,
+                  isGeneralEntry,
+                  content: entry.content || "",
+                  createdAt: entry.createdAt ? new Date(entry.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
+                  updatedAt: entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
+                  _updatedAtDate: entry.updatedAt ? new Date(entry.updatedAt) : (entry.createdAt ? new Date(entry.createdAt) : new Date(0)),
+                  isLiked: entry.isLiked || false,
+                  likesCount: entry.likesCount || 0,
+                  likes: entry.likes || [],
+                };
+              })
+              .sort((a: any, b: any) => {
+                // Sort by updatedAt descending (newest first)
+                return b._updatedAtDate.getTime() - a._updatedAtDate.getTime();
+              })
+              .map(({ _updatedAtDate, ...entry }: { _updatedAtDate: Date; [key: string]: any }) => entry) // Remove temporary sorting field
+          : [];
+        setDiaryEntries(transformedEntries);
+      }
+    } catch (error) {
+      console.error("Error fetching diary entries:", error);
+    }
+  }, []);
+  
+  // Refresh diary entries when Diary tab is activated
+  React.useEffect(() => {
+    if (activeTab === "Diary" && activeUsername) {
+      fetchDiaryEntries(activeUsername);
+    }
+  }, [activeTab, activeUsername, fetchDiaryEntries]);
   
   // Social counts from API
   const [followersCount, setFollowersCount] = React.useState(0);
@@ -1097,7 +2062,12 @@ export default function UserProfilePage() {
       // Activity tab should always show logged-in user's activity
       // If we're not on logged-in user's profile, redirect to their profile with Activity tab
       if (isAuthenticated && session?.user?.username && activeUsername !== session.user.username) {
-        window.location.href = `/u/${encodeURIComponent(session.user.username)}?tab=Activity`;
+        // Use router.push instead of window.location.href to avoid potential issues
+        try {
+          router.push(`/u/${encodeURIComponent(session.user.username)}?tab=Activity`);
+        } catch (error) {
+          console.error("Failed to navigate to Activity tab:", error);
+        }
         return;
       }
       // Set Activity as active tab (even though it's not in dockLabels, we handle it specially)
@@ -1105,7 +2075,7 @@ export default function UserProfilePage() {
     } else if (tabFromUrl && dockLabels.includes(tabFromUrl as (typeof dockLabels)[number])) {
       setActiveTab(tabFromUrl as DockLabel);
     }
-  }, [searchParams, isAuthenticated, session?.user?.username, activeUsername]);
+  }, [searchParams, isAuthenticated, session?.user?.username, activeUsername, router]);
   
   // Track which username we've loaded to prevent duplicate loads
   const loadedUsernameRef = React.useRef<string | null>(null);
@@ -1217,9 +2187,18 @@ export default function UserProfilePage() {
                   author: book.author || "Unknown Author",
                   cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
                   mood: book.mood,
+                  // Store identifiers for navigation
+                  bookId: book.bookId?.toString() || book._id?.toString(),
+                  isbndbId: book.isbndbId,
+                  openLibraryId: book.openLibraryId,
                 }))
               : [];
             setFavoriteBooks(transformedFavoriteBooks);
+            
+            // Clear cache to force fresh data on next load
+            if (typeof window !== "undefined") {
+              sessionStorage.removeItem(`profile_${activeUsername}`);
+            }
             
             // Bookshelf books - sort by finishedOn date (newest first)
             const transformedBookshelf: BookshelfBook[] = Array.isArray(data.user.bookshelf)
@@ -1314,9 +2293,34 @@ export default function UserProfilePage() {
               : [];
             setReadingLists(transformedLists);
             
+            // Diary entries
+            const transformedDiaryEntries: any[] = Array.isArray(data.user.diaryEntries)
+              ? data.user.diaryEntries.map((entry: any, idx: number) => {
+                  const isGeneralEntry = !entry.bookId && !entry.bookTitle;
+                  return {
+                    id: entry._id?.toString() || `diary-${idx}`,
+                    bookId: entry.bookId?.toString() || entry.bookId,
+                    bookTitle: entry.bookTitle || null,
+                    bookAuthor: entry.bookAuthor || null,
+                    bookCover: entry.bookCover || null,
+                    subject: entry.subject || null,
+                    isGeneralEntry,
+                    content: entry.content || "",
+                    likes: Array.isArray(entry.likes) ? entry.likes.map((id: any) => id.toString()) : [],
+                    likesCount: Array.isArray(entry.likes) ? entry.likes.length : 0,
+                    isLiked: session?.user?.id && Array.isArray(entry.likes) && entry.likes.some((id: any) => id.toString() === session.user.id),
+                    createdAt: entry.createdAt ? new Date(entry.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
+                    updatedAt: entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
+                  };
+                })
+              : [];
+            setDiaryEntries(transformedDiaryEntries);
+            
             // Activities
             // Determine if this is the owner's profile before mapping
             const isOwnerProfile = isAuthenticated && session?.user?.username === data.user.username;
+            
+            // Transform regular activities
             const transformedActivities: ActivityEntry[] = Array.isArray(data.user.recentActivities)
               ? data.user.recentActivities.map((activity: any, idx: number) => {
                   // Format time ago
@@ -1367,10 +2371,80 @@ export default function UserProfilePage() {
                     detail,
                     timeAgo,
                     cover: activity.bookCover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                    type: activity.type,
                   };
                 })
               : [];
-            setActivities(transformedActivities);
+            
+            // Add diary entries as activities
+            const diaryActivities: ActivityEntry[] = Array.isArray(data.user.diaryEntries)
+              ? data.user.diaryEntries.map((entry: any, idx: number) => {
+                  // Format time ago
+                  const entryDate = entry.updatedAt ? new Date(entry.updatedAt) : (entry.createdAt ? new Date(entry.createdAt) : new Date());
+                  const now = new Date();
+                  const diffMs = now.getTime() - entryDate.getTime();
+                  const diffMins = Math.floor(diffMs / (1000 * 60));
+                  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                  
+                  let timeAgo = "";
+                  if (diffMins < 1) timeAgo = "Just now";
+                  else if (diffMins < 60) timeAgo = `${diffMins}m ago`;
+                  else if (diffHours < 24) timeAgo = `${diffHours}h ago`;
+                  else if (diffDays === 1) timeAgo = "Yesterday";
+                  else if (diffDays < 7) timeAgo = `${diffDays}d ago`;
+                  else if (diffDays < 30) timeAgo = `${Math.floor(diffDays / 7)}w ago`;
+                  else if (diffDays < 365) timeAgo = `${Math.floor(diffDays / 30)}mo ago`;
+                  else timeAgo = `${Math.floor(diffDays / 365)}y ago`;
+                  
+                  const entryId = entry._id?.toString() || entry.id || `diary-${idx}`;
+                  const bookId = entry.bookId?.toString() || entry.bookId;
+                  const isLiked = session?.user?.id && Array.isArray(entry.likes) && entry.likes.some((id: any) => id.toString() === session.user.id);
+                  
+                  const isGeneralEntry = !entry.bookId && !entry.bookTitle;
+                  return {
+                    id: `diary-activity-${entryId}`,
+                    name: isOwnerProfile ? "You" : data.user.name || "User",
+                    action: isGeneralEntry ? "wrote" : "wrote about",
+                    detail: entry.bookTitle || (isGeneralEntry 
+                      ? (entry.subject && entry.subject.trim() ? entry.subject : "a diary entry")
+                      : "a book"),
+                    timeAgo,
+                    cover: entry.bookCover || null,
+                  
+                    diaryEntryId: entryId,
+                    bookId: bookId,
+                    bookTitle: entry.bookTitle || null,
+                    bookAuthor: entry.bookAuthor || null,
+                    isGeneralEntry,
+                    content: entry.content || "",
+                    createdAt: entry.createdAt ? new Date(entry.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
+                    updatedAt: entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
+                    isLiked: isLiked || false,
+                    likesCount: Array.isArray(entry.likes) ? entry.likes.length : 0,
+                  };
+                })
+              : [];
+            
+            // Combine and sort all activities by time (newest first)
+            const allActivities = [...transformedActivities, ...diaryActivities].sort((a, b) => {
+              // Parse timeAgo to get approximate timestamp for sorting
+              // This is a simple heuristic - activities with "Just now" or "m ago" come first
+              const getSortValue = (timeAgo: string) => {
+                if (timeAgo === "Just now") return 0;
+                if (timeAgo.includes("m ago")) return parseInt(timeAgo) || 0;
+                if (timeAgo.includes("h ago")) return parseInt(timeAgo) * 60 || 0;
+                if (timeAgo === "Yesterday") return 1440;
+                if (timeAgo.includes("d ago")) return parseInt(timeAgo) * 1440 || 0;
+                if (timeAgo.includes("w ago")) return parseInt(timeAgo) * 10080 || 0;
+                if (timeAgo.includes("mo ago")) return parseInt(timeAgo) * 43200 || 0;
+                if (timeAgo.includes("y ago")) return parseInt(timeAgo) * 525600 || 0;
+                return 999999;
+              };
+              return getSortValue(a.timeAgo) - getSortValue(b.timeAgo);
+            });
+            
+            setActivities(allActivities);
             
             // Set follower/following counts
             setFollowersCount(data.user.followersCount || 0);
@@ -1397,6 +2471,7 @@ export default function UserProfilePage() {
             setLikedBooks([]);
             setTbrBooks([]);
             setReadingLists([]);
+            setDiaryEntries([]);
             setActivities([]);
           }
         })
@@ -1449,10 +2524,16 @@ export default function UserProfilePage() {
         }
       } catch (error) {
         console.error("Failed to check follow status:", error);
+        // Ensure we don't leave state in an inconsistent state
+        setIsFollowing(false);
       }
     };
 
-    checkFollowStatus();
+    // Properly handle the async function to prevent unhandled rejections
+    checkFollowStatus().catch((error) => {
+      console.error("Unhandled error in checkFollowStatus:", error);
+      setIsFollowing(false);
+    });
   }, [isAuthenticated, currentUsername, activeUsername, isOwnProfile]);
 
   // Handle follow/unfollow action
@@ -1694,10 +2775,42 @@ export default function UserProfilePage() {
                     subtitle="The ones I keep coming back to."
                     books={topBooks}
                   />
-                  <BookCarousel
+                  <EditableFavoriteBooksCarousel
                     title="Books that I love"
                     subtitle="Comfort stories and obsessions that always earn a re-read."
                     books={favoriteBooks}
+                    username={activeUsername}
+                    canEdit={isOwnProfile}
+                    onUpdate={async () => {
+                      // Reload favorite books
+                      if (!activeUsername) return;
+                      try {
+                        const response = await fetch(`/api/users/${encodeURIComponent(activeUsername)}`);
+                        if (response.ok) {
+                          const data = await response.json();
+                          const transformedFavoriteBooks: ProfileBook[] = Array.isArray(data.user.favoriteBooks)
+                            ? data.user.favoriteBooks.map((book: any, idx: number) => ({
+                                id: book.bookId?.toString() || book._id?.toString() || `fav-${idx}`,
+                                title: book.title || "Unknown Title",
+                                author: book.author || "Unknown Author",
+                                cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                                mood: book.mood,
+                                // Store identifiers for navigation
+                                bookId: book.bookId?.toString() || book._id?.toString(),
+                                isbndbId: book.isbndbId,
+                                openLibraryId: book.openLibraryId,
+                              }))
+                            : [];
+                          setFavoriteBooks(transformedFavoriteBooks);
+                          // Clear cache
+                          if (typeof window !== "undefined") {
+                            sessionStorage.removeItem(`profile_${activeUsername}`);
+                          }
+                        }
+                      } catch (error) {
+                        console.error("Failed to reload favorite books:", error);
+                      }
+                    }}
                   />
                 </div>
               ) : activeTab === "Activity" ? (
@@ -1756,7 +2869,26 @@ export default function UserProfilePage() {
                         .map((entry) => (
                           <article
                             key={entry.id}
-                            className="flex gap-4 rounded-3xl border border-border/70 bg-background/90 p-4 shadow-sm transition hover:-translate-y-1"
+                            onClick={() => {
+                              // If it's a diary entry, open the diary entry dialog
+                              if (entry.type === "diary_entry" && entry.diaryEntryId) {
+                                setSelectedActivityDiaryEntry({
+                                  id: entry.diaryEntryId,
+                                  bookId: entry.bookId,
+                                  bookTitle: entry.bookTitle,
+                                  bookAuthor: entry.bookAuthor,
+                                  bookCover: entry.cover,
+                                  content: entry.content,
+                                  createdAt: entry.createdAt,
+                                  updatedAt: entry.updatedAt,
+                                  isLiked: entry.isLiked,
+                                  likesCount: entry.likesCount,
+                                });
+                              }
+                            }}
+                            className={`flex gap-4 rounded-3xl border border-border/70 bg-background/90 p-4 shadow-sm transition hover:-translate-y-1 ${
+                              entry.type === "diary_entry" ? "cursor-pointer" : ""
+                            }`}
                           >
                             <div className="relative h-24 w-24 overflow-hidden rounded-2xl bg-muted">
                               <Image
@@ -1777,13 +2909,182 @@ export default function UserProfilePage() {
                                 </p>
                                 <p className="text-sm text-muted-foreground">{entry.detail}</p>
                               </div>
+                              {entry.type === "diary_entry" ? (
+                                <button className="text-sm font-semibold text-primary transition hover:text-primary/80">
+                                  View diary entry
+                                </button>
+                              ) : (
                               <button className="text-sm font-semibold text-primary transition hover:text-primary/80">
                                 View details
                               </button>
+                              )}
                             </div>
                           </article>
                         ))}
                     </div>
+                  )}
+                  
+                  {/* Diary Entry Dialog for Activity */}
+                  {selectedActivityDiaryEntry && (
+                    <DiaryEntryDialog
+                      open={!!selectedActivityDiaryEntry}
+                      onOpenChange={(open) => {
+                        if (!open) setSelectedActivityDiaryEntry(null);
+                      }}
+                      entry={selectedActivityDiaryEntry}
+                      username={activeUsername}
+                      isOwnProfile={isOwnProfile}
+                      onLikeChange={async () => {
+                        // Refresh activities after like change
+                        if (activeUsername) {
+                          try {
+                            const response = await fetch(`/api/users/${encodeURIComponent(activeUsername)}`);
+                            if (!response.ok) {
+                              console.error("Failed to refresh activities after like change");
+                              return;
+                            }
+                              const data = await response.json();
+                              // Re-transform activities (similar to the main fetch logic)
+                              const isOwnerProfile = isAuthenticated && session?.user?.username === data.user.username;
+                              
+                              const transformedActivities: ActivityEntry[] = Array.isArray(data.user.recentActivities)
+                                ? data.user.recentActivities.map((activity: any, idx: number) => {
+                                    const activityDate = activity.timestamp ? new Date(activity.timestamp) : new Date();
+                                    const now = new Date();
+                                    const diffMs = now.getTime() - activityDate.getTime();
+                                    const diffMins = Math.floor(diffMs / (1000 * 60));
+                                    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                                    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                                    
+                                    let timeAgo = "";
+                                    if (diffMins < 1) timeAgo = "Just now";
+                                    else if (diffMins < 60) timeAgo = `${diffMins}m ago`;
+                                    else if (diffHours < 24) timeAgo = `${diffHours}h ago`;
+                                    else if (diffDays === 1) timeAgo = "Yesterday";
+                                    else if (diffDays < 7) timeAgo = `${diffDays}d ago`;
+                                    else if (diffDays < 30) timeAgo = `${Math.floor(diffDays / 7)}w ago`;
+                                    else if (diffDays < 365) timeAgo = `${Math.floor(diffDays / 30)}mo ago`;
+                                    else timeAgo = `${Math.floor(diffDays / 365)}y ago`;
+                                    
+                                    let action = "";
+                                    let detail = "";
+                                    if (activity.type === "read") {
+                                      action = "finished";
+                                      detail = activity.bookTitle || "a book";
+                                    } else if (activity.type === "rated") {
+                                      action = `rated ${"★".repeat(activity.rating || 0)}`;
+                                      detail = activity.bookTitle || "a book";
+                                    } else if (activity.type === "liked") {
+                                      action = "liked";
+                                      detail = activity.bookTitle || "a book";
+                                    } else if (activity.type === "added_to_list") {
+                                      action = "added to list";
+                                      detail = activity.bookTitle || "a book";
+                                    } else if (activity.type === "started_reading") {
+                                      action = "started reading";
+                                      detail = activity.bookTitle || "a book";
+                                    } else if (activity.type === "reviewed") {
+                                      action = "reviewed";
+                                      detail = activity.bookTitle || "a book";
+                                    }
+                                    
+                                    return {
+                                      id: activity._id?.toString() || `activity-${idx}`,
+                                      name: isOwnerProfile ? "You" : data.user.name || "User",
+                                      action,
+                                      detail,
+                                      timeAgo,
+                                      cover: activity.bookCover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                                      type: activity.type,
+                                    };
+                                  })
+                                : [];
+                              
+                              const diaryActivities: ActivityEntry[] = Array.isArray(data.user.diaryEntries)
+                                ? data.user.diaryEntries.map((entry: any, idx: number) => {
+                                    const entryDate = entry.updatedAt ? new Date(entry.updatedAt) : (entry.createdAt ? new Date(entry.createdAt) : new Date());
+                                    const now = new Date();
+                                    const diffMs = now.getTime() - entryDate.getTime();
+                                    const diffMins = Math.floor(diffMs / (1000 * 60));
+                                    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                                    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                                    
+                                    let timeAgo = "";
+                                    if (diffMins < 1) timeAgo = "Just now";
+                                    else if (diffMins < 60) timeAgo = `${diffMins}m ago`;
+                                    else if (diffHours < 24) timeAgo = `${diffHours}h ago`;
+                                    else if (diffDays === 1) timeAgo = "Yesterday";
+                                    else if (diffDays < 7) timeAgo = `${diffDays}d ago`;
+                                    else if (diffDays < 30) timeAgo = `${Math.floor(diffDays / 7)}w ago`;
+                                    else if (diffDays < 365) timeAgo = `${Math.floor(diffDays / 30)}mo ago`;
+                                    else timeAgo = `${Math.floor(diffDays / 365)}y ago`;
+                                    
+                                    const entryId = entry._id?.toString() || entry.id || `diary-${idx}`;
+                                    const bookId = entry.bookId?.toString() || entry.bookId;
+                                    const isLiked = session?.user?.id && Array.isArray(entry.likes) && entry.likes.some((id: any) => id.toString() === session.user.id);
+                                    const isGeneralEntry = !entry.bookId && !entry.bookTitle;
+                                    
+                                    return {
+                                      id: `diary-activity-${entryId}`,
+                                      name: isOwnerProfile ? "You" : data.user.name || "User",
+                                      action: isGeneralEntry ? "wrote" : "wrote about",
+                                      detail: entry.bookTitle || (isGeneralEntry ? "a diary entry" : "a book"),
+                                      timeAgo,
+                                      cover: entry.bookCover || null,
+                                      type: "diary_entry",
+                                      diaryEntryId: entryId,
+                                      bookId: bookId,
+                                      bookTitle: entry.bookTitle || null,
+                                      bookAuthor: entry.bookAuthor || null,
+                                      isGeneralEntry,
+                                      content: entry.content || "",
+                                      createdAt: entry.createdAt ? new Date(entry.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
+                                      updatedAt: entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
+                                      isLiked: isLiked || false,
+                                      likesCount: Array.isArray(entry.likes) ? entry.likes.length : 0,
+                                    };
+                                  })
+                                : [];
+                              
+                              const allActivities = [...transformedActivities, ...diaryActivities].sort((a, b) => {
+                                const getSortValue = (timeAgo: string) => {
+                                  if (timeAgo === "Just now") return 0;
+                                  if (timeAgo.includes("m ago")) return parseInt(timeAgo) || 0;
+                                  if (timeAgo.includes("h ago")) return parseInt(timeAgo) * 60 || 0;
+                                  if (timeAgo === "Yesterday") return 1440;
+                                  if (timeAgo.includes("d ago")) return parseInt(timeAgo) * 1440 || 0;
+                                  if (timeAgo.includes("w ago")) return parseInt(timeAgo) * 10080 || 0;
+                                  if (timeAgo.includes("mo ago")) return parseInt(timeAgo) * 43200 || 0;
+                                  if (timeAgo.includes("y ago")) return parseInt(timeAgo) * 525600 || 0;
+                                  return 999999;
+                                };
+                                return getSortValue(a.timeAgo) - getSortValue(b.timeAgo);
+                              });
+                              
+                              setActivities(allActivities);
+                              
+                              // Update selected entry
+                              const updatedEntry = allActivities.find(a => a.diaryEntryId === selectedActivityDiaryEntry.id);
+                              if (updatedEntry && updatedEntry.type === "diary_entry") {
+                                setSelectedActivityDiaryEntry({
+                                  id: updatedEntry.diaryEntryId!,
+                                  bookId: updatedEntry.bookId,
+                                  bookTitle: updatedEntry.bookTitle,
+                                  bookAuthor: updatedEntry.bookAuthor,
+                                  bookCover: updatedEntry.cover,
+                                  content: updatedEntry.content,
+                                  createdAt: updatedEntry.createdAt,
+                                  updatedAt: updatedEntry.updatedAt,
+                                  isLiked: updatedEntry.isLiked,
+                                  likesCount: updatedEntry.likesCount,
+                                });
+                              }
+                          } catch (error) {
+                            console.error("Error refreshing activities:", error);
+                          }
+                        }
+                      }}
+                    />
                   )}
                 </div>
               ) : activeTab === "Authors" ? (
@@ -1801,6 +3102,24 @@ export default function UserProfilePage() {
                 <ListsCarousel lists={readingLists} canEdit={isOwnProfile} />
               ) : activeTab === "'to-be-read'" ? (
                 <TbrSection books={tbrBooks} page={tbrPage} pageSize={TBR_PAGE_SIZE} onPageChange={setTbrPage} />
+              ) : activeTab === "Diary" ? (
+                <DiarySection
+                  entries={diaryEntries}
+                  isOwnProfile={isOwnProfile}
+                  username={activeUsername}
+                  onEntryClick={() => {
+                    // Refresh diary entries after interaction
+                    if (activeUsername) {
+                      fetchDiaryEntries(activeUsername);
+                    }
+                  }}
+                  onRefresh={async () => {
+                    // Refresh diary entries after deletion
+                    if (activeUsername) {
+                      await fetchDiaryEntries(activeUsername);
+                    }
+                  }}
+                />
               ) : (
                 <TabPlaceholder label={activeTab} />
               )}

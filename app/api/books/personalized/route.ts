@@ -35,9 +35,64 @@ export async function GET(request: NextRequest) {
     let books: any[] = [];
 
     switch (type) {
+      case 'onboarding': {
+        // Books based on onboarding questionnaire (for new users)
+        const preference = await UserPreference.findOne({ userId }).lean();
+        
+        if (!preference || !preference.onboarding) {
+          break;
+        }
+
+        const onboarding = preference.onboarding;
+        const genreNames = onboarding.genres?.map(g => g.genre) || [];
+        const authorNames = onboarding.favoriteAuthors || [];
+
+        // Build query for books matching onboarding preferences
+        const query: any = {
+          'volumeInfo.imageLinks.thumbnail': { $exists: true, $ne: null },
+        };
+
+        // Add genre or author filter
+        if (genreNames.length > 0 || authorNames.length > 0) {
+          query.$or = [];
+          
+          if (genreNames.length > 0) {
+            // Match any of the selected genres (case-insensitive regex match)
+            // Genres in categories array might be stored in different formats
+            for (const genre of genreNames) {
+              query.$or.push({
+                'volumeInfo.categories': { $regex: genre, $options: 'i' },
+              });
+            }
+          }
+          
+          if (authorNames.length > 0) {
+            // Match any of the favorite authors (case-insensitive)
+            for (const author of authorNames) {
+              query.$or.push({
+                'volumeInfo.authors': { $regex: author, $options: 'i' },
+              });
+            }
+          }
+        }
+
+        if (query.$or && query.$or.length > 0) {
+          books = await Book.find(query)
+            .sort({ 
+              'volumeInfo.averageRating': -1, 
+              'volumeInfo.ratingsCount': -1,
+              'volumeInfo.publishedDate': -1 
+            })
+            .limit(limit * 2) // Fetch more to account for duplicates
+            .lean();
+        }
+        break;
+      }
+
       case 'recommended': {
         try {
           // Use the recommendation service
+          console.log(`[Personalized API] Generating recommendations for user: ${userId}, limit: ${limit}`);
           const recommendationService = new RecommendationService(userId);
           const recommendations = await recommendationService.getRecommendations(
             userId,
@@ -45,8 +100,14 @@ export async function GET(request: NextRequest) {
             { page: 'home' }
           );
           
+          console.log(`[Personalized API] Generated ${recommendations.length} recommendations`);
+          
           // Extract books from recommendations
           books = recommendations.map(rec => rec.book);
+          
+          if (books.length === 0) {
+            console.warn(`[Personalized API] No books returned from recommendations (user may have no reading history)`);
+          }
         } catch (error) {
           console.error('[Personalized API] Error getting recommendations:', error);
           // Return empty array if recommendations fail - don't crash the API
@@ -352,14 +413,27 @@ export async function GET(request: NextRequest) {
       })
       .map((book: any) => ({
         id: book._id.toString(),
+        _id: book._id.toString(),
         title: book.volumeInfo?.title || 'Unknown Title',
         author: book.volumeInfo?.authors?.[0] || 'Unknown Author',
+        authors: book.volumeInfo?.authors || [],
+        description: book.volumeInfo?.description || '',
+        publishedDate: book.volumeInfo?.publishedDate || '',
         cover:
           book.volumeInfo?.imageLinks?.thumbnail ||
           book.volumeInfo?.imageLinks?.smallThumbnail ||
           book.volumeInfo?.imageLinks?.medium ||
           book.volumeInfo?.imageLinks?.large ||
           'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80',
+        isbn: book.isbn,
+        isbn13: book.isbn13,
+        openLibraryId: book.openLibraryId,
+        isbndbId: book.isbndbId,
+        averageRating: book.volumeInfo?.averageRating,
+        ratingsCount: book.volumeInfo?.ratingsCount,
+        pageCount: book.volumeInfo?.pageCount,
+        categories: book.volumeInfo?.categories || [],
+        publisher: book.volumeInfo?.publisher,
       }))
       .filter((book) => {
         // Create a unique key from title and author (case-insensitive, normalized)

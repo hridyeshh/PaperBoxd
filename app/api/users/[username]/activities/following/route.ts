@@ -73,13 +73,14 @@ export async function GET(
     const followedUsers = await User.find({
       _id: { $in: followingIds },
     })
-      .select("_id username name avatar activities")
+      .select("_id username name avatar activities diaryEntries")
       .lean();
 
     // Collect all activities from followed users
     const allActivities: any[] = [];
 
     followedUsers.forEach((user: any) => {
+      // Add regular activities
       const activities = Array.isArray(user.activities) ? user.activities : [];
       // Filter out any search-related activities if they exist
       const filteredActivities = activities.filter((activity: any) => 
@@ -92,6 +93,33 @@ export async function GET(
           username: user.username,
           userName: user.name || user.username,
           userAvatar: user.avatar,
+        });
+      });
+
+      // Add diary entries as activities
+      const diaryEntries = Array.isArray(user.diaryEntries) ? user.diaryEntries : [];
+      diaryEntries.forEach((entry: any) => {
+        const entryDate = entry.updatedAt ? new Date(entry.updatedAt) : (entry.createdAt ? new Date(entry.createdAt) : new Date());
+        const isGeneralEntry = !entry.bookId;
+        allActivities.push({
+          _id: entry._id?.toString() || entry._id,
+          type: "diary_entry",
+          timestamp: entryDate,
+          bookId: entry.bookId?.toString() || entry.bookId || null,
+          bookTitle: entry.bookTitle || (isGeneralEntry ? null : "Unknown Book"),
+          bookAuthor: entry.bookAuthor || (isGeneralEntry ? null : "Unknown Author"),
+          bookCover: entry.bookCover || (isGeneralEntry ? null : undefined),
+          subject: entry.subject || null, // Include subject for general entries
+          diaryEntryId: entry._id?.toString() || entry._id,
+          content: entry.content || "",
+          createdAt: entry.createdAt,
+          updatedAt: entry.updatedAt,
+          likes: entry.likes || [],
+          userId: user._id.toString(),
+          username: user.username,
+          userName: user.name || user.username,
+          userAvatar: user.avatar,
+          isGeneralEntry, // Flag to indicate this is a general entry
         });
       });
     });
@@ -110,9 +138,22 @@ export async function GET(
     const endIndex = startIndex + pageSize;
     const paginatedActivities = allActivities.slice(startIndex, endIndex);
 
-    // Populate activities with book information
+    // Populate activities with book information and add like info for diary entries
+    const currentUserId = currentUser._id.toString();
     const activitiesWithBooks = await Promise.all(
       paginatedActivities.map(async (activity: any) => {
+        // For diary entries, add like information
+        if (activity.type === "diary_entry") {
+          const likesArray = activity.likes || [];
+          const isLiked = currentUserId ? likesArray.some((id: any) => id.toString() === currentUserId) : false;
+          return {
+            ...activity,
+            isLiked,
+            likesCount: likesArray.length,
+          };
+        }
+
+        // For regular activities, populate book information
         if (activity.bookId) {
           try {
             // Convert bookId to ObjectId if it's a string
@@ -121,10 +162,11 @@ export async function GET(
             if (book) {
               return {
                 ...activity,
-                bookTitle: book.volumeInfo?.title || undefined,
+                bookTitle: book.volumeInfo?.title || activity.bookTitle || undefined,
                 bookCover: book.volumeInfo?.imageLinks?.thumbnail || 
                           book.volumeInfo?.imageLinks?.smallThumbnail ||
                           book.volumeInfo?.imageLinks?.medium ||
+                          activity.bookCover ||
                           undefined,
               };
             }

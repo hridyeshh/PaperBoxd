@@ -52,6 +52,18 @@ export interface IReadingList {
   _id?: mongoose.Types.ObjectId;
 }
 
+export interface IDiaryEntry {
+  bookId?: mongoose.Types.ObjectId | null; // Optional for general diary entries
+  bookTitle?: string | null; // Optional for general diary entries
+  bookAuthor?: string | null; // Optional for general diary entries
+  bookCover?: string | null;
+  subject?: string | null; // Subject/title for general diary entries
+  content: string; // Rich text content (HTML)
+  likes?: mongoose.Types.ObjectId[]; // Array of user IDs who liked this entry
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface IActivity {
   type: "read" | "rated" | "liked" | "added_to_list" | "started_reading" | "reviewed";
   bookId?: mongoose.Types.ObjectId;
@@ -98,6 +110,9 @@ export interface IUser extends Document {
 
   // Reading Lists
   readingLists: IReadingList[];
+
+  // Diary Entries
+  diaryEntries: IDiaryEntry[];
 
   // Activity & Engagement
   activities: IActivity[];
@@ -162,6 +177,41 @@ const ReadingListSchema = new Schema({
   isPublic: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
+});
+
+const DiaryEntrySchema = new Schema({
+  bookId: { 
+    type: Schema.Types.ObjectId, 
+    ref: "Book", 
+    required: false,
+    default: undefined // Explicitly allow undefined
+  }, // Optional for general diary entries
+  bookTitle: { 
+    type: String, 
+    required: false,
+    default: undefined // Explicitly allow undefined
+  }, // Optional for general diary entries
+  bookAuthor: { 
+    type: String, 
+    required: false,
+    default: undefined // Explicitly allow undefined
+  }, // Optional for general diary entries
+  bookCover: { 
+    type: String,
+    required: false,
+    default: undefined
+  },
+  subject: {
+    type: String,
+    required: false,
+  }, // Subject/title for general diary entries
+  content: { type: String, required: true }, // HTML content
+  likes: [{ type: Schema.Types.ObjectId, ref: "User" }], // Array of user IDs who liked this entry
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+}, {
+  _id: true, // Ensure _id is generated for each entry
+  strict: true, // Only save fields defined in schema
 });
 
 const ActivitySchema = new Schema({
@@ -236,6 +286,9 @@ const UserSchema = new Schema<IUser>(
 
     // Reading Lists
     readingLists: [ReadingListSchema],
+
+    // Diary Entries
+    diaryEntries: [DiaryEntrySchema],
 
     // Activity & Engagement
     activities: [ActivitySchema],

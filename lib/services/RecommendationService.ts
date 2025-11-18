@@ -61,14 +61,19 @@ export class RecommendationService {
     let profile: IUserPreference | null = await UserPreference.findOne({ userId: userIdObj });
 
     if (!profile || profile.needsRecomputation()) {
+      console.log(`[RecommendationService] Building profile for user: ${userIdObj}`);
       profile = await this.profileBuilder.buildProfile(userIdObj);
+    } else {
+      console.log(`[RecommendationService] Using existing profile for user: ${userIdObj}`);
     }
 
     // 2. Generate candidate books from multiple sources
     const candidates = await this.generateCandidates(userIdObj, profile);
+    console.log(`[RecommendationService] Generated ${candidates.length} candidate books`);
 
     if (candidates.length === 0) {
       // Fallback to trending books if no candidates
+      console.log(`[RecommendationService] No candidates found, falling back to trending books`);
       return this.getTrendingBooks(n);
     }
 

@@ -122,7 +122,10 @@ export function PublicHome() {
       }
     };
 
-    fetchSphereBooks();
+    fetchSphereBooks().catch((error) => {
+      console.error('Unhandled error in fetchSphereBooks:', error);
+      setIsLoadingSphere(false);
+    });
   }, []);
 
   // Scroll detection for sphere zoom animation

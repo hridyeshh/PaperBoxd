@@ -1,12 +1,21 @@
 import mongoose from "mongoose";
 
-if (!process.env.MONGODB_URI) {
+// Lazy getter for MONGODB_URI to avoid Edge Runtime issues
+// This function will only be called in Node.js runtime (API routes)
+function getMongoDBUri(): string {
+  if (typeof process === 'undefined' || typeof process.env === 'undefined') {
+    throw new Error("MONGODB_URI is not available in Edge Runtime. This function should only be called in Node.js runtime.");
+  }
+  
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
   throw new Error(
     "Please define the MONGODB_URI environment variable inside .env.local"
   );
 }
 
-const MONGODB_URI: string = process.env.MONGODB_URI;
+  return uri;
+}
 
 /**
  * Global is used here to maintain a cached connection across hot reloads
@@ -63,7 +72,17 @@ async function connectDB(): Promise<typeof mongoose> {
 
     // Set up connection event handlers for better error handling (only once)
     // Only set up event handlers in Node.js runtime (not Edge Runtime)
-    const isNodeRuntime = typeof process !== 'undefined' && process.versions?.node;
+    // Check for Node.js runtime in Edge-compatible way
+    let isNodeRuntime = false;
+    try {
+      isNodeRuntime = typeof process !== 'undefined' && 
+                      typeof process.versions === 'object' && 
+                      process.versions !== null &&
+                      typeof process.versions.node === 'string';
+    } catch (e) {
+      // Edge Runtime - process.versions not available
+      isNodeRuntime = false;
+    }
     
     if (isNodeRuntime && mongoose.connection && mongoose.connection.listeners) {
       if (mongoose.connection.listeners('connected').length === 0) {
@@ -86,7 +105,12 @@ async function connectDB(): Promise<typeof mongoose> {
         });
 
         // Handle process termination (only register once, only in Node.js runtime)
-        if (typeof process !== 'undefined' && process.on && process.listeners) {
+        // Skip in Edge Runtime - use try-catch to safely check for Node.js APIs
+        try {
+          if (typeof process !== 'undefined' && 
+              typeof process.on === 'function' && 
+              typeof process.listeners === 'function' &&
+              typeof process.exit === 'function') {
           if (process.listeners('SIGINT').length === 0) {
             process.on('SIGINT', async () => {
               await mongoose.connection.close();
@@ -94,10 +118,14 @@ async function connectDB(): Promise<typeof mongoose> {
               process.exit(0);
             });
           }
+          }
+        } catch (e) {
+          // Edge Runtime - process APIs not available, skip gracefully
         }
       }
     }
 
+    const MONGODB_URI = getMongoDBUri();
     const dbHost = MONGODB_URI.split("@")[1]?.split("/")[0] || "MongoDB Atlas";
     console.log("🔌 Creating new MongoDB connection to:", dbHost);
 

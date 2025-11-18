@@ -159,7 +159,7 @@ const UserPreferenceSchema = new Schema<IUserPreference>(
       ref: 'User',
       required: true,
       unique: true,
-      index: true,
+      // Index is created explicitly below to avoid duplicate index warning
     },
 
     onboarding: OnboardingSchema,

@@ -4,6 +4,9 @@ export type ProfileBook = {
   author: string;
   cover: string;
   mood?: string;
+  bookId?: string; // MongoDB _id for navigation
+  isbndbId?: string; // ISBNdb ID for navigation
+  openLibraryId?: string; // Open Library ID for navigation
 };
 
 export type BookshelfBook = ProfileBook & {

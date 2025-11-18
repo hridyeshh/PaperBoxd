@@ -10,11 +10,12 @@ import { useRouter, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { CommandItem, SearchModal } from "@/components/ui/search-modal";
-import { Sheet, SheetContent, SheetFooter } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Dropdown } from "@/components/ui/dropdown";
 import { signOut } from "@/lib/auth-client";
 import { DeleteAccountDialog } from "@/components/ui/delete-account-dialog";
+import { GeneralDiaryEditorDialog } from "@/components/ui/general-diary-editor-dialog";
 
 // Links will be dynamic based on authentication status
 // We'll handle Activity link specially in the component
@@ -68,6 +69,7 @@ export function Header({
   const [hasNewActivities, setHasNewActivities] = React.useState(false);
   const [isDark, setIsDark] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
+  const [writeDialogOpen, setWriteDialogOpen] = React.useState(false);
   const { data: session, status } = useSession();
   const isAuthenticated = status === "authenticated";
   const router = useRouter();
@@ -328,15 +330,15 @@ export function Header({
       )}
       <header
         className={cn(
-          "fixed top-0 left-0 right-0 z-[100] w-full border-b border-border/60 backdrop-blur-md",
-          "bg-background/85 supports-[backdrop-filter]:bg-background/75",
+          "fixed top-0 left-0 right-0 z-[100] w-full border-b border-border/60",
+          "bg-white dark:bg-black",
         )}
       >
       <nav className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-4 sm:px-6">
         <button
           type="button"
           onClick={() => router.push("/")}
-          className="flex items-center gap-2 rounded-full px-3 py-1.5 transition hover:bg-white dark:hover:bg-black cursor-pointer"
+          className="flex items-center gap-2 rounded-full px-1 py-1 transition hover:bg-white dark:hover:bg-black cursor-pointer"
         >
           {mounted && (isDark !== undefined) ? (
             <Image
@@ -367,28 +369,44 @@ export function Header({
                 className: "font-medium text-foreground/80 hover:text-foreground",
               })}
             >
-              Books
+              Feed
             </button>
             {isAuthenticated && session?.user?.username ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  router.push("/activity");
-                }}
-                className={cn(
-                  buttonVariants({
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setWriteDialogOpen(true);
+                  }}
+                  className={buttonVariants({
                     variant: "ghost",
-                    className: "font-medium text-foreground/80 hover:text-foreground relative",
-                  })
-                )}
-              >
-                Activity
-                {hasNewActivities && (
-                  <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-red-500 border-2 border-background" />
-                )}
-              </button>
+                    className: "font-medium text-foreground/80 hover:text-foreground",
+                  })}
+                >
+                  Write
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    router.push("/activity");
+                  }}
+                  className={cn(
+                    buttonVariants({
+                      variant: "ghost",
+                      className: "font-medium text-foreground/80 hover:text-foreground relative",
+                    })
+                  )}
+                >
+                  Updates
+                  {hasNewActivities && (
+                    <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-red-500 border-2 border-background" />
+                  )}
+                </button>
+              </>
             ) : null}
           </div>
           <SearchModal data={searchItems}>
@@ -495,6 +513,9 @@ export function Header({
               showClose={false}
               side="left"
             >
+              <SheetHeader className="sr-only">
+                <SheetTitle>Navigation Menu</SheetTitle>
+              </SheetHeader>
               <button
                 type="button"
                 onClick={() => {
@@ -532,7 +553,7 @@ export function Header({
                     className: "justify-start text-base",
                   })}
                 >
-                  Books
+                  Feed
                 </button>
                 {isAuthenticated && session?.user?.username ? (
                   <button
@@ -545,7 +566,7 @@ export function Header({
                       className: "justify-start text-base",
                     })}
                   >
-                    Activity
+                    Updates
                   </button>
                 ) : null}
               </div>
@@ -560,6 +581,13 @@ export function Header({
         </div>
       </nav>
     </header>
+    {isAuthenticated && session?.user?.username && (
+      <GeneralDiaryEditorDialog
+        open={writeDialogOpen}
+        onOpenChange={setWriteDialogOpen}
+        username={session.user.username}
+      />
+    )}
     <DeleteAccountDialog
       open={isDeleteAccountOpen}
       onOpenChange={setIsDeleteAccountOpen}

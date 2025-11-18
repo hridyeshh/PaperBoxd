@@ -37,10 +37,16 @@ const BookCard = ({ book }: { book: BookCarouselBook }) => {
 
   return (
     <motion.div
-      className="group w-[180px] flex-shrink-0 cursor-pointer"
+      className="group w-[160px] flex-shrink-0 cursor-pointer"
       whileHover={{ y: -5 }}
       transition={{ type: "spring", stiffness: 300 }}
-      onClick={() => router.push(`/b/${book.id}`)}
+      onClick={() => {
+        try {
+          router.push(`/b/${book.id}`);
+        } catch (error) {
+          console.error("Navigation error:", error);
+        }
+      }}
     >
       <div className="overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm">
         <div className="relative aspect-[2/3] overflow-hidden">
@@ -49,7 +55,7 @@ const BookCard = ({ book }: { book: BookCarouselBook }) => {
             alt={`${book.title} cover`}
             fill
             className="object-cover transition-transform duration-300 group-hover:scale-105"
-            sizes="180px"
+            sizes="160px"
             quality={100}
             unoptimized={
               book.cover?.includes('isbndb.com') ||
@@ -98,8 +104,12 @@ const ViewAllBooksDialog = ({
                 key={book.id}
                 className="group flex flex-col gap-3 cursor-pointer"
                 onClick={() => {
+                  try {
                   router.push(`/b/${book.id}`);
                   onOpenChange(false);
+                  } catch (error) {
+                    console.error("Navigation error:", error);
+                  }
                 }}
               >
                 <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-sm">

@@ -143,6 +143,7 @@ export async function GET(
         tbrBooks: Array.isArray(userPlain.tbrBooks) ? userPlain.tbrBooks : [],
         currentlyReading: Array.isArray(userPlain.currentlyReading) ? userPlain.currentlyReading : [],
         readingLists: Array.isArray(userPlain.readingLists) ? userPlain.readingLists : [],
+        diaryEntries: Array.isArray(userPlain.diaryEntries) ? userPlain.diaryEntries : [],
 
         // Social
         followers: followers.map((id) => id.toString()),

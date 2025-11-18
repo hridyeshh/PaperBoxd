@@ -35,11 +35,14 @@ export default function ProfilePage() {
               return;
             }
             
-            // If onboarding not completed, redirect to onboarding
-            if (!data.completed) {
+            // Only redirect to onboarding if user is new (no activity, recently created account)
+            // Existing users who log in should not see onboarding even if not completed
+            if (!data.completed && data.isNewUser) {
+              // Only show onboarding for new users
               router.replace("/onboarding");
               return;
             }
+            // Existing user without onboarding - skip it and go to profile
             
             // Has username and completed onboarding - redirect to profile
             const username = data.username || session?.user?.username;

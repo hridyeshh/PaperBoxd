@@ -84,7 +84,7 @@ export function MasonryGrid({ books, onCardClick }: MasonryGridProps) {
 
   return (
     <>
-      <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
+      <div className="grid grid-cols-5 gap-4">
         {books.map((book) => {
           const height = cardHeights[book.id] || 320;
           const formattedDate = formatDate(book.publishedDate);
@@ -96,7 +96,7 @@ export function MasonryGrid({ books, onCardClick }: MasonryGridProps) {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="break-inside-avoid mb-4 cursor-pointer group"
+              className="cursor-pointer group"
               onClick={() => handleCardClick(book)}
             >
               <div className="relative rounded-2xl overflow-hidden bg-background border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1">

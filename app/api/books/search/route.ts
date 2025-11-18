@@ -22,8 +22,9 @@ import {
  * - q: Search query (required)
  * - maxResults: Number of results (default: 10, max: 40)
  * - startIndex: Pagination offset (default: 0)
+ * - forceFresh: If "true", bypass cache and always query external APIs (default: false)
  *
- * Example: /api/books/search?q=harry+potter&maxResults=10
+ * Example: /api/books/search?q=harry+potter&maxResults=10&forceFresh=true
  */
 export async function GET(request: NextRequest) {
   try {
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest) {
       40
     );
     const startIndex = parseInt(searchParams.get("startIndex") || "0");
+    const forceFresh = searchParams.get("forceFresh") === "true";
 
     if (!query) {
       return NextResponse.json(
@@ -45,6 +47,10 @@ export async function GET(request: NextRequest) {
     // Connect to database
     await connectDB();
 
+    // If forceFresh is true, skip cache and go straight to APIs
+    if (forceFresh) {
+      console.log(`[Search] 🔄 Force fresh mode: bypassing cache for query: "${query}"`);
+    } else {
     // First, try to find books in our database using text search
     // If text index doesn't exist, this will fail gracefully and fall back to regex search
     let cachedBooks: any[] = [];
@@ -225,13 +231,15 @@ export async function GET(request: NextRequest) {
         kind: "books#volumes",
         totalItems: cachedBooks.length,
         items: cachedBooks.map((book) => ({
-          id: book.isbndbId || book.openLibraryId,
+          id: book.isbndbId || book.openLibraryId || book._id?.toString() || '',
+          _id: book._id?.toString(), // Also include _id for reference
           volumeInfo: book.volumeInfo,
           saleInfo: book.saleInfo,
           apiSource: book.apiSource,
           fromCache: true,
         })),
       });
+      }
     }
 
     // Step 2: Try ISBNdb API first (premium, high-quality data)
@@ -263,6 +271,7 @@ export async function GET(request: NextRequest) {
         totalItems: isbndbResult.data.total,
         items: transformedBooks.map((book: any) => ({
           id: book.isbndbId,
+          isbndbId: book.isbndbId, // Include explicitly for easier access
           volumeInfo: book.volumeInfo,
           apiSource: "isbndb",
           fromCache: false,
@@ -299,6 +308,7 @@ export async function GET(request: NextRequest) {
         totalItems: openLibraryResult.data.numFound,
         items: transformedBooks.map((book: any) => ({
           id: book.openLibraryId,
+          openLibraryId: book.openLibraryId, // Include explicitly for easier access
           volumeInfo: book.volumeInfo,
           apiSource: "open_library",
           fromCache: false,
