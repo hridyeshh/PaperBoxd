@@ -35,6 +35,14 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "lh3.googleusercontent.com",
       },
+      {
+        protocol: "https",
+        hostname: "i.pravatar.cc",
+      },
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+      },
     ],
     // Disable image optimization for external book covers to prevent blur
     // Book cover images from APIs are already optimized and small

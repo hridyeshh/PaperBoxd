@@ -343,12 +343,26 @@ function ProfileSummary({
     <section className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
         <div className="relative h-28 w-28 flex-shrink-0">
-          <Image
-            src={profile.avatar || defaultAvatar}
-            alt="Profile avatar"
-            fill
-            className="rounded-full border-4 border-background object-cover shadow-lg"
-          />
+          {(() => {
+            const avatarSrc = profile.avatar || defaultAvatar;
+            console.log(`[ProfileSummary] Rendering avatar:`, avatarSrc ? `"${avatarSrc.substring(0, 100)}..."` : 'null/undefined');
+            console.log(`[ProfileSummary] Using default:`, !profile.avatar);
+            return (
+              <Image
+                src={avatarSrc}
+                alt="Profile avatar"
+                fill
+                className="rounded-full border-4 border-background object-cover shadow-lg"
+                onError={(e) => {
+                  console.error(`[ProfileSummary] Image load error:`, e);
+                  console.error(`[ProfileSummary] Failed to load avatar:`, avatarSrc);
+                }}
+                onLoad={() => {
+                  console.log(`[ProfileSummary] Image loaded successfully:`, avatarSrc ? `"${avatarSrc.substring(0, 100)}..."` : 'null');
+                }}
+              />
+            );
+          })()}
         </div>
         <div className="flex-1 space-y-3 min-w-0">
           <div className="space-y-1">
@@ -1156,6 +1170,15 @@ export default function UserProfilePage() {
         })
         .then((data) => {
           if (data?.user) {
+            console.log(`[Profile] Received user data for: ${data.user.username}`);
+            console.log(`[Profile] Avatar from API:`, data.user.avatar ? `"${data.user.avatar.substring(0, 100)}..."` : 'null/undefined');
+            console.log(`[Profile] Default avatar:`, defaultProfile.avatar ? `"${defaultProfile.avatar.substring(0, 50)}..."` : 'null/undefined');
+            
+            const avatarValue = data.user.avatar || defaultProfile.avatar;
+            console.log(`[Profile] Final avatar value:`, avatarValue ? `"${avatarValue.substring(0, 100)}..."` : 'null/undefined');
+            console.log(`[Profile] Avatar type:`, typeof avatarValue);
+            console.log(`[Profile] Avatar length:`, avatarValue ? avatarValue.length : 0);
+            
             const profile = {
               username: data.user.username || defaultProfile.username,
               name: data.user.name || defaultProfile.name,
@@ -1166,8 +1189,9 @@ export default function UserProfilePage() {
               links: Array.isArray(data.user.links) ? data.user.links.join(", ") : (data.user.links || defaultProfile.links),
               gender: data.user.gender || defaultProfile.gender,
               isPublic: typeof data.user.isPublic === "boolean" ? data.user.isPublic : defaultProfile.isPublic,
-              avatar: data.user.avatar || defaultProfile.avatar,
+              avatar: avatarValue,
             };
+            console.log(`[Profile] Setting profile data with avatar:`, profile.avatar ? `"${profile.avatar.substring(0, 100)}..."` : 'missing');
             setProfileData(profile);
             // Store original avatar to track changes
             setOriginalAvatar(profile.avatar || "");
@@ -1501,8 +1525,7 @@ export default function UserProfilePage() {
       setIsSavingProfile(true);
       setProfileSaveError(null);
 
-      // TEMPORARILY DISABLED: Avatar saving to prevent cookie size issues
-      // Avatar will not be saved to MongoDB for now
+      // Avatar is now saved as Cloudinary URL (not base64), which is small enough for cookies
       const payload: any = {
         username: profileData.username,
         name: profileData.name,
@@ -1510,7 +1533,7 @@ export default function UserProfilePage() {
         birthday: profileData.birthday || null,
         gender: profileData.gender,
         // Ensure pronouns is always an array, never an empty string
-        pronouns: Array.isArray(profileData.pronouns) 
+        pronouns: Array.isArray(profileData.pronouns)
           ? profileData.pronouns.filter((p) => p && typeof p === "string" && p.trim().length > 0)
           : [],
         links: profileData.links
@@ -1520,8 +1543,7 @@ export default function UserProfilePage() {
               .filter(Boolean)
           : [],
         // isPublic is always set to true on the server (all profiles are public)
-        // Avatar saving temporarily disabled
-        // avatar: profileData.avatar || "",
+        avatar: profileData.avatar || "",
       };
 
       const response = await fetch(`/api/users/${activeUsername}`, {

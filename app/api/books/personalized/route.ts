@@ -36,16 +36,22 @@ export async function GET(request: NextRequest) {
 
     switch (type) {
       case 'recommended': {
-        // Use the recommendation service
-        const recommendationService = new RecommendationService(userId);
-        const recommendations = await recommendationService.getRecommendations(
-          userId,
-          limit,
-          { page: 'home' }
-        );
-        
-        // Extract books from recommendations
-        books = recommendations.map(rec => rec.book);
+        try {
+          // Use the recommendation service
+          const recommendationService = new RecommendationService(userId);
+          const recommendations = await recommendationService.getRecommendations(
+            userId,
+            limit,
+            { page: 'home' }
+          );
+          
+          // Extract books from recommendations
+          books = recommendations.map(rec => rec.book);
+        } catch (error) {
+          console.error('[Personalized API] Error getting recommendations:', error);
+          // Return empty array if recommendations fail - don't crash the API
+          books = [];
+        }
         break;
       }
 

@@ -26,38 +26,63 @@ export async function GET(
     await connectDB();
 
     // Find user by username with optional populate
+    // IMPORTANT: Don't use .lean() yet - we need to check the raw Mongoose document first
     let user;
     try {
       user = await User.findOne({ username })
-        .select("-password") // Exclude password
-        .populate({
-          path: "readingLists.books",
-          select: "volumeInfo.title volumeInfo.authors volumeInfo.imageLinks",
-          model: "Book",
-        });
-    } catch (populateError) {
-      console.warn("Failed to populate readingLists.books, trying without populate:", populateError);
-      // Fallback: try without populate
-      user = await User.findOne({ username }).select("-password");
+        .select("-password"); // Exclude password
+      
+      // Try to populate readingLists.books if user exists
+      if (user) {
+        try {
+          await user.populate({
+            path: "readingLists.books",
+            select: "volumeInfo.title volumeInfo.authors volumeInfo.imageLinks",
+            model: "Book",
+          });
+        } catch (populateError) {
+          console.warn("Failed to populate readingLists.books:", populateError);
+        }
+      }
+    } catch (error) {
+      console.error("Error finding user:", error);
+      user = null;
     }
+    
+    // Convert to plain object AFTER all operations
+    const userPlain = user ? user.toObject() : null;
 
-    if (!user) {
+    if (!user || !userPlain) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Update last active
+    // Debug: Log raw user data from database BEFORE processing
+    console.log(`[User API] ✅ Found user: ${userPlain.username || userPlain.email}`);
+    console.log(`[User API] Raw user._id:`, userPlain._id?.toString());
+    console.log(`[User API] Raw followers (type: ${typeof userPlain.followers}, isArray: ${Array.isArray(userPlain.followers)}, length: ${Array.isArray(userPlain.followers) ? userPlain.followers.length : 'N/A'}):`, JSON.stringify(userPlain.followers));
+    console.log(`[User API] Raw following (type: ${typeof userPlain.following}, isArray: ${Array.isArray(userPlain.following)}, length: ${Array.isArray(userPlain.following) ? userPlain.following.length : 'N/A'}):`, JSON.stringify(userPlain.following));
+    console.log(`[User API] Raw bookshelf (type: ${typeof userPlain.bookshelf}, isArray: ${Array.isArray(userPlain.bookshelf)}, length: ${Array.isArray(userPlain.bookshelf) ? userPlain.bookshelf.length : 'N/A'}):`, Array.isArray(userPlain.bookshelf) ? `${userPlain.bookshelf.length} items` : 'not an array');
+    console.log(`[User API] Raw avatar:`, userPlain.avatar ? `${userPlain.avatar.substring(0, 50)}...` : 'null/undefined');
+    console.log(`[User API] User object keys:`, Object.keys(userPlain).slice(0, 20));
+
+    // Update lastActive separately using updateOne
     try {
-      user.lastActive = new Date();
-      await user.save();
+      await User.updateOne(
+        { _id: user._id },
+        { $set: { lastActive: new Date() } }
+      );
     } catch (saveError) {
       console.warn("Failed to update lastActive:", saveError);
       // Continue even if save fails - this is not critical
     }
 
+    // Use userPlain (plain object) instead of user (Mongoose document)
     // Safely extract arrays and handle undefined values
-    const activities = Array.isArray(user.activities) ? user.activities : [];
-    const followers = Array.isArray(user.followers) ? user.followers : [];
-    const following = Array.isArray(user.following) ? user.following : [];
+    const activities = Array.isArray(userPlain.activities) ? userPlain.activities : [];
+    const followers = Array.isArray(userPlain.followers) ? userPlain.followers : [];
+    const following = Array.isArray(userPlain.following) ? userPlain.following : [];
+    
+    console.log(`[User API] After extraction - followers: ${followers.length}, following: ${following.length}, bookshelf: ${Array.isArray(userPlain.bookshelf) ? userPlain.bookshelf.length : 0}`);
 
     // Filter out any search-related activities if they exist
     const filteredActivities = activities.filter((activity: any) => 
@@ -98,26 +123,26 @@ export async function GET(
 
     return NextResponse.json({
       user: {
-        id: user._id?.toString() || user._id,
-        username: user.username,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar,
-        bio: user.bio,
-        birthday: user.birthday,
-        gender: user.gender,
-        pronouns: Array.isArray(user.pronouns) ? user.pronouns : [],
-        links: Array.isArray(user.links) ? user.links : [],
-        isPublic: user.isPublic,
+        id: userPlain._id?.toString() || userPlain._id,
+        username: userPlain.username,
+        name: userPlain.name,
+        email: userPlain.email,
+        avatar: userPlain.avatar,
+        bio: userPlain.bio,
+        birthday: userPlain.birthday,
+        gender: userPlain.gender,
+        pronouns: Array.isArray(userPlain.pronouns) ? userPlain.pronouns : [],
+        links: Array.isArray(userPlain.links) ? userPlain.links : [],
+        isPublic: userPlain.isPublic,
 
         // Books & Reading
-        topBooks: Array.isArray(user.topBooks) ? user.topBooks : [],
-        favoriteBooks: Array.isArray(user.favoriteBooks) ? user.favoriteBooks : [],
-        bookshelf: Array.isArray(user.bookshelf) ? user.bookshelf : [],
-        likedBooks: Array.isArray(user.likedBooks) ? user.likedBooks : [],
-        tbrBooks: Array.isArray(user.tbrBooks) ? user.tbrBooks : [],
-        currentlyReading: Array.isArray(user.currentlyReading) ? user.currentlyReading : [],
-        readingLists: Array.isArray(user.readingLists) ? user.readingLists : [],
+        topBooks: Array.isArray(userPlain.topBooks) ? userPlain.topBooks : [],
+        favoriteBooks: Array.isArray(userPlain.favoriteBooks) ? userPlain.favoriteBooks : [],
+        bookshelf: Array.isArray(userPlain.bookshelf) ? userPlain.bookshelf : [],
+        likedBooks: Array.isArray(userPlain.likedBooks) ? userPlain.likedBooks : [],
+        tbrBooks: Array.isArray(userPlain.tbrBooks) ? userPlain.tbrBooks : [],
+        currentlyReading: Array.isArray(userPlain.currentlyReading) ? userPlain.currentlyReading : [],
+        readingLists: Array.isArray(userPlain.readingLists) ? userPlain.readingLists : [],
 
         // Social
         followers: followers.map((id) => id.toString()),
@@ -126,17 +151,17 @@ export async function GET(
         followingCount: following.length,
 
         // Stats
-        totalBooksRead: user.totalBooksRead ?? 0,
-        totalPagesRead: user.totalPagesRead ?? 0,
-        readingGoal: user.readingGoal ?? null,
-        authorsRead: Array.isArray(user.authorsRead) ? user.authorsRead : [],
+        totalBooksRead: userPlain.totalBooksRead ?? 0,
+        totalPagesRead: userPlain.totalPagesRead ?? 0,
+        readingGoal: userPlain.readingGoal ?? null,
+        authorsRead: Array.isArray(userPlain.authorsRead) ? userPlain.authorsRead : [],
 
         // Activity - with populated book information
         recentActivities: activitiesWithBooks,
 
         // Metadata
-        createdAt: user.createdAt,
-        lastActive: user.lastActive,
+        createdAt: userPlain.createdAt,
+        lastActive: userPlain.lastActive,
       },
     });
   } catch (error) {

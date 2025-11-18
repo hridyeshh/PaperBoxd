@@ -64,6 +64,7 @@ export function EditProfileForm({
 }: EditProfileFormProps) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [avatarError, setAvatarError] = React.useState<string | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = React.useState(false);
   const [useCustomGender, setUseCustomGender] = React.useState(
     () => profile.gender.length > 0 && !genderOptions.includes(profile.gender),
   );
@@ -151,23 +152,102 @@ export function EditProfileForm({
     updateProfile({ [name]: value } as Partial<EditableProfile>);
   }
 
-  function handleAvatarChange(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleAvatarChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    // Validate file size (5MB limit)
     if (file.size > 5 * 1024 * 1024) {
       setAvatarError("Please choose an image that is 5MB or less.");
       return;
     }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setAvatarError("Please select a valid image file.");
+      return;
+    }
+
     setAvatarError(null);
-    const reader = new FileReader();
-    reader.onload = (loadEvent) => {
-      const result = loadEvent.target?.result;
-      if (typeof result === "string") {
-        updateProfile({ avatar: result });
+    setIsUploadingAvatar(true);
+
+    try {
+      // Convert file to base64 for upload
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = (loadEvent) => {
+          const result = loadEvent.target?.result;
+          if (typeof result === "string") {
+            resolve(result);
+          } else {
+            reject(new Error("Failed to read file"));
+          }
+        };
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsDataURL(file);
+      });
+
+      const base64Image = await base64Promise;
+
+      // Upload to Cloudinary
+      const response = await fetch('/api/upload/avatar', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ image: base64Image }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload avatar');
       }
-    };
-    reader.readAsDataURL(file);
+
+      // Update profile with Cloudinary URL
+      updateProfile({ avatar: data.avatar });
+    } catch (error) {
+      console.error('Avatar upload error:', error);
+      setAvatarError(
+        error instanceof Error ? error.message : 'Failed to upload avatar. Please try again.'
+      );
+    } finally {
+      setIsUploadingAvatar(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
   }
+
+  const handleRemoveAvatar = React.useCallback(async () => {
+    setAvatarError(null);
+    setIsUploadingAvatar(true);
+
+    try {
+      // Only call delete endpoint if avatar is from Cloudinary
+      if (profile.avatar && profile.avatar.includes('cloudinary.com')) {
+        const response = await fetch('/api/upload/avatar', {
+          method: 'DELETE',
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to delete avatar');
+        }
+      }
+
+      // Remove avatar from profile
+      updateProfile({ avatar: '' });
+    } catch (error) {
+      console.error('Avatar delete error:', error);
+      setAvatarError(
+        error instanceof Error ? error.message : 'Failed to delete avatar. Please try again.'
+      );
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  }, [profile.avatar, updateProfile]);
 
   const handlePronounSelection = React.useCallback(
     (selection: Selection) => {
@@ -230,6 +310,11 @@ export function EditProfileForm({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <div className="relative h-24 w-24 overflow-hidden rounded-2xl border border-border/70 bg-background">
             <Image src={profile.avatar || defaultAvatar} alt={profile.name} fill className="object-cover" sizes="96px" />
+            {isUploadingAvatar && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                <Loader2 className="h-6 w-6 animate-spin text-white" />
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-3 text-sm text-muted-foreground">
             <p>Upload a square image (at least 400px). PNG or JPG works best.</p>
@@ -239,14 +324,26 @@ export function EditProfileForm({
                 variant="default"
                 onClick={() => fileInputRef.current?.click()}
                 className="rounded-full px-6"
+                disabled={isUploadingAvatar}
               >
-                Change photo
+                {isUploadingAvatar ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="mr-2 h-4 w-4" />
+                    Change photo
+                  </>
+                )}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                onClick={() => updateProfile({ avatar: "" })}
+                onClick={handleRemoveAvatar}
+                disabled={isUploadingAvatar || !profile.avatar}
               >
                 Remove
               </Button>
