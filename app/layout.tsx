@@ -17,6 +17,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "PaperBoxd - Your Reading Universe",
   description: "Track, organize, and share the books you love",
+  icons: {
+    icon: "/logo.jpg",
+    shortcut: "/logo.jpg",
+    apple: "/logo.jpg",
+  },
+  other: {
+    'adobe-fonts': 'https://use.typekit.net/fabulosa.css',
+  },
 };
 
 export default function RootLayout({

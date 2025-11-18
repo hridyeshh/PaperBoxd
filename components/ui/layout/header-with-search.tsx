@@ -66,6 +66,8 @@ export function Header({
   const [isNavigatingToProfile, setIsNavigatingToProfile] = React.useState(false);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = React.useState(false);
   const [hasNewActivities, setHasNewActivities] = React.useState(false);
+  const [isDark, setIsDark] = React.useState(false);
+  const [mounted, setMounted] = React.useState(false);
   const { data: session, status } = useSession();
   const isAuthenticated = status === "authenticated";
   const router = useRouter();
@@ -105,6 +107,74 @@ export function Header({
       setIsLoadingAvatar(false);
     }
   }, [isAuthenticated, session?.user?.username]);
+
+  // Detect theme for logo switching
+  React.useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const root = window.document.documentElement;
+      const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)");
+
+      const resolveInitialTheme = () => {
+        const hasDarkClass = root.classList.contains("dark");
+        let storedTheme: string | null = null;
+        
+        try {
+          storedTheme = window.localStorage.getItem("paperboxd-theme");
+        } catch (e) {
+          // localStorage might not be available (private browsing, etc.)
+        }
+        
+        if (storedTheme === "dark" || storedTheme === "light") {
+          return storedTheme === "dark";
+        }
+        
+        return hasDarkClass || systemPrefersDark.matches;
+      };
+
+      const initialIsDark = resolveInitialTheme();
+      setIsDark(initialIsDark);
+      setMounted(true);
+
+      const handleSystemThemeChange = (event: MediaQueryListEvent) => {
+        try {
+          const storedTheme = window.localStorage.getItem("paperboxd-theme");
+          if (!storedTheme) {
+            setIsDark(event.matches);
+          }
+        } catch (e) {
+          // Ignore localStorage errors
+        }
+      };
+
+      const handleThemeChange = () => {
+        const hasDarkClass = root.classList.contains("dark");
+        setIsDark(hasDarkClass);
+      };
+
+      // Watch for theme changes
+      const observer = new MutationObserver(handleThemeChange);
+      observer.observe(root, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+
+      systemPrefersDark.addEventListener("change", handleSystemThemeChange);
+
+      return () => {
+        systemPrefersDark.removeEventListener("change", handleSystemThemeChange);
+        observer.disconnect();
+      };
+    } catch (error) {
+      // Fallback: just set mounted to true with default theme
+      console.warn("Error setting up theme detection:", error);
+      setIsDark(false);
+      setMounted(true);
+    }
+  }, []);
 
   // Check for new friend activities periodically
   React.useEffect(() => {
@@ -266,14 +336,22 @@ export function Header({
         <button
           type="button"
           onClick={() => router.push("/")}
-          className="flex items-center gap-2 rounded-full px-3 py-1.5 transition hover:bg-foreground/5 cursor-pointer"
+          className="flex items-center gap-2 rounded-full px-3 py-1.5 transition hover:bg-white dark:hover:bg-black cursor-pointer"
         >
-          <span className="flex size-6 items-center justify-center rounded-full bg-primary/20 text-primary">
-            <Grid2x2PlusIcon className="size-3.5" />
-          </span>
-          <p className="font-mono text-lg font-semibold tracking-tight text-foreground">
-            PaperBoxd
-          </p>
+          {mounted && (isDark !== undefined) ? (
+            <Image
+              src={isDark ? "/logo_black.jpg" : "/logo_white.jpg"}
+              alt="PaperBoxd"
+              width={220}
+              height={120}
+              className="h-16 dark:h-14 w-auto object-contain"
+              priority
+            />
+          ) : (
+            <span className="flex size-6 items-center justify-center rounded-full bg-primary/20 text-primary">
+              <Grid2x2PlusIcon className="size-3.5" />
+            </span>
+          )}
         </button>
         <div className="flex items-center gap-2">
           <div className="hidden items-center gap-1 lg:flex">
@@ -423,14 +501,22 @@ export function Header({
                   router.push("/");
                   setOpen(false);
                 }}
-                className="flex items-center gap-2 px-4 pt-8 pb-6 w-full cursor-pointer"
+                className="flex items-center gap-2 px-4 pt-8 pb-6 w-full transition hover:bg-white dark:hover:bg-black cursor-pointer rounded-lg"
               >
-                <span className="flex size-8 items-center justify-center rounded-full bg-primary/20 text-primary">
-                  <Grid2x2PlusIcon className="size-4" />
-                </span>
-                <p className="font-mono text-lg font-semibold tracking-tight text-foreground">
-                  PaperBoxd
-                </p>
+                {mounted && (isDark !== undefined) ? (
+                  <Image
+                    src={isDark ? "/logo_black.jpg" : "/logo_white.jpg"}
+                    alt="PaperBoxd"
+                    width={220}
+                    height={120}
+                    className="h-16 dark:h-14 w-auto object-contain"
+                    priority
+                  />
+                ) : (
+                  <span className="flex size-8 items-center justify-center rounded-full bg-primary/20 text-primary">
+                    <Grid2x2PlusIcon className="size-4" />
+                  </span>
+                )}
               </button>
               <div className="grid gap-y-2 overflow-y-auto px-4 pb-6">
                 <button

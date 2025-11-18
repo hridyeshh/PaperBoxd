@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { AvatarEditor } from "@/components/ui/avatar-editor";
 import { cn } from "@/lib/utils";
 
 export type EditableProfile = {
@@ -65,6 +66,8 @@ export function EditProfileForm({
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [avatarError, setAvatarError] = React.useState<string | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = React.useState(false);
+  const [editorOpen, setEditorOpen] = React.useState(false);
+  const [selectedImage, setSelectedImage] = React.useState<string | null>(null);
   const [useCustomGender, setUseCustomGender] = React.useState(
     () => profile.gender.length > 0 && !genderOptions.includes(profile.gender),
   );
@@ -169,10 +172,9 @@ export function EditProfileForm({
     }
 
     setAvatarError(null);
-    setIsUploadingAvatar(true);
 
     try {
-      // Convert file to base64 for upload
+      // Convert file to base64 to show in editor
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve, reject) => {
         reader.onload = (loadEvent) => {
@@ -188,14 +190,33 @@ export function EditProfileForm({
       });
 
       const base64Image = await base64Promise;
+      
+      // Show editor with the selected image
+      setSelectedImage(base64Image);
+      setEditorOpen(true);
+    } catch (error) {
+      console.error('Error reading file:', error);
+      setAvatarError("Failed to read image file. Please try again.");
+    } finally {
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  }
 
-      // Upload to Cloudinary
+  const handleEditorSave = async (croppedImage: string) => {
+    setIsUploadingAvatar(true);
+    setAvatarError(null);
+
+    try {
+      // Upload cropped image to Cloudinary
       const response = await fetch('/api/upload/avatar', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ image: base64Image }),
+        body: JSON.stringify({ image: croppedImage }),
       });
 
       const data = await response.json();
@@ -206,6 +227,7 @@ export function EditProfileForm({
 
       // Update profile with Cloudinary URL
       updateProfile({ avatar: data.avatar });
+      setSelectedImage(null);
     } catch (error) {
       console.error('Avatar upload error:', error);
       setAvatarError(
@@ -213,12 +235,8 @@ export function EditProfileForm({
       );
     } finally {
       setIsUploadingAvatar(false);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
     }
-  }
+  };
 
   const handleRemoveAvatar = React.useCallback(async () => {
     setAvatarError(null);
@@ -570,6 +588,21 @@ export function EditProfileForm({
           </Button>
         </div>
       </div>
+
+      {/* Avatar Editor Dialog */}
+      {selectedImage && (
+        <AvatarEditor
+          image={selectedImage}
+          open={editorOpen}
+          onOpenChange={(open) => {
+            setEditorOpen(open);
+            if (!open) {
+              setSelectedImage(null);
+            }
+          }}
+          onSave={handleEditorSave}
+        />
+      )}
     </form>
   );
 }

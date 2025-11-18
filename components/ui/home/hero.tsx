@@ -46,7 +46,7 @@ function Hero({ showButton = true }: HeroProps) {
           </div> */}
           <div className="flex gap-4 flex-col">
             <h1 className="text-5xl md:text-7xl max-w-2xl tracking-tighter text-center font-regular">
-              <span className="text-9xl text-spektr-cyan-50">PaperBoxd</span>
+              <span className="text-9xl text-spektr-cyan-50" style={{ fontFamily: '"brooklyn-heritage-script", serif' }}>PaperBoxd</span>
               <span className="relative flex w-full justify-center overflow-hidden text-center md:pb-4 md:pt-1">
                 &nbsp;
                 {titles.map((title, index) => (

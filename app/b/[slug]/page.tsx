@@ -639,9 +639,10 @@ export default function BookDetailPage() {
             </div>
           </div>
         </div>
+        </div>
         
-        {/* Carousels Section */}
-        <div className="mt-12 space-y-12">
+        {/* Carousels Section - Full Width */}
+        <div className="mt-12 space-y-12 w-full px-4 pb-16">
           {/* Similar Books Carousel */}
           {similarBooks.length > 0 && (
             <BookCarousel
@@ -660,7 +661,6 @@ export default function BookDetailPage() {
             />
           )}
         </div>
-      </div>
       </div>
     </main>
   );

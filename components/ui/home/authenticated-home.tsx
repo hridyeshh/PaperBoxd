@@ -115,7 +115,7 @@ export function AuthenticatedHome() {
       <Hero showButton={false} />
 
       {/* Personalized Book Carousels - Below Hero */}
-      <div className="container mx-auto px-4 pb-16 space-y-12">
+      <div className="w-full px-4 pb-16 space-y-12">
         {carousels.map((carousel) => {
           const books = carouselData[carousel.type] || [];
           

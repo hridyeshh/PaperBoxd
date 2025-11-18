@@ -78,7 +78,7 @@ function Footerdemo() {
           <div className="relative">
             <h2 className="mb-4 text-3xl font-bold tracking-tight">Stay Connected</h2>
             <p className="mb-6 text-muted-foreground">
-              Join our newsletter for the latest features and updates.
+              Subscribe to be the first one to know about the future features and updates.
             </p>
             <form className="relative" onSubmit={handleNewsletterSubmit}>
               <Input

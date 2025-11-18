@@ -36,10 +36,10 @@ export function AuthShell({
 }: AuthShellProps) {
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center">
-      <div className="grid w-full max-w-6xl grid-cols-1 gap-10 px-6 py-12 md:grid-cols-[minmax(0,1.1fr)_minmax(0,420px)] md:px-12 lg:px-16">
+      <div className="grid w-full max-w-6xl grid-cols-1 gap-10 px-6 py-12 md:grid-cols-[minmax(0,1.1fr)_minmax(0,420px)] md:px-12 lg:px-16 md:items-center">
         <div
           className={cn(
-            "hidden min-h-[820px] max-h-[820px] flex-col justify-between overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-10 shadow-xl shadow-primary/10 backdrop-blur lg:flex",
+            "hidden flex-col overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-10 shadow-xl shadow-primary/10 backdrop-blur lg:flex",
             sideContent ? "md:flex" : "md:hidden",
           )}
         >
@@ -52,7 +52,7 @@ export function AuthShell({
                 {badge}
               </span>
             ) : null}
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl" style={{ fontFamily: '"el-paso", serif' }}>
               {title}
             </h1>
             {description ? (

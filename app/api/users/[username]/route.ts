@@ -36,11 +36,11 @@ export async function GET(
       if (user) {
         try {
           await user.populate({
-            path: "readingLists.books",
-            select: "volumeInfo.title volumeInfo.authors volumeInfo.imageLinks",
-            model: "Book",
-          });
-        } catch (populateError) {
+          path: "readingLists.books",
+          select: "volumeInfo.title volumeInfo.authors volumeInfo.imageLinks",
+          model: "Book",
+        });
+    } catch (populateError) {
           console.warn("Failed to populate readingLists.books:", populateError);
         }
       }

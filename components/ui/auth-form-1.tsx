@@ -27,6 +27,8 @@ import {
   signInWithGoogle,
   registerUser,
 } from "@/lib/auth-client";
+import { PrivacyPolicyDialog } from "@/components/ui/privacy-policy-dialog";
+import { TermsOfServiceDialog } from "@/components/ui/terms-of-service-dialog";
 
 enum AuthView {
   SIGN_IN = "sign-in",
@@ -404,6 +406,8 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
     error: null,
     showPassword: false,
   });
+  const [privacyDialogOpen, setPrivacyDialogOpen] = React.useState(false);
+  const [termsDialogOpen, setTermsDialogOpen] = React.useState(false);
 
   const {
     register,
@@ -553,11 +557,21 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
               </Label>
               <p className="text-xs text-muted-foreground">
                 By signing up, you agree to our{" "}
-                <Button variant="link" className="h-auto p-0 text-xs" type="button">
+                <Button 
+                  variant="link" 
+                  className="h-auto p-0 text-xs" 
+                  type="button"
+                  onClick={() => setTermsDialogOpen(true)}
+                >
                   Terms
                 </Button>{" "}
                 and{" "}
-                <Button variant="link" className="h-auto p-0 text-xs" type="button">
+                <Button 
+                  variant="link" 
+                  className="h-auto p-0 text-xs" 
+                  type="button"
+                  onClick={() => setPrivacyDialogOpen(true)}
+                >
                   Privacy Policy
                 </Button>
                 .
@@ -596,6 +610,15 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
           </Button>
         </p>
       </div>
+
+      <PrivacyPolicyDialog 
+        open={privacyDialogOpen} 
+        onOpenChange={setPrivacyDialogOpen} 
+      />
+      <TermsOfServiceDialog 
+        open={termsDialogOpen} 
+        onOpenChange={setTermsDialogOpen} 
+      />
     </motion.div>
   );
 }

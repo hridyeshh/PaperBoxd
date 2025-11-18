@@ -1,6 +1,7 @@
-import NextAuth, { User as NextAuthUser } from "next-auth";
+import NextAuth, { User as NextAuthUser, type DefaultSession } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
+import type { Provider } from "next-auth/providers";
 import bcrypt from "bcryptjs";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
@@ -37,20 +38,21 @@ declare module "next-auth" {
     id: string;
     email: string;
     name: string;
-    username: string;
+    username?: string;
     image?: string;
   }
-}
 
-declare module "next-auth/jwt" {
   interface JWT {
-    id: string;
-    username: string;
+    id?: string;
+    username?: string;
+    email?: string;
+    name?: string;
+    picture?: string;
   }
 }
 
 // Build providers array conditionally
-const providers = [
+const providers: Provider[] = [
   CredentialsProvider({
       name: "Credentials",
       credentials: {
@@ -92,7 +94,7 @@ const providers = [
           // Don't include avatar image in JWT - it can be too large (base64 images)
           // Avatar will be fetched from database when needed
           return {
-            id: user._id.toString(),
+            id: user.id.toString(),
             email: user.email,
             name: user.name,
             username: user.username,
@@ -170,7 +172,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         // Update user info
-        user.id = existingUser._id.toString();
+        user.id = existingUser.id.toString();
         user.username = existingUser.username;
 
         // Update last active
@@ -220,8 +222,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async session({ session, token }) {
       if (token && session.user) {
-        session.user.id = token.id;
-        session.user.username = token.username;
+        session.user.id = token.id as string;
+        session.user.username = token.username as string;
         session.user.email = token.email!;
         session.user.name = token.name!;
         // Only include image if it's a URL, not base64
