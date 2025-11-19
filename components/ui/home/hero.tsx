@@ -78,7 +78,7 @@ function Hero({ showButton = true }: HeroProps) {
 
             <p 
               className="text-lg md:text-xl leading-relaxed tracking-tight text-muted-foreground max-w-2xl text-center"
-              style={{ fontFamily: '"El Paso", sans-serif' }}
+              style={{ fontFamily: '"joc", sans-serif' }}
             >
               Create lists, share books, add favourites, and much more on PaperBoxd.
             </p>

@@ -4,8 +4,8 @@ import Image from "next/image";
 import * as React from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { Header } from "@/components/ui/layout/header-with-search";
-import TetrisLoading from "@/components/ui/tetris-loader";
-import { NotFoundPage } from "@/components/ui/not-found-page";
+import TetrisLoading from "@/components/ui/features/tetris-loader";
+import { NotFoundPage } from "@/components/ui/pages/not-found-page";
 import { createBookSlug } from "@/lib/utils/book-slug";
 
 type AuthorBook = {

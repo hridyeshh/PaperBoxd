@@ -6,15 +6,15 @@ import Image from "next/image";
 import { Plus, Share2, MoreVertical, Link2, Search, Send, Bookmark, X, Edit, Trash2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import TetrisLoading from "@/components/ui/tetris-loader";
-import { NotFoundPage } from "@/components/ui/not-found-page";
+import TetrisLoading from "@/components/ui/features/tetris-loader";
+import { NotFoundPage } from "@/components/ui/pages/not-found-page";
 import { Header } from "@/components/ui/layout/header-with-search";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Dropdown } from "@/components/ui/dropdown";
+import { Button } from "@/components/ui/primitives/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/primitives/dialog";
+import { Input } from "@/components/ui/primitives/input";
+import { Label } from "@/components/ui/primitives/label";
+import { Switch } from "@/components/ui/primitives/switch";
+import { Dropdown } from "@/components/ui/primitives/dropdown";
 import { createBookSlug } from "@/lib/utils/book-slug";
 
 interface Book {

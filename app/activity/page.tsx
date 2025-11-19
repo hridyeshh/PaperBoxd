@@ -7,9 +7,9 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 import { Header } from "@/components/ui/layout/header-with-search";
-import TetrisLoading from "@/components/ui/tetris-loader";
-import { DiaryEntryDialog } from "@/components/ui/diary-entry-dialog";
-import { Button } from "@/components/ui/button";
+import TetrisLoading from "@/components/ui/features/tetris-loader";
+import { DiaryEntryDialog } from "@/components/ui/dialogs/diary-entry-dialog";
+import { Button } from "@/components/ui/primitives/button";
 import { toast } from "sonner";
 import { createBookSlug } from "@/lib/utils/book-slug";
 import {
@@ -19,7 +19,7 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination";
+} from "@/components/ui/primitives/pagination";
 
 // Removed ActivityView - only showing Friends activities now
 

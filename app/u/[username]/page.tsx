@@ -15,11 +15,11 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination";
+} from "@/components/ui/primitives/pagination";
 import { Header } from "@/components/ui/layout/header-with-search";
-import { Dropdown } from "@/components/ui/dropdown";
+import { Dropdown } from "@/components/ui/primitives/dropdown";
 import { EditProfileForm, defaultProfile, type EditableProfile } from "@/components/ui/forms/edit-profile-form";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/primitives/sheet";
 import {
   Dialog,
   DialogContent,
@@ -27,9 +27,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@/components/ui/primitives/dialog";
 import { Edit, Image as ImageIcon, MoreVertical, Trash2, Plus, X, Heart, ArrowLeft, Search as SearchIcon, Send, AlertTriangle } from "lucide-react";
-import TetrisLoading from "@/components/ui/tetris-loader";
+import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { createBookSlug } from "@/lib/utils/book-slug";
 import {
   type BookshelfBook,
@@ -38,11 +38,11 @@ import {
   type ReadingList,
   type ProfileBook,
 } from "@/lib/mock/profileBooks";
-import { DiaryEntryDialog } from "@/components/ui/diary-entry-dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
+import { DiaryEntryDialog } from "@/components/ui/dialogs/diary-entry-dialog";
+import { Input } from "@/components/ui/primitives/input";
+import { Label } from "@/components/ui/primitives/label";
+import { Switch } from "@/components/ui/primitives/switch";
+import { Button } from "@/components/ui/primitives/button";
 import { toast } from "sonner";
 
 const dockLabels = ["Favourites", "Bookshelf", "Diary", "Authors", "Lists", "'to-be-read'", "Likes"] as const;

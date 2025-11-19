@@ -6,8 +6,8 @@ import { BookOpen } from "lucide-react";
 import { useSession } from "next-auth/react";
 
 import { Header } from "@/components/ui/layout/header-with-search";
-import TetrisLoading from "@/components/ui/tetris-loader";
-import { MasonryGrid } from "@/components/ui/masonry-grid";
+import TetrisLoading from "@/components/ui/features/tetris-loader";
+import { MasonryGrid } from "@/components/ui/demos/masonry-grid";
 import {
   Pagination,
   PaginationContent,
@@ -15,7 +15,7 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination";
+} from "@/components/ui/primitives/pagination";
 import { createBookSlug } from "@/lib/utils/book-slug";
 
 type Book = {

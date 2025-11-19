@@ -3,19 +3,19 @@
 import Image from "next/image";
 import React from "react";
 import { ChevronDown, Grid2x2PlusIcon, MenuIcon, SearchIcon, LinkIcon, Trash2 } from "lucide-react";
-import TetrisLoading from "@/components/ui/tetris-loader";
+import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { useSession } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { CommandItem, SearchModal } from "@/components/ui/search-modal";
-import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { Dropdown } from "@/components/ui/dropdown";
+import { Button, buttonVariants } from "@/components/ui/primitives/button";
+import { CommandItem, SearchModal } from "@/components/ui/features/search-modal";
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/primitives/sheet";
+import { ThemeToggle } from "@/components/ui/features/theme-toggle";
+import { Dropdown } from "@/components/ui/primitives/dropdown";
 import { signOut } from "@/lib/auth-client";
-import { DeleteAccountDialog } from "@/components/ui/delete-account-dialog";
-import { GeneralDiaryEditorDialog } from "@/components/ui/general-diary-editor-dialog";
+import { DeleteAccountDialog } from "@/components/ui/dialogs/delete-account-dialog";
+import { GeneralDiaryEditorDialog } from "@/components/ui/dialogs/general-diary-editor-dialog";
 import { toast } from "sonner";
 
 // Links will be dynamic based on authentication status
@@ -364,7 +364,11 @@ export function Header({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                router.push("/feed");
+                if (isAuthenticated) {
+                  router.push("/feed");
+                } else {
+                  router.push("/auth");
+                }
               }}
               className={buttonVariants({
                 variant: "ghost",
@@ -562,7 +566,11 @@ export function Header({
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    router.push("/feed");
+                    if (isAuthenticated) {
+                      router.push("/feed");
+                    } else {
+                      router.push("/auth");
+                    }
                     setOpen(false);
                   }}
                   className={buttonVariants({

@@ -4,8 +4,8 @@ import React, { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { BookCarousel, BookCarouselBook } from "@/components/ui/home/book-carousel";
 import { Hero } from "@/components/ui/home/hero";
-import TetrisLoading from "@/components/ui/tetris-loader";
-import { Footerdemo } from "@/components/ui/footer-section";
+import TetrisLoading from "@/components/ui/features/tetris-loader";
+import { Footerdemo } from "@/components/ui/features/footer-section";
 
 interface CarouselData {
   title: string;

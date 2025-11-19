@@ -3,7 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import TetrisLoading from "@/components/ui/tetris-loader";
+import TetrisLoading from "@/components/ui/features/tetris-loader";
 
 export default function ProfilePage() {
   const { data: session, status } = useSession();

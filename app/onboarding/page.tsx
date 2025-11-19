@@ -3,8 +3,8 @@
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { OnboardingQuestionnaire } from "@/components/ui/onboarding-questionnaire";
-import TetrisLoading from "@/components/ui/tetris-loader";
+import { OnboardingQuestionnaire } from "@/components/ui/features/onboarding-questionnaire";
+import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 
 export default function OnboardingPage() {

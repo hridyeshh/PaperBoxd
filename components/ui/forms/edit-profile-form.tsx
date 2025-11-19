@@ -7,14 +7,14 @@ import type { Selection } from "react-aria-components";
 import { format as formatDate } from "date-fns";
 
 import { ChronoSelect } from "@/components/ui/forms/chrono-select";
-import { Button } from "@/components/ui/button";
-import { Dropdown } from "@/components/ui/dropdown";
+import { Button } from "@/components/ui/primitives/button";
+import { Dropdown } from "@/components/ui/primitives/dropdown";
 import { GridList, GridListItem } from "@/components/ui/forms/grid-list";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
-import { AvatarEditor } from "@/components/ui/avatar-editor";
+import { Input } from "@/components/ui/primitives/input";
+import { Label } from "@/components/ui/primitives/label";
+import { Switch } from "@/components/ui/primitives/switch";
+import { Textarea } from "@/components/ui/primitives/textarea";
+import { AvatarEditor } from "@/components/ui/features/avatar-editor";
 import { cn } from "@/lib/utils";
 
 export type EditableProfile = {

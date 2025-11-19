@@ -5,7 +5,7 @@ import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-patter
 import { Header } from "@/components/ui/layout/header-with-search";
 import { PublicHome } from "@/components/ui/home/public-home";
 import { AuthenticatedHome } from "@/components/ui/home/authenticated-home";
-import TetrisLoading from "@/components/ui/tetris-loader";
+import TetrisLoading from "@/components/ui/features/tetris-loader";
 
 export default function Home() {
   const { data: session, status } = useSession();

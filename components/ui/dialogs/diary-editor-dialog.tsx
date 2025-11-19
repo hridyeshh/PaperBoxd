@@ -1,0 +1,177 @@
+"use client";
+
+import * as React from "react";
+import { Button } from "@/components/ui/primitives/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/primitives/dialog";
+import { Save, X } from "lucide-react";
+import { toast } from "sonner";
+import { TiptapEditor } from "@/components/ui/features/tiptap-editor";
+
+interface DiaryEditorDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  bookId: string;
+  bookTitle: string;
+  bookAuthor: string;
+  bookCover?: string;
+  initialContent?: string;
+  username: string;
+  onSave?: () => void;
+}
+
+export function DiaryEditorDialog({
+  open,
+  onOpenChange,
+  bookId,
+  bookTitle,
+  bookAuthor,
+  bookCover,
+  initialContent = "",
+  username,
+  onSave,
+}: DiaryEditorDialogProps) {
+  const [content, setContent] = React.useState(initialContent);
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  // Reset content when dialog opens/closes
+  React.useEffect(() => {
+    if (open) {
+      setContent(initialContent || "");
+    }
+  }, [open, initialContent]);
+
+  const handleContentChange = (html: string) => {
+    setContent(html);
+  };
+
+  const handleSave = async () => {
+    // Check if content is empty (Tiptap returns <p></p> for empty content)
+    const textContent = content.replace(/<[^>]*>/g, "").trim();
+    if (!textContent) {
+      toast.error("Please write something before saving");
+      return;
+    }
+
+    console.log("[DiaryEditor] Attempting to save:", {
+      username,
+      bookId,
+      bookTitle,
+      bookAuthor,
+      contentLength: content.trim().length,
+    });
+
+    setIsSaving(true);
+    try {
+      const requestBody = {
+        bookId,
+        content: content.trim(),
+        bookTitle,
+        bookAuthor,
+        bookCover,
+      };
+
+      console.log("[DiaryEditor] Request body:", requestBody);
+
+      const response = await fetch(`/api/users/${encodeURIComponent(username)}/diary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log("[DiaryEditor] Response status:", response.status);
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        console.error("[DiaryEditor] Error response:", error);
+        const errorMessage = error.error || error.details || "Failed to save diary entry";
+        throw new Error(errorMessage);
+      }
+
+      const responseData = await response.json();
+      console.log("[DiaryEditor] Success response:", responseData);
+
+      toast.success("Diary entry saved!");
+      onOpenChange(false);
+      if (onSave) {
+        onSave();
+      }
+    } catch (error) {
+      console.error("[DiaryEditor] Exception caught:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to save diary entry");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Write about {bookTitle}</DialogTitle>
+          <DialogDescription>
+            Share your thoughts, reflections, or notes about this book
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 flex flex-col gap-4 overflow-visible">
+          {/* Book Info */}
+          <div className="flex gap-4 p-4 rounded-lg border bg-muted/50">
+            {bookCover && (
+              <div className="relative w-16 h-24 flex-shrink-0 overflow-hidden rounded-lg">
+                <img
+                  src={bookCover}
+                  alt={bookTitle}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-foreground line-clamp-2">{bookTitle}</h3>
+              <p className="text-sm text-muted-foreground">{bookAuthor}</p>
+            </div>
+          </div>
+
+          {/* Tiptap Editor */}
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="flex-1 overflow-y-auto">
+              <TiptapEditor
+                content={content}
+                onChange={handleContentChange}
+                placeholder="Start writing your thoughts about this book..."
+                editable={true}
+              />
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isSaving}
+          >
+            <X className="mr-2 h-4 w-4" />
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving || !content || content.replace(/<[^>]*>/g, "").trim() === ""}
+          >
+            <Save className="mr-2 h-4 w-4" />
+            {isSaving ? "Saving..." : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+

@@ -3,8 +3,8 @@
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { UsernameSelection } from "@/components/ui/username-selection";
-import TetrisLoading from "@/components/ui/tetris-loader";
+import { UsernameSelection } from "@/components/ui/features/username-selection";
+import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 
 export default function ChooseUsernamePage() {

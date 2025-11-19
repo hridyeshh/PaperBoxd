@@ -1,6 +1,6 @@
 
 import { AuthShell } from "@/components/ui/auth/auth-shell";
-import { Auth } from "@/components/ui/auth-form-1";
+import { Auth } from "@/components/ui/auth/auth-form-1";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 import { Header } from "@/components/ui/layout/header-with-search";
 

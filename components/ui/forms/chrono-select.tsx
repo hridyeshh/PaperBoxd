@@ -8,15 +8,15 @@ import {
   Popover,
   PopoverTrigger,
   PopoverContent,
-} from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
+} from "@/components/ui/primitives/popover"
+import { Calendar } from "@/components/ui/primitives/calendar"
 import {
   Select,
   SelectTrigger,
   SelectContent,
   SelectValue,
   SelectItem,
-} from "@/components/ui/select"
+} from "@/components/ui/primitives/select"
 import { format } from "date-fns"
 
 interface ChronoSelectProps {

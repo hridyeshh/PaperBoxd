@@ -10,7 +10,7 @@ import {
   composeRenderProps,
 } from "react-aria-components";
 
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@/components/ui/primitives/checkbox";
 import { cn } from "@/lib/utils";
 
 export function GridList<T extends object>({ children, ...props }: AriaGridListProps<T>) {

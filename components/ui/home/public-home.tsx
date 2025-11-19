@@ -3,9 +3,9 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useScroll, useTransform, motion } from "framer-motion";
 import { Hero } from "@/components/ui/home/hero";
-import { Timeline } from "@/components/ui/timeline";
-import { Footerdemo } from "@/components/ui/footer-section";
-import SphereImageGrid, { ImageData } from "@/components/ui/img-sphere";
+import { Timeline } from "@/components/ui/features/timeline";
+import { Footerdemo } from "@/components/ui/features/footer-section";
+import SphereImageGrid, { ImageData } from "@/components/ui/demos/img-sphere";
 
 const timelineData = [
   {
@@ -163,7 +163,7 @@ export function PublicHome() {
           className="flex flex-col items-center justify-center"
         >
           <h2 className="text-3xl md:text-5xl font-bold text-foreground mb-4 text-center">
-            Explore Our Collection
+            All the books, all in one place.
           </h2>
           <p className="text-muted-foreground text-lg mb-12 text-center max-w-2xl">
             Discover books from every genre - from fiction to manga, comics to non-fiction. 

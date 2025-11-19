@@ -7,18 +7,18 @@ import { Calendar, BookOpen, Users, Star, MapPin, Globe, FileText, Loader2, Hear
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import TetrisLoading from "@/components/ui/tetris-loader";
-import { NotFoundPage } from "@/components/ui/not-found-page";
+import TetrisLoading from "@/components/ui/features/tetris-loader";
+import { NotFoundPage } from "@/components/ui/pages/not-found-page";
 import { InteractiveHoverButton } from "@/components/ui/buttons/interactive-hover-button";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/primitives/button";
 import { Header } from "@/components/ui/layout/header-with-search";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 import { stripHtmlTags } from "@/lib/utils";
-import { SignupPromptDialog } from "@/components/ui/signup-prompt-dialog";
+import { SignupPromptDialog } from "@/components/ui/dialogs/signup-prompt-dialog";
 import { BookCarousel, BookCarouselBook } from "@/components/ui/home/book-carousel";
-import { DiaryEditorDialog } from "@/components/ui/diary-editor-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { DiaryEditorDialog } from "@/components/ui/dialogs/diary-editor-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/primitives/dialog";
+import { Input } from "@/components/ui/primitives/input";
 
 interface BookDetails {
   id: string;
