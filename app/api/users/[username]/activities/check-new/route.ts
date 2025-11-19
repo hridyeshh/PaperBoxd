@@ -67,12 +67,40 @@ export async function GET(
     // Collect all activities from followed users
     const allActivities: any[] = [];
 
+    // First, add shared_list activities from the current user's activities array
+    // (These are lists that were shared TO the current user)
+    const currentUserActivities = Array.isArray(user.activities) ? user.activities : [];
+    const sharedListActivities = currentUserActivities.filter((activity: any) =>
+      activity.type === "shared_list"
+    );
+
+    sharedListActivities.forEach((activity: any) => {
+      const activityTimestamp = activity.timestamp
+        ? new Date(activity.timestamp).getTime()
+        : activity.createdAt
+        ? new Date(activity.createdAt).getTime()
+        : 0;
+
+      // If lastViewed is provided, only count activities newer than that
+      if (lastViewed) {
+        const lastViewedTime = new Date(lastViewed).getTime();
+        if (activityTimestamp <= lastViewedTime) {
+          return; // Skip this activity, it's not new
+        }
+      }
+
+      allActivities.push({
+        ...activity,
+        timestamp: activityTimestamp,
+      });
+    });
+
     followedUsers.forEach((followedUser: any) => {
       // Add regular activities
       const activities = Array.isArray(followedUser.activities) ? followedUser.activities : [];
-      // Filter out search-related activities
-      const filteredActivities = activities.filter((activity: any) => 
-        activity.type !== "search"
+      // Filter out search-related activities and shared_list (handled separately above)
+      const filteredActivities = activities.filter((activity: any) =>
+        activity.type !== "search" && activity.type !== "shared_list"
       );
       
       filteredActivities.forEach((activity: any) => {

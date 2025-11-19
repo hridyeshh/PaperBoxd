@@ -39,6 +39,10 @@ import {
   type ProfileBook,
 } from "@/lib/mock/profileBooks";
 import { DiaryEntryDialog } from "@/components/ui/diary-entry-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 
 const dockLabels = ["Profile", "Bookshelf", "Diary", "Authors", "Lists", "'to-be-read'", "Likes"] as const;
 type DockLabel = (typeof dockLabels)[number] | "Activity";
@@ -47,6 +51,8 @@ const BOOKSHELF_PAGE_SIZE = 12;
 const LIKES_PAGE_SIZE = 12;
 const TBR_PAGE_SIZE = 12;
 const AUTHORS_PAGE_SIZE = 12;
+const DIARY_PAGE_SIZE = 15; // 3x5 grid
+const LISTS_PAGE_SIZE = 12;
 
 type ActivityEntry = {
   id: string;
@@ -73,6 +79,7 @@ type AuthorStat = {
   read: number;
   tbr: number;
   cover: string;
+  books?: BookshelfBook[];
 };
 
 type UserListItem = {
@@ -1270,10 +1277,44 @@ function BookshelfSection({
   pageSize: number;
   onPageChange: (page: number) => void;
 }) {
+  const router = useRouter();
   const totalPages = Math.ceil(books.length / pageSize);
   const startIndex = (page - 1) * pageSize;
   const endIndex = startIndex + pageSize;
   const paginatedBooks = books.slice(startIndex, endIndex);
+
+  const handleBookClick = React.useCallback((book: BookshelfBook) => {
+    try {
+      // Priority: isbndbId > openLibraryId > bookId (MongoDB _id) > create slug from title
+      const bookId = (book as any).isbndbId || (book as any).openLibraryId || book.id;
+      
+      if (bookId) {
+        // Check if it's an ISBN (10 or 13 digits)
+        const isISBN = /^(\d{10}|\d{13})$/.test(bookId);
+        // Check if it's an Open Library ID
+        const isOpenLibraryId = bookId.startsWith("OL") || bookId.startsWith("/works/");
+        // Check if it's a MongoDB ObjectId (24 hex characters)
+        const isMongoObjectId = /^[0-9a-fA-F]{24}$/.test(bookId);
+        // Check if it's a valid ID format (alphanumeric, no spaces, no +)
+        const isValidId = /^[a-zA-Z0-9_-]+$/.test(bookId) && !bookId.includes(" ") && !bookId.includes("+");
+        
+        // Use ID directly if it's a recognized format
+        if (isISBN || isOpenLibraryId || isMongoObjectId || isValidId) {
+          router.push(`/b/${bookId}`);
+        } else {
+          // Create slug from title for unrecognized formats
+          const slug = createBookSlug(book.title, (book as any).isbndbId, bookId);
+          router.push(`/b/${slug}`);
+        }
+      } else {
+        // Fallback to slug if no ID available
+        const slug = createBookSlug(book.title);
+        router.push(`/b/${slug}`);
+      }
+    } catch (error) {
+      console.error("Error in handleBookClick:", error);
+    }
+  }, [router]);
 
   if (books.length === 0) {
     return (
@@ -1288,7 +1329,11 @@ function BookshelfSection({
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
         {paginatedBooks.map((book) => (
-          <div key={book.id} className="group flex gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md">
+          <div 
+            key={book.id} 
+            onClick={() => handleBookClick(book)}
+            className="group flex gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md cursor-pointer"
+          >
             <div className="relative aspect-[2/3] h-20 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-muted shadow-sm">
               <Image
                 src={book.cover}
@@ -1368,10 +1413,36 @@ function LikesSection({
   pageSize: number;
   onPageChange: (page: number) => void;
 }) {
+  const router = useRouter();
   const totalPages = Math.ceil(books.length / pageSize);
   const startIndex = (page - 1) * pageSize;
   const endIndex = startIndex + pageSize;
   const paginatedBooks = books.slice(startIndex, endIndex);
+
+  const handleBookClick = React.useCallback((book: LikedBook) => {
+    try {
+      const bookId = (book as any).isbndbId || (book as any).openLibraryId || book.id;
+      
+      if (bookId) {
+        const isISBN = /^(\d{10}|\d{13})$/.test(bookId);
+        const isOpenLibraryId = bookId.startsWith("OL") || bookId.startsWith("/works/");
+        const isMongoObjectId = /^[0-9a-fA-F]{24}$/.test(bookId);
+        const isValidId = /^[a-zA-Z0-9_-]+$/.test(bookId) && !bookId.includes(" ") && !bookId.includes("+");
+        
+        if (isISBN || isOpenLibraryId || isMongoObjectId || isValidId) {
+          router.push(`/b/${bookId}`);
+        } else {
+          const slug = createBookSlug(book.title, (book as any).isbndbId, bookId);
+          router.push(`/b/${slug}`);
+        }
+      } else {
+        const slug = createBookSlug(book.title);
+        router.push(`/b/${slug}`);
+      }
+    } catch (error) {
+      console.error("Error in handleBookClick:", error);
+    }
+  }, [router]);
 
   if (books.length === 0) {
     return (
@@ -1384,24 +1455,28 @@ function LikesSection({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
         {paginatedBooks.map((book) => (
-          <div key={book.id} className="group flex flex-col gap-3">
-            <div className="relative aspect-[2/3] overflow-hidden rounded-3xl bg-muted shadow-sm">
+          <div 
+            key={book.id} 
+            onClick={() => handleBookClick(book)}
+            className="group flex gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md cursor-pointer"
+          >
+            <div className="relative aspect-[2/3] h-20 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-muted shadow-sm">
               <Image
                 src={book.cover}
                 alt={`${book.title} cover`}
                 fill
                 className="object-cover transition-transform duration-500 group-hover:scale-105"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+                sizes="56px"
                 quality={100}
                 unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
               />
             </div>
-            <div>
-              <h3 className="text-base font-semibold text-foreground">{book.title}</h3>
-              <p className="text-sm text-muted-foreground">{book.author}</p>
-              {book.reason ? <p className="mt-1 text-xs text-muted-foreground/80">{book.reason}</p> : null}
+            <div className="flex-1 min-w-0 space-y-1">
+              <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
+              <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+              {book.reason ? <p className="text-xs text-muted-foreground/80 line-clamp-1">{book.reason}</p> : null}
             </div>
           </div>
         ))}
@@ -1461,10 +1536,36 @@ function TbrSection({
   pageSize: number;
   onPageChange: (page: number) => void;
 }) {
+  const router = useRouter();
   const totalPages = Math.ceil(books.length / pageSize);
   const startIndex = (page - 1) * pageSize;
   const endIndex = startIndex + pageSize;
   const paginatedBooks = books.slice(startIndex, endIndex);
+
+  const handleBookClick = React.useCallback((book: TbrBook) => {
+    try {
+      const bookId = (book as any).isbndbId || (book as any).openLibraryId || book.id;
+      
+      if (bookId) {
+        const isISBN = /^(\d{10}|\d{13})$/.test(bookId);
+        const isOpenLibraryId = bookId.startsWith("OL") || bookId.startsWith("/works/");
+        const isMongoObjectId = /^[0-9a-fA-F]{24}$/.test(bookId);
+        const isValidId = /^[a-zA-Z0-9_-]+$/.test(bookId) && !bookId.includes(" ") && !bookId.includes("+");
+        
+        if (isISBN || isOpenLibraryId || isMongoObjectId || isValidId) {
+          router.push(`/b/${bookId}`);
+        } else {
+          const slug = createBookSlug(book.title, (book as any).isbndbId, bookId);
+          router.push(`/b/${slug}`);
+        }
+      } else {
+        const slug = createBookSlug(book.title);
+        router.push(`/b/${slug}`);
+      }
+    } catch (error) {
+      console.error("Error in handleBookClick:", error);
+    }
+  }, [router]);
 
   if (books.length === 0) {
     return (
@@ -1481,26 +1582,30 @@ function TbrSection({
         <h2 className="text-xl font-semibold text-foreground">The procrastination wall</h2>
         <p className="text-sm text-muted-foreground">All the books waiting to be read</p>
       </div>
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
         {paginatedBooks.map((book) => (
-          <div key={book.id} className="group flex flex-col gap-3">
-            <div className="relative aspect-[2/3] overflow-hidden rounded-3xl bg-muted shadow-sm">
+          <div 
+            key={book.id} 
+            onClick={() => handleBookClick(book)}
+            className="group flex gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md cursor-pointer"
+          >
+            <div className="relative aspect-[2/3] h-20 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-muted shadow-sm">
               <Image
                 src={book.cover}
                 alt={`${book.title} cover`}
                 fill
                 className="object-cover transition-transform duration-500 group-hover:scale-105"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+                sizes="56px"
                 quality={100}
                 unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
               />
             </div>
-            <div>
-              <h3 className="text-base font-semibold text-foreground">{book.title}</h3>
-              <p className="text-sm text-muted-foreground">{book.author}</p>
+            <div className="flex-1 min-w-0 space-y-1">
+              <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
+              <p className="text-xs text-muted-foreground truncate">{book.author}</p>
               <p className="text-xs text-muted-foreground/80">{book.addedOn}</p>
               {book.urgency ? (
-                <p className="mt-1 text-xs font-semibold text-muted-foreground">{book.urgency}</p>
+                <p className="text-xs font-semibold text-muted-foreground">{book.urgency}</p>
               ) : null}
             </div>
           </div>
@@ -1555,16 +1660,71 @@ function AuthorsSection({
   page,
   pageSize,
   onPageChange,
+  username,
+  bookshelfBooks,
 }: {
   authors: AuthorStat[];
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
+  username: string;
+  bookshelfBooks: BookshelfBook[];
 }) {
+  const [selectedAuthor, setSelectedAuthor] = React.useState<AuthorStat | null>(null);
+  const [isAuthorDialogOpen, setIsAuthorDialogOpen] = React.useState(false);
+  const [authorBooks, setAuthorBooks] = React.useState<BookshelfBook[]>([]);
+  
   const totalPages = Math.ceil(authors.length / pageSize);
   const startIndex = (page - 1) * pageSize;
   const endIndex = startIndex + pageSize;
   const paginatedAuthors = authors.slice(startIndex, endIndex);
+
+  const handleAuthorClick = React.useCallback((author: AuthorStat) => {
+    try {
+      if (!author || !author.name) return;
+      
+      // Filter bookshelf books by this author
+      const booksByAuthor = (Array.isArray(bookshelfBooks) ? bookshelfBooks : []).filter((book) => {
+        if (!book || !book.author) return false;
+        const bookAuthor = book.author || "";
+        return bookAuthor.toLowerCase() === author.name.toLowerCase();
+      });
+      
+      setAuthorBooks(booksByAuthor);
+      setSelectedAuthor(author);
+      setIsAuthorDialogOpen(true);
+    } catch (error) {
+      console.error("Error in handleAuthorClick:", error);
+    }
+  }, [bookshelfBooks]);
+
+  const router = useRouter();
+  const handleBookClick = React.useCallback((book: BookshelfBook) => {
+    try {
+      if (!book) return;
+      
+      const bookId = (book as any)?.isbndbId || (book as any)?.openLibraryId || book?.id;
+      
+      if (bookId) {
+        const isISBN = /^(\d{10}|\d{13})$/.test(String(bookId));
+        const isOpenLibraryId = String(bookId).startsWith("OL") || String(bookId).startsWith("/works/");
+        const isMongoObjectId = /^[0-9a-fA-F]{24}$/.test(String(bookId));
+        const isValidId = /^[a-zA-Z0-9_-]+$/.test(String(bookId)) && !String(bookId).includes(" ") && !String(bookId).includes("+");
+        
+        if (isISBN || isOpenLibraryId || isMongoObjectId || isValidId) {
+          router.push(`/b/${bookId}`);
+        } else {
+          const slug = createBookSlug(book?.title || "Unknown", (book as any)?.isbndbId, bookId);
+          router.push(`/b/${slug}`);
+        }
+      } else {
+        const slug = createBookSlug(book?.title || "Unknown");
+        router.push(`/b/${slug}`);
+      }
+    } catch (error) {
+      console.error("Error in handleBookClick:", error);
+    }
+  }, [router]);
 
   if (authors.length === 0) {
     return (
@@ -1577,28 +1737,63 @@ function AuthorsSection({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {paginatedAuthors.map((author) => (
-          <div key={author.name} className="group flex flex-col gap-3">
-            <div className="relative aspect-[2/3] overflow-hidden rounded-3xl bg-muted shadow-sm">
-              <Image
-                src={author.cover}
-                alt={`${author.name} profile`}
-                fill
-                className="object-cover transition-transform duration-500 group-hover:scale-105"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
-                quality={100}
-                unoptimized={author.cover?.includes('isbndb.com') || author.cover?.includes('images.isbndb.com') || author.cover?.includes('covers.isbndb.com') || true}
-              />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+        {paginatedAuthors.map((author) => {
+          if (!author || !author.name) return null;
+          const displayBooks = (author.books && Array.isArray(author.books)) ? author.books.slice(0, 3) : [];
+          
+          return (
+            <div 
+              key={author.name} 
+              onClick={() => handleAuthorClick(author)}
+              className="group flex flex-col gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md cursor-pointer"
+            >
+              {/* 3-Book Grid */}
+              <div className="grid grid-cols-3 gap-1.5">
+                {[0, 1, 2].map((index) => {
+                  const book = displayBooks[index];
+                  const cover = (book && book.cover) ? book.cover : null;
+                  
+                  return (
+                    <div
+                      key={index}
+                      className="relative aspect-[2/3] overflow-hidden rounded-sm bg-muted/50"
+                    >
+                      {cover ? (
+                        <Image
+                          src={cover}
+                          alt={(book && book.title) ? book.title : `Book ${index + 1}`}
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 640px) 33vw, 120px"
+                          quality={100}
+                          unoptimized={cover?.includes('isbndb.com') || cover?.includes('images.isbndb.com') || cover?.includes('covers.isbndb.com') || true}
+                          onError={(e) => {
+                            // Fallback to gray placeholder on image error
+                            const target = e.target as HTMLImageElement;
+                            if (target) {
+                              target.style.display = 'none';
+                            }
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-muted/50" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Author Info */}
+              <div className="flex-1 min-w-0 space-y-1">
+                <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{author.name || "Unknown Author"}</h3>
+                <p className="text-xs text-muted-foreground">
+                  {author.read || 0} read • {author.tbr || 0} to-be-read
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-base font-semibold text-foreground">{author.name}</h3>
-              <p className="text-sm text-muted-foreground">
-                {author.read} read • {author.tbr} to-be-read
-              </p>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       {totalPages > 1 && (
         <Pagination>
@@ -1640,6 +1835,53 @@ function AuthorsSection({
           </PaginationContent>
         </Pagination>
       )}
+      
+      {/* Author Books Dialog */}
+      <Dialog open={isAuthorDialogOpen} onOpenChange={setIsAuthorDialogOpen}>
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto p-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>{selectedAuthor?.name || "Author"} - Books read</DialogTitle>
+          </DialogHeader>
+          <div className="p-6 sm:p-8">
+            {/* Header Section */}
+            <div className="mb-8">
+              <h1 className="text-4xl font-bold text-foreground mb-2">{selectedAuthor?.name}</h1>
+              <p className="text-lg text-muted-foreground">
+                {authorBooks.length} {authorBooks.length === 1 ? "book" : "books"} read
+              </p>
+            </div>
+
+            {/* Books Grid */}
+            {authorBooks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center min-h-[calc(100vh-300px)] text-center">
+                <p className="text-xl text-muted-foreground">
+                  You haven't read any books by {selectedAuthor?.name} yet
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                {authorBooks.map((book) => (
+                  <div
+                    key={book.id}
+                    onClick={() => handleBookClick(book)}
+                    className="group relative aspect-[2/3] overflow-hidden rounded-lg cursor-pointer"
+                  >
+                    <Image
+                      src={book.cover}
+                      alt={book.title}
+                      fill
+                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 20vw, 16vw"
+                      quality={100}
+                      unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1647,34 +1889,84 @@ function AuthorsSection({
 function ListCard({
   list,
   canEdit,
+  username,
 }: {
   list: ReadingList;
   canEdit: boolean;
+  username: string;
 }) {
+  const router = useRouter();
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
+  
+  // Check if this is a saved list (has "from @" in description)
+  const isSavedList = list.description?.includes("from @") || false;
+  
+  // User can only edit if they own the list AND it's not a saved list
+  const canEditList = canEdit && !isSavedList;
+
+  // Get first 3 books for display
+  const displayBooks = list.books?.slice(0, 3) || [];
+  const getBookCover = (book: any) => {
+    if (book?.volumeInfo?.imageLinks?.thumbnail) return book.volumeInfo.imageLinks.thumbnail;
+    if (book?.volumeInfo?.imageLinks?.smallThumbnail) return book.volumeInfo.imageLinks.smallThumbnail;
+    if (book?.volumeInfo?.imageLinks?.medium) return book.volumeInfo.imageLinks.medium;
+    if (book?.volumeInfo?.imageLinks?.large) return book.volumeInfo.imageLinks.large;
+    return null;
+  };
 
   return (
-    <div className="group relative flex w-[200px] flex-shrink-0 flex-col gap-3">
-      <div className="relative aspect-[2/3] overflow-hidden rounded-3xl bg-muted shadow-sm">
-        <Image
-          src={list.cover}
-          alt={`${list.title} cover`}
-          fill
-          className="object-cover transition-transform duration-500 group-hover:scale-105"
-          sizes="200px"
-          quality={100}
-          unoptimized={list.cover?.includes('isbndb.com') || list.cover?.includes('images.isbndb.com') || list.cover?.includes('covers.isbndb.com') || true}
-        />
+    <div 
+      className="group flex flex-col gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md cursor-pointer"
+      onClick={() => {
+        router.push(`/u/${username}/lists/${list.id}`);
+      }}
+    >
+      {/* 3-Book Grid */}
+      <div className="grid grid-cols-3 gap-1.5">
+        {[0, 1, 2].map((index) => {
+          const book = displayBooks[index];
+          const cover = book ? getBookCover(book) : null;
+          
+          return (
+            <div
+              key={index}
+              className="relative aspect-[2/3] overflow-hidden rounded-sm bg-muted/50"
+            >
+              {cover ? (
+                <Image
+                  src={cover}
+                  alt={(book?.volumeInfo?.title) ? book.volumeInfo.title : `Book ${index + 1}`}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 640px) 33vw, 120px"
+                  quality={100}
+                  unoptimized={cover?.includes('isbndb.com') || cover?.includes('images.isbndb.com') || cover?.includes('covers.isbndb.com') || true}
+                  onError={(e) => {
+                    // Fallback to gray placeholder on image error
+                    const target = e.target as HTMLImageElement;
+                    if (target && target.parentElement) {
+                      target.style.display = 'none';
+                    }
+                  }}
+                />
+              ) : (
+                <div className="w-full h-full bg-muted/50" />
+              )}
+            </div>
+          );
+        })}
       </div>
-      <div className="relative">
+      
+      {/* List Info */}
+      <div className="flex-1 min-w-0 space-y-1 relative">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-semibold text-foreground truncate">{list.title}</h3>
-            <p className="text-sm text-muted-foreground">
+            <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{list.title}</h3>
+            <p className="text-xs text-muted-foreground truncate">
               {list.booksCount} {list.booksCount === 1 ? "book" : "books"} • {list.updatedAgo}
             </p>
           </div>
-          {canEdit && (
+          {canEditList && (
             <Dropdown.Root isOpen={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
               <Dropdown.Trigger
                 className="flex-shrink-0 rounded-lg p-1 transition hover:bg-foreground/5"
@@ -1722,7 +2014,72 @@ function ListCard({
   );
 }
 
-function ListsCarousel({ lists, canEdit }: { lists: ReadingList[]; canEdit: boolean }) {
+function ListsCarousel({ lists, canEdit, username, onListCreated, page, pageSize, onPageChange }: { lists: ReadingList[]; canEdit: boolean; username: string; onListCreated?: () => void; page: number; pageSize: number; onPageChange: (page: number) => void }) {
+  const router = useRouter();
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
+  const [listName, setListName] = React.useState("");
+  const [isSecret, setIsSecret] = React.useState(false);
+  const [isGroup, setIsGroup] = React.useState(false);
+  const [isCreating, setIsCreating] = React.useState(false);
+
+  const resetForm = () => {
+    setListName("");
+    setIsSecret(false);
+    setIsGroup(false);
+  };
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setIsCreateDialogOpen(open);
+    if (!open) {
+      resetForm();
+    }
+  };
+
+  const handleCreateList = async () => {
+    if (!listName.trim() || !username) {
+      return;
+    }
+
+    try {
+      setIsCreating(true);
+      const response = await fetch(`/api/users/${encodeURIComponent(username)}/lists`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: listName.trim(),
+          description: "",
+          isPublic: !isSecret,
+          books: [],
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to create list");
+      }
+
+      const data = await response.json();
+      const listId = data.list._id || data.list.id;
+
+      // Reset form and close dialog
+      resetForm();
+      setIsCreateDialogOpen(false);
+
+      // Refresh lists
+      if (onListCreated) {
+        onListCreated();
+      }
+
+      // Redirect to list detail page
+      router.push(`/u/${username}/lists/${listId}`);
+    } catch (error) {
+      console.error("Failed to create list:", error);
+      // TODO: Show error toast
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -1731,15 +2088,106 @@ function ListsCarousel({ lists, canEdit }: { lists: ReadingList[]; canEdit: bool
           <p className="text-sm text-muted-foreground">Your curated collections</p>
         </div>
         {canEdit && (
-          <InteractiveHoverButton
-            text="Create list"
-            showIdleAccent={false}
-            invert
-            className="min-w-[120px]"
-            onClick={() => {
-              // TODO: Implement create list
-            }}
-          />
+          <>
+            <InteractiveHoverButton
+              text="Create list"
+              showIdleAccent={false}
+              invert
+              className="min-w-[120px]"
+              onClick={() => {
+                setIsCreateDialogOpen(true);
+              }}
+            />
+            <Dialog open={isCreateDialogOpen} onOpenChange={handleDialogOpenChange}>
+              <DialogContent className="max-w-md p-0 sm:rounded-2xl">
+                <div className="p-6">
+                  <DialogHeader>
+                    <DialogTitle className="text-2xl font-semibold">Create a list</DialogTitle>
+                  </DialogHeader>
+                  
+                  {/* List Image Placeholder */}
+                  <div className="mt-6 mb-6">
+                    <div className="relative w-full rounded-lg bg-muted/40 border border-border/60 overflow-hidden">
+                      <div className="aspect-[4/3] flex items-center justify-center">
+                        <div className="grid grid-cols-2 gap-1.5 w-full h-full p-2.5">
+                          <div className="bg-muted/50 rounded-sm"></div>
+                          <div className="bg-muted/50 rounded-sm"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* List Name Input */}
+                  <div className="space-y-2 mb-6">
+                    <Label htmlFor="list-name" className="text-sm font-medium">
+                      List name
+                    </Label>
+                    <Input
+                      id="list-name"
+                      placeholder="Name your list"
+                      value={listName}
+                      onChange={(e) => setListName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && listName.trim()) {
+                          handleCreateList();
+                        }
+                      }}
+                      className="w-full focus-visible:border-foreground dark:focus-visible:border-white"
+                      autoFocus
+                    />
+                  </div>
+
+                  {/* Make this list secret */}
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between rounded-lg border border-border/50 p-4 hover:bg-muted/30 transition-colors cursor-pointer"
+                      onClick={() => setIsSecret(!isSecret)}
+                    >
+                      <div className="flex-1">
+                        <Label htmlFor="secret-toggle" className="text-sm font-medium cursor-pointer">
+                          Make this list secret
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Only you and collaborators will see this list
+                        </p>
+                      </div>
+                      <Switch
+                        id="secret-toggle"
+                        checked={isSecret}
+                        onCheckedChange={setIsSecret}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Group list */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between rounded-lg border border-border/50 p-4 hover:bg-muted/30 transition-colors cursor-pointer"
+                      onClick={() => setIsGroup(!isGroup)}
+                    >
+                      <div className="flex-1">
+                        <Label htmlFor="group-toggle" className="text-sm font-medium cursor-pointer">
+                          Group list
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Invite others to collaborate on this list
+                        </p>
+                      </div>
+                      <Users className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                  </div>
+
+                  {/* Create Button */}
+                  <Button
+                    onClick={handleCreateList}
+                    disabled={!listName.trim() || isCreating}
+                    variant={listName.trim() ? "default" : "secondary"}
+                    className="w-full h-11 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isCreating ? "Creating..." : "Create"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </>
         )}
       </div>
       {lists.length === 0 ? (
@@ -1750,11 +2198,53 @@ function ListsCarousel({ lists, canEdit }: { lists: ReadingList[]; canEdit: bool
           </p>
         </div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-          {lists.map((list) => (
-            <ListCard key={list.id} list={list} canEdit={canEdit} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+            {lists.slice((page - 1) * pageSize, page * pageSize).map((list) => (
+              <ListCard key={list.id} list={list} canEdit={canEdit} username={username} />
+            ))}
+          </div>
+          {Math.ceil(lists.length / pageSize) > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (page > 1) onPageChange(page - 1);
+                    }}
+                    className={page === 1 ? "pointer-events-none opacity-50" : ""}
+                  />
+                </PaginationItem>
+                {Array.from({ length: Math.ceil(lists.length / pageSize) }, (_, i) => i + 1).map((pageNum) => (
+                  <PaginationItem key={pageNum}>
+                    <PaginationLink
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        onPageChange(pageNum);
+                      }}
+                      isActive={page === pageNum}
+                    >
+                      {pageNum}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (page < Math.ceil(lists.length / pageSize)) onPageChange(page + 1);
+                    }}
+                    className={page === Math.ceil(lists.length / pageSize) ? "pointer-events-none opacity-50" : ""}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
+        </>
       )}
     </div>
   );
@@ -1769,12 +2259,24 @@ function TabPlaceholder({ label }: { label: string }) {
   );
 }
 
-function DiarySection({ entries, isOwnProfile, username, onEntryClick, onRefresh }: { 
+function DiarySection({ 
+  entries, 
+  isOwnProfile, 
+  username, 
+  onEntryClick, 
+  onRefresh,
+  page,
+  pageSize,
+  onPageChange,
+}: { 
   entries: any[]; 
   isOwnProfile: boolean;
   username: string;
   onEntryClick?: (entry: any) => void;
   onRefresh?: () => void;
+  page: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
 }) {
   const { data: session } = useSession();
   const [selectedEntry, setSelectedEntry] = React.useState<any | null>(null);
@@ -1795,6 +2297,11 @@ function DiarySection({ entries, isOwnProfile, username, onEntryClick, onRefresh
     }
   }, [entries, selectedEntryId, selectedEntryIsLiked, selectedEntryLikesCount]);
 
+  const totalPages = Math.ceil(entries.length / pageSize);
+  const startIndex = (page - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedEntries = entries.slice(startIndex, endIndex);
+
   if (entries.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
@@ -1807,16 +2314,6 @@ function DiarySection({ entries, isOwnProfile, username, onEntryClick, onRefresh
       </div>
     );
   }
-
-  // Helper function to strip HTML and truncate text
-  const truncateContent = (html: string, maxLines: number = 2) => {
-    // Create a temporary div to parse HTML
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = html;
-    const text = tempDiv.textContent || tempDiv.innerText || '';
-    // For now, just return the HTML with line-clamp CSS
-    return html;
-  };
 
   const handleEntryClick = (entry: any) => {
     setSelectedEntry(entry);
@@ -1832,8 +2329,8 @@ function DiarySection({ entries, isOwnProfile, username, onEntryClick, onRefresh
           <h2 className="text-xl font-semibold text-foreground">Diary</h2>
           <p className="text-sm text-muted-foreground">Thoughts and reflections on books</p>
         </div>
-        <div className="space-y-8">
-          {entries.map((entry) => {
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+          {paginatedEntries.map((entry) => {
             const isLiked = entry.isLiked || false;
             const likesCount = entry.likesCount || 0;
 
@@ -1841,47 +2338,29 @@ function DiarySection({ entries, isOwnProfile, username, onEntryClick, onRefresh
               <div
                 key={entry.id}
                 onClick={() => handleEntryClick(entry)}
-                className="group flex gap-6 rounded-3xl border border-border/70 bg-muted/20 p-6 transition-all hover:bg-muted/40 cursor-pointer"
+                className="group flex flex-col gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md cursor-pointer"
               >
-                {/* Book Cover - only show if book exists */}
-                {entry.bookCover && (
-                  <div className="relative h-32 w-20 flex-shrink-0 overflow-hidden rounded-lg">
-                    <Image
-                      src={entry.bookCover}
-                      alt={entry.bookTitle ? `${entry.bookTitle} cover` : "Book cover"}
-                      fill
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
-                      sizes="80px"
-                      quality={100}
-                      unoptimized={entry.bookCover?.includes('isbndb.com') || entry.bookCover?.includes('images.isbndb.com') || entry.bookCover?.includes('covers.isbndb.com') || true}
-                    />
-                  </div>
-                )}
-                
                 {/* Entry Content */}
-                <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex-1 min-w-0 space-y-1">
                   <div>
                     {entry.bookTitle ? (
                       <>
-                        <h3 className="text-lg font-semibold text-foreground">{entry.bookTitle}</h3>
-                        {entry.bookAuthor && <p className="text-sm text-muted-foreground">{entry.bookAuthor}</p>}
+                        <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{entry.bookTitle}</h3>
+                        {entry.bookAuthor && <p className="text-xs text-muted-foreground truncate">{entry.bookAuthor}</p>}
                       </>
                     ) : (
-                      <>
-                        <h3 className="text-lg font-semibold text-foreground">
-                          {(entry.subject && entry.subject.trim()) ? entry.subject : "Diary Entry"}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">You</p>
-                      </>
+                      <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">
+                        {(entry.subject && entry.subject.trim()) ? entry.subject : "Diary Entry"}
+                      </h3>
                     )}
                     {entry.updatedAt && (
-                      <p className="text-xs text-muted-foreground/80 mt-1">
+                      <p className="text-xs text-muted-foreground/80 mt-1 truncate">
                         {entry.updatedAt !== entry.createdAt ? `Updated ${entry.updatedAt}` : entry.createdAt}
                       </p>
                     )}
                   </div>
                   <div
-                    className="prose prose-sm dark:prose-invert max-w-none text-foreground/90 line-clamp-2 overflow-hidden"
+                    className="prose prose-sm dark:prose-invert max-w-none text-foreground/90 line-clamp-2 overflow-hidden text-xs"
                     dangerouslySetInnerHTML={{ __html: entry.content }}
                     style={{
                       display: '-webkit-box',
@@ -1891,7 +2370,7 @@ function DiarySection({ entries, isOwnProfile, username, onEntryClick, onRefresh
                     }}
                   />
                   {likesCount > 0 && (
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                       <Heart className={`h-3 w-3 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
                       <span>{likesCount}</span>
                     </div>
@@ -1901,6 +2380,46 @@ function DiarySection({ entries, isOwnProfile, username, onEntryClick, onRefresh
             );
           })}
         </div>
+        {totalPages > 1 && (
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (page > 1) onPageChange(page - 1);
+                  }}
+                  className={page === 1 ? "pointer-events-none opacity-50" : ""}
+                />
+              </PaginationItem>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                <PaginationItem key={pageNum}>
+                  <PaginationLink
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onPageChange(pageNum);
+                    }}
+                    isActive={page === pageNum}
+                  >
+                    {pageNum}
+                  </PaginationLink>
+                </PaginationItem>
+              ))}
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (page < totalPages) onPageChange(page + 1);
+                  }}
+                  className={page === totalPages ? "pointer-events-none opacity-50" : ""}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        )}
       </div>
       
       {selectedEntry && (
@@ -1967,6 +2486,8 @@ export default function UserProfilePage() {
   const [tbrPage, setTbrPage] = React.useState(1);
   const [isEditOpen, setIsEditOpen] = React.useState(false);
   const [authorsPage, setAuthorsPage] = React.useState(1);
+  const [diaryPage, setDiaryPage] = React.useState(1);
+  const [listsPage, setListsPage] = React.useState(1);
   const [isSavingProfile, setIsSavingProfile] = React.useState(false);
   const [profileSaveError, setProfileSaveError] = React.useState<string | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = React.useState(true);
@@ -2288,6 +2809,8 @@ export default function UserProfilePage() {
                     booksCount: Array.isArray(list.books) ? list.books.length : 0,
                     updatedAgo,
                     cover,
+                    description: list.description,
+                    books: Array.isArray(list.books) ? list.books.slice(0, 3) : [], // Store first 3 books for display
                   };
                 })
               : [];
@@ -2411,7 +2934,7 @@ export default function UserProfilePage() {
                       : "a book"),
                     timeAgo,
                     cover: entry.bookCover || null,
-                  
+                    type: "diary_entry",
                     diaryEntryId: entryId,
                     bookId: bookId,
                     bookTitle: entry.bookTitle || null,
@@ -2579,6 +3102,7 @@ export default function UserProfilePage() {
           read: 0,
           tbr: 0,
           cover: cover ?? placeholderCover,
+          books: [],
         });
       } else if (cover) {
         const entry = map.get(name)!;
@@ -2588,14 +3112,31 @@ export default function UserProfilePage() {
       }
       return map.get(name)!;
     };
-    bookshelfBooks.forEach((book) => {
-      const entry = ensureEntry(book.author, book.cover);
-      entry.read += 1;
-    });
-    tbrBooks.forEach((book) => {
-      const entry = ensureEntry(book.author, book.cover);
-      entry.tbr += 1;
-    });
+    try {
+      bookshelfBooks.forEach((book) => {
+        if (!book || !book.author) return;
+        const entry = ensureEntry(book.author, book.cover);
+        entry.read += 1;
+        // Add book to author's books array (only from bookshelf, not TBR)
+        if (!entry.books) {
+          entry.books = [];
+        }
+        entry.books.push(book);
+      });
+      tbrBooks.forEach((book) => {
+        if (!book || !book.author) return;
+        const entry = ensureEntry(book.author, book.cover);
+        entry.tbr += 1;
+      });
+      // Sort books for each author (by finishedOn date, newest first)
+      map.forEach((entry) => {
+        if (entry.books) {
+          entry.books = entry.books.slice(0, 3); // Keep only first 3 books
+        }
+      });
+    } catch (error) {
+      console.error("Error calculating author stats:", error);
+    }
     return Array.from(map.values()).sort((a, b) => b.read + b.tbr - (a.read + a.tbr));
   }, [bookshelfBooks, tbrBooks]);
 
@@ -3088,7 +3629,7 @@ export default function UserProfilePage() {
                   )}
                 </div>
               ) : activeTab === "Authors" ? (
-                <AuthorsSection authors={authorStats} page={authorsPage} pageSize={AUTHORS_PAGE_SIZE} onPageChange={setAuthorsPage} />
+                <AuthorsSection authors={authorStats} page={authorsPage} pageSize={AUTHORS_PAGE_SIZE} onPageChange={setAuthorsPage} username={activeUsername} bookshelfBooks={bookshelfBooks} />
               ) : activeTab === "Bookshelf" ? (
                 <BookshelfSection
                   books={bookshelfBooks}
@@ -3099,7 +3640,62 @@ export default function UserProfilePage() {
               ) : activeTab === "Likes" ? (
                 <LikesSection books={likedBooks} page={likesPage} pageSize={LIKES_PAGE_SIZE} onPageChange={setLikesPage} />
               ) : activeTab === "Lists" ? (
-                <ListsCarousel lists={readingLists} canEdit={isOwnProfile} />
+                <ListsCarousel 
+                  lists={readingLists} 
+                  canEdit={isOwnProfile} 
+                  username={activeUsername}
+                  page={listsPage}
+                  pageSize={LISTS_PAGE_SIZE}
+                  onPageChange={setListsPage}
+                  onListCreated={async () => {
+                    // Refresh lists after creation
+                    try {
+                      const response = await fetch(`/api/users/${encodeURIComponent(activeUsername)}/lists`);
+                      if (response.ok) {
+                        const data = await response.json();
+                        const transformedLists: ReadingList[] = Array.isArray(data.lists)
+                          ? data.lists.map((list: any, idx: number) => {
+                              const updatedAt = list.updatedAt ? new Date(list.updatedAt) : new Date(list.createdAt || Date.now());
+                              const now = new Date();
+                              const diffMs = now.getTime() - updatedAt.getTime();
+                              const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                              let updatedAgo = "";
+                              if (diffDays === 0) updatedAgo = "Today";
+                              else if (diffDays === 1) updatedAgo = "1d";
+                              else if (diffDays < 7) updatedAgo = `${diffDays}d`;
+                              else if (diffDays < 30) updatedAgo = `${Math.floor(diffDays / 7)}w`;
+                              else if (diffDays < 365) updatedAgo = `${Math.floor(diffDays / 30)}mo`;
+                              else updatedAgo = `${Math.floor(diffDays / 365)}y`;
+                              
+                              // Get cover from first book if available
+                              let cover = "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80";
+                              if (Array.isArray(list.books) && list.books.length > 0) {
+                                const firstBook = list.books[0];
+                                if (firstBook?.volumeInfo?.imageLinks?.thumbnail) {
+                                  cover = firstBook.volumeInfo.imageLinks.thumbnail;
+                                } else if (firstBook?.volumeInfo?.imageLinks?.smallThumbnail) {
+                                  cover = firstBook.volumeInfo.imageLinks.smallThumbnail;
+                                }
+                              }
+                              
+                              return {
+                                id: list.id || list._id?.toString() || `list-${idx}`,
+                                title: list.title || "Untitled List",
+                                booksCount: list.booksCount || (Array.isArray(list.books) ? list.books.length : 0),
+                                updatedAgo,
+                                cover,
+                                description: list.description,
+                                books: Array.isArray(list.books) ? list.books.slice(0, 3) : [], // Store first 3 books for display
+                              };
+                            })
+                          : [];
+                        setReadingLists(transformedLists);
+                      }
+                    } catch (error) {
+                      console.error("Failed to refresh lists:", error);
+                    }
+                  }}
+                />
               ) : activeTab === "'to-be-read'" ? (
                 <TbrSection books={tbrBooks} page={tbrPage} pageSize={TBR_PAGE_SIZE} onPageChange={setTbrPage} />
               ) : activeTab === "Diary" ? (
@@ -3107,6 +3703,9 @@ export default function UserProfilePage() {
                   entries={diaryEntries}
                   isOwnProfile={isOwnProfile}
                   username={activeUsername}
+                  page={diaryPage}
+                  pageSize={DIARY_PAGE_SIZE}
+                  onPageChange={setDiaryPage}
                   onEntryClick={() => {
                     // Refresh diary entries after interaction
                     if (activeUsername) {

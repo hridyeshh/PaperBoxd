@@ -330,7 +330,8 @@ export function Header({
       )}
       <header
         className={cn(
-          "fixed top-0 left-0 right-0 z-[100] w-full border-b border-border/60",
+          "fixed top-0 left-0 right-0 z-[100] w-full border-b",
+          "border-gray-200/50 dark:border-border/60",
           "bg-white dark:bg-black",
         )}
       >

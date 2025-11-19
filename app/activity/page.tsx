@@ -30,7 +30,7 @@ type ActivityEntry = {
   timeAgo: string;
   cover: string | null;
   bookTitle?: string | null;
-  type?: string; // Activity type: "diary_entry", "read", "rated", etc.
+  type?: string; // Activity type: "diary_entry", "read", "rated", "shared_list", etc.
   diaryEntryId?: string; // For diary entries
   bookId?: string | null; // For diary entries
   bookAuthor?: string | null; // For diary entries
@@ -40,6 +40,9 @@ type ActivityEntry = {
   isLiked?: boolean; // For diary entries
   likesCount?: number; // For diary entries
   isGeneralEntry?: boolean; // For general diary entries (no book)
+  listId?: string; // For shared_list activities
+  sharedByUsername?: string; // For shared_list activities
+  listBooksCount?: number; // For shared_list activities
 };
 
 const ACTIVITY_PAGE_SIZE = 10;
@@ -137,6 +140,9 @@ export default function ActivityPage() {
       action = "started reading";
     } else if (activity.type === "reviewed") {
       action = "reviewed";
+    } else if (activity.type === "shared_list") {
+      action = "shared their list";
+      bookTitle = activity.listTitle;
     } else {
       console.warn(`Unknown activity type: "${activity.type}"`);
     }
@@ -146,7 +152,10 @@ export default function ActivityPage() {
 
   // Fetch activities from followed users only
   React.useEffect(() => {
+    console.log('[ACTIVITY PAGE] useEffect triggered. Auth:', isAuthenticated, 'Username:', session?.user?.username);
+
     if (!isAuthenticated || !session?.user?.username) {
+      console.log('[ACTIVITY PAGE] Not authenticated or no username, skipping fetch');
       setIsLoading(false);
       return;
     }
@@ -154,15 +163,19 @@ export default function ActivityPage() {
     const username = session.user.username;
     setIsLoading(true);
 
+      console.log('[ACTIVITY PAGE] Fetching activities for:', username);
       // Fetch activities from followed users
       fetch(`/api/users/${encodeURIComponent(username)}/activities/following?page=${currentPage}&pageSize=${ACTIVITY_PAGE_SIZE}`)
         .then((res) => {
+          console.log('[ACTIVITY PAGE] API response status:', res.status);
           if (!res.ok) {
             throw new Error(`Failed to fetch following activities: ${res.status}`);
           }
           return res.json();
         })
         .then((data) => {
+          console.log('[ACTIVITY PAGE] Got data:', data);
+          console.log('[ACTIVITY PAGE] Activities count:', data.activities?.length);
           const transformedActivities: ActivityEntry[] = Array.isArray(data.activities)
             ? data.activities.map((activity: any, idx: number) => {
                 const { action, bookTitle } = formatActivity(activity);
@@ -175,10 +188,12 @@ export default function ActivityPage() {
                   action,
                   detail: activity.isGeneralEntry 
                     ? (activity.subject && activity.subject.trim() ? activity.subject : "a diary entry")
-                    : bookTitle,
-                  bookTitle,
+                    : (activity.type === "shared_list" ? activity.listTitle : bookTitle),
+                  bookTitle: activity.type === "shared_list" ? activity.listTitle : bookTitle,
                   timeAgo: formatTimeAgo(activity.timestamp),
-                  cover: activity.bookCover || (activity.isGeneralEntry ? null : "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80"),
+                  cover: activity.type === "shared_list" 
+                    ? (activity.listCover || "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80")
+                    : (activity.bookCover || (activity.isGeneralEntry ? null : "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80")),
                 type: activity.type,
                 };
               
@@ -195,6 +210,13 @@ export default function ActivityPage() {
                 baseEntry.isGeneralEntry = activity.isGeneralEntry;
               }
               
+              // Add shared list specific fields
+              if (activity.type === "shared_list") {
+                baseEntry.listId = activity.listId;
+                baseEntry.sharedByUsername = activity.sharedByUsername;
+                baseEntry.listBooksCount = activity.listBooksCount;
+              }
+              
               return baseEntry;
               })
             : [];
@@ -204,7 +226,7 @@ export default function ActivityPage() {
           setHasFriendsActivities((data.total || 0) > 0);
         })
         .catch((error) => {
-          console.error("Failed to fetch following activities:", error);
+          console.error("[ACTIVITY PAGE] Failed to fetch following activities:", error);
           setActivities([]);
           setTotalPages(1);
           setHasFriendsActivities(false);
@@ -302,9 +324,13 @@ export default function ActivityPage() {
                         });
                         setSelectedDiaryEntryUsername(entry.username || null);
                       }
+                      // If it's a shared list, navigate to the list
+                      else if (entry.type === "shared_list" && entry.listId && entry.sharedByUsername) {
+                        router.push(`/u/${entry.sharedByUsername}/lists/${entry.listId}`);
+                      }
                     }}
                     className={`flex gap-4 rounded-3xl border border-border/70 bg-background/90 p-4 shadow-sm transition hover:-translate-y-1 ${
-                      entry.type === "diary_entry" ? "cursor-pointer" : ""
+                      (entry.type === "diary_entry" || entry.type === "shared_list") ? "cursor-pointer" : ""
                     }`}
                   >
                     {/* Show profile picture of the person who did the activity */}
@@ -321,14 +347,33 @@ export default function ActivityPage() {
                     <div className="flex flex-1 flex-col justify-center gap-1">
                       <p className="text-xs text-muted-foreground">{entry.timeAgo}</p>
                       <p className="text-base font-semibold text-foreground">
-                        <span className="font-medium">{entry.name}</span>{" "}
+                        <span className="font-medium">@{entry.username || entry.name}</span>
+                        {entry.action && " "}
                         {entry.action && <span>{entry.action}</span>}
-                        {entry.action && entry.detail && " "}
+                        {entry.detail && " "}
                         {entry.detail && (
                           <span className="font-medium text-muted-foreground">{entry.detail}</span>
                         )}
+                        {entry.type === "shared_list" && entry.listBooksCount !== undefined && (
+                          <span className="text-sm text-muted-foreground ml-1">
+                            ({entry.listBooksCount} {entry.listBooksCount === 1 ? "book" : "books"})
+                          </span>
+                        )}
                       </p>
                     </div>
+                    {/* Show cover for shared lists */}
+                    {entry.type === "shared_list" && entry.cover && (
+                      <div className="relative h-16 w-12 flex-shrink-0 overflow-hidden rounded-lg">
+                        <Image
+                          src={entry.cover}
+                          alt={entry.detail || "List cover"}
+                          fill
+                          className="object-cover"
+                          sizes="48px"
+                          quality={100}
+                        />
+                      </div>
+                    )}
                   </article>
                 ))}
               </div>

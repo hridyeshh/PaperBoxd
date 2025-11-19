@@ -32,6 +32,19 @@ export type ReadingList = {
   booksCount: number;
   updatedAgo: string;
   cover: string;
+  description?: string;
+  books?: Array<{
+    _id?: string;
+    volumeInfo?: {
+      title?: string;
+      imageLinks?: {
+        thumbnail?: string;
+        smallThumbnail?: string;
+        medium?: string;
+        large?: string;
+      };
+    };
+  }>;
 };
 
 export const topBooks: ProfileBook[] = [

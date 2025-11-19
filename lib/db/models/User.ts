@@ -65,12 +65,14 @@ export interface IDiaryEntry {
 }
 
 export interface IActivity {
-  type: "read" | "rated" | "liked" | "added_to_list" | "started_reading" | "reviewed";
+  type: "read" | "rated" | "liked" | "added_to_list" | "started_reading" | "reviewed" | "shared_list";
   bookId?: mongoose.Types.ObjectId;
   listId?: string;
   rating?: number;
   review?: string;
   timestamp: Date;
+  sharedBy?: mongoose.Types.ObjectId; // User who shared the list
+  sharedByUsername?: string; // Username of the person who shared
 }
 
 export interface IAuthorStats {
@@ -217,7 +219,7 @@ const DiaryEntrySchema = new Schema({
 const ActivitySchema = new Schema({
   type: {
     type: String,
-    enum: ["read", "rated", "liked", "added_to_list", "started_reading", "reviewed"],
+    enum: ["read", "rated", "liked", "added_to_list", "started_reading", "reviewed", "shared_list"],
     required: true,
   },
   bookId: { type: Schema.Types.ObjectId, ref: "Book" },
@@ -225,6 +227,8 @@ const ActivitySchema = new Schema({
   rating: { type: Number, min: 1, max: 5 },
   review: { type: String },
   timestamp: { type: Date, default: Date.now },
+  sharedBy: { type: Schema.Types.ObjectId, ref: "User" },
+  sharedByUsername: { type: String },
 });
 
 const AuthorStatsSchema = new Schema({
