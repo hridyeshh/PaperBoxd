@@ -85,8 +85,12 @@ All data operations flow through well-defined RESTful API routes (`/app/api/*`),
 │   ├── [username]/follow   # Follow/unfollow actions
 │   ├── [username]/followers # Follower list
 │   ├── [username]/following # Following list
-│   ├── [username]/lists    # Custom reading lists
+│   ├── [username]/lists    # Custom reading lists (create, fetch)
+│   ├── [username]/lists/[listId]/ # List operations (update, delete)
+│   ├── [username]/lists/[listId]/share # Share list with followers
+│   ├── [username]/lists/[listId]/save # Save/remove list
 │   ├── [username]/activities/check-new # Check for new friend activities
+│   ├── [username]/activities/following # Get activities from followed users
 │   ├── register            # User registration
 │   ├── search              # User search
 │   └── check-username      # Username availability check
@@ -361,9 +365,17 @@ We use a **hybrid state management approach**:
 
 **Profile Sections**:
 - **Profile Summary**: Avatar, username, name, bio, pronouns, follower/following counts
-- **Dock Navigation**: Tabs for Bookshelf, Likes, To-Be-Read, Lists, Authors
+- **Dock Navigation**: Tabs for Bookshelf, Diary, Authors, Lists, To-Be-Read, Likes
 - **Owner-Specific Content**: "Your saved ideas" vs "{username}'s saved ideas" based on profile ownership
 - **Edit Profile**: Side sheet modal with comprehensive form (username, bio, gender, pronouns, birthday, links)
+
+**Consistent Grid Layouts & Pagination**:
+- **Bookshelf**: 3-column grid with pagination, clickable books that navigate to book detail pages
+- **Diary**: 3x5 grid (15 entries per page) with pagination, no cover images, clean entry display
+- **Authors**: 3-column grid with pagination, each card displays a 3-book cover grid (with gray placeholders for missing books), clickable to open author dialog
+- **Lists**: 3-column grid with pagination, each list card shows a 3-book cover grid (with gray placeholders), clickable to navigate to list detail page
+- **To-Be-Read**: Same 3-column grid design as Bookshelf, clickable books
+- **Likes**: Same 3-column grid design as Bookshelf, clickable books
 
 **Data Fetching**:
 - Server-side fetch for initial load (SEO-friendly)
@@ -373,9 +385,10 @@ We use a **hybrid state management approach**:
 ### Book Management
 
 **Collections**:
-- **Bookshelf**: Books marked as "read" (3x4 grid with pagination, sorted by most recently finished)
-- **Likes**: Books marked as "liked" (same grid format)
-- **To-Be-Read**: Books marked as "pending" (labeled "The procrastination wall")
+- **Bookshelf**: Books marked as "read" (3-column grid with pagination, sorted by most recently finished, clickable to navigate to book detail pages)
+- **Likes**: Books marked as "liked" (3-column grid with pagination, clickable to navigate to book detail pages)
+- **To-Be-Read**: Books marked as "pending" (3-column grid with pagination, labeled "The procrastination wall", clickable to navigate to book detail pages)
+- **Diary**: Reading diary entries (3x5 grid, 15 entries per page, clean display without cover images)
 
 **Search Integration**:
 - Hybrid search: MongoDB database first, Google Books API fallback
@@ -403,18 +416,46 @@ We use a **hybrid state management approach**:
 - Follower/following counts displayed on profiles
 - Clickable counts open dialog showing user lists
 - Follow/unfollow button on other users' profiles
+- Share lists directly with followers via share modal
+
+**Author Discovery**:
+- **Author Section**: Displays all authors from user's bookshelf in a 3-column grid
+- **Author Cards**: Show 3-book cover grid (with gray placeholders), author name, and read/TBR counts
+- **Author Dialog**: Clicking an author opens a dialog (not a separate page) showing:
+  - Author name as header
+  - All books read by that author from the user's bookshelf
+  - Responsive grid layout (2-6 columns based on screen size)
+  - Clickable book covers that navigate to book detail pages
 
 **Activity Feed**:
 - Dedicated `/activity` page for logged-in user's activity
-- Tracks book additions, list creations, profile updates
+- Tracks book additions, list creations, profile updates, list shares
 - Filterable by "Friends" and "Me"
-- Real-time activity indicator in header when new friend activities are available
+- Real-time activity indicator in header ("Updates" button) when new friend activities are available
+- Activity format: `[username] [action] [bookname]` for clear readability
+- Clickable activities that navigate to relevant content (e.g., shared lists)
 
 **Reading Lists**:
-- Custom lists with name, cover image, description
-- Book count and last updated timestamp displayed
-- Dropdown menu for editing (name, cover) or deleting
-- Carousel layout similar to Pinterest-style boards
+- **List Creation**: Pinterest-style modal for creating new lists with title, description, secret/group options
+- **List Detail Pages**: Full-featured list pages (`/u/[username]/lists/[listId]`) with:
+  - Book search modal for adding books to lists
+  - Book removal functionality (cross button on hover)
+  - Share functionality with followers and social media options
+  - Save/Remove list functionality for other users
+  - Edit details and delete list options (for list owners)
+- **List Cards**: 3-column grid layout in profile dock, each card displays:
+  - 3-book cover grid (with gray placeholders if fewer than 3 books)
+  - List title, description, book count, and last updated timestamp
+  - Clickable to navigate to list detail page
+- **List Sharing**: 
+  - Share lists with specific followers via share modal
+  - Shared lists appear as notifications in recipient's "Updates" section
+  - Recipients can save shared lists to their own profile
+  - Saved lists retain original creator's username
+- **List Management**:
+  - Edit list details (title, description, secret/group settings)
+  - Delete lists with confirmation (removes from owner and all saved instances)
+  - View-only access for saved lists (no editing permissions)
 
 ### Recommendation System
 
@@ -524,6 +565,9 @@ paperboxd/
 │   ├── api/                      # API Routes (Server-side)
 │   │   ├── auth/                 # NextAuth routes
 │   │   ├── users/                # User CRUD & social features
+│   │   │   ├── [username]/lists/ # List CRUD, sharing, saving
+│   │   │   ├── [username]/activities/ # Activity feed & following activities
+│   │   │   └── [username]/following # Following list management
 │   │   ├── books/                # Book search, details, carousels
 │   │   ├── authors/              # Author search
 │   │   ├── onboarding/           # Onboarding questionnaire
@@ -532,6 +576,7 @@ paperboxd/
 │   │   ├── newsletter/           # Newsletter subscription
 │   │   └── cleanup/              # Data cleanup endpoints
 │   ├── u/[username]/             # Dynamic user profile pages
+│   │   └── lists/[listId]/       # List detail pages
 │   ├── b/[slug]/                 # Book detail pages with carousels
 │   ├── profile/                  # Profile redirect (auth check)
 │   ├── choose-username/          # Username selection page
