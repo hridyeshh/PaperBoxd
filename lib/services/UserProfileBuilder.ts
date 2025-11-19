@@ -38,14 +38,29 @@ export class UserProfileBuilder {
     const readingVelocity = this.calculateReadingVelocity(user);
 
     // Update preference document
-    preference.implicitPreferences = {
-      genreWeights,
-      authorWeights,
-      avgPageLength,
-      diversityScore,
-      readingVelocity,
-      lastComputed: new Date(),
-    };
+    // Convert Maps to plain objects for Mongoose Schema.Types.Map
+    const genreWeightsObj: Record<string, number> = {};
+    genreWeights.forEach((value, key) => {
+      genreWeightsObj[key] = value;
+    });
+    
+    const authorWeightsObj: Record<string, number> = {};
+    authorWeights.forEach((value, key) => {
+      authorWeightsObj[key] = value;
+    });
+    
+    // Set as plain objects - Mongoose will handle conversion to Map
+    preference.implicitPreferences.genreWeights = genreWeightsObj as any;
+    preference.implicitPreferences.authorWeights = authorWeightsObj as any;
+    preference.implicitPreferences.avgPageLength = avgPageLength;
+    preference.implicitPreferences.diversityScore = diversityScore;
+    preference.implicitPreferences.readingVelocity = readingVelocity;
+    preference.implicitPreferences.lastComputed = new Date();
+    
+    // Mark Maps as modified so Mongoose saves them correctly
+    preference.markModified('implicitPreferences.genreWeights');
+    preference.markModified('implicitPreferences.authorWeights');
+    preference.markModified('implicitPreferences');
 
     await preference.save();
 
@@ -308,8 +323,10 @@ export class UserProfileBuilder {
     weight: number
   ): void {
     for (const author of authors) {
-      const currentWeight = authorWeights.get(author) || 0;
-      authorWeights.set(author, currentWeight + weight);
+      // Sanitize author name to remove characters that are invalid in MongoDB keys
+      const sanitizedAuthor = author.replace(/\./g, '');
+      const currentWeight = authorWeights.get(sanitizedAuthor) || 0;
+      authorWeights.set(sanitizedAuthor, currentWeight + weight);
     }
   }
 
@@ -391,17 +408,34 @@ export class UserProfileBuilder {
 
     const authorWeights = new Map<string, number>();
     for (const author of onboardingAuthors) {
-      authorWeights.set(author, 2.0); // Strong initial signal
+      // Sanitize author name to remove characters that are invalid in MongoDB keys
+      const sanitizedAuthor = author.replace(/\./g, '');
+      authorWeights.set(sanitizedAuthor, 2.0); // Strong initial signal
     }
 
-    preference.implicitPreferences = {
-      genreWeights,
-      authorWeights,
-      avgPageLength: 350, // Default
-      diversityScore: 0.5, // Neutral
-      readingVelocity: 2, // Assume 2 books per month initially
-      lastComputed: new Date(),
-    };
+    // Convert Maps to plain objects for Mongoose Schema.Types.Map
+    const genreWeightsObj: Record<string, number> = {};
+    genreWeights.forEach((value, key) => {
+      genreWeightsObj[key] = value;
+    });
+    
+    const authorWeightsObj: Record<string, number> = {};
+    authorWeights.forEach((value, key) => {
+      authorWeightsObj[key] = value;
+    });
+    
+    // Set as plain objects - Mongoose will handle conversion to Map
+    preference.implicitPreferences.genreWeights = genreWeightsObj as any;
+    preference.implicitPreferences.authorWeights = authorWeightsObj as any;
+    preference.implicitPreferences.avgPageLength = 350; // Default
+    preference.implicitPreferences.diversityScore = 0.5; // Neutral
+    preference.implicitPreferences.readingVelocity = 2; // Assume 2 books per month initially
+    preference.implicitPreferences.lastComputed = new Date();
+    
+    // Mark Maps as modified so Mongoose saves them correctly
+    preference.markModified('implicitPreferences.genreWeights');
+    preference.markModified('implicitPreferences.authorWeights');
+    preference.markModified('implicitPreferences');
 
     await preference.save();
 
@@ -448,16 +482,36 @@ export class UserProfileBuilder {
 
     // Update genre weights
     if (book.volumeInfo.categories) {
-      const genreWeights = preference.implicitPreferences.genreWeights;
+      // Ensure we have a Map to work with
+      let genreWeights = preference.implicitPreferences.genreWeights;
+      if (!(genreWeights instanceof Map)) {
+        genreWeights = new Map(Object.entries(genreWeights || {}));
+      }
       this.addGenreWeight(genreWeights, book.volumeInfo.categories, weight);
-      preference.implicitPreferences.genreWeights = genreWeights;
+      // Convert Map to plain object for Mongoose
+      const genreWeightsObj: Record<string, number> = {};
+      genreWeights.forEach((value, key) => {
+        genreWeightsObj[key] = value;
+      });
+      preference.implicitPreferences.genreWeights = genreWeightsObj as any;
+      preference.markModified('implicitPreferences.genreWeights');
     }
 
     // Update author weights
     if (book.volumeInfo.authors) {
-      const authorWeights = preference.implicitPreferences.authorWeights;
+      // Ensure we have a Map to work with
+      let authorWeights = preference.implicitPreferences.authorWeights;
+      if (!(authorWeights instanceof Map)) {
+        authorWeights = new Map(Object.entries(authorWeights || {}));
+      }
       this.addAuthorWeight(authorWeights, book.volumeInfo.authors, weight);
-      preference.implicitPreferences.authorWeights = authorWeights;
+      // Convert Map to plain object for Mongoose
+      const authorWeightsObj: Record<string, number> = {};
+      authorWeights.forEach((value, key) => {
+        authorWeightsObj[key] = value;
+      });
+      preference.implicitPreferences.authorWeights = authorWeightsObj as any;
+      preference.markModified('implicitPreferences.authorWeights');
     }
 
     preference.implicitPreferences.lastComputed = new Date();

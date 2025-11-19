@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import React from "react";
-import { ChevronDown, Grid2x2PlusIcon, MenuIcon, SearchIcon, LinkIcon, QrCodeIcon, Trash2 } from "lucide-react";
+import { ChevronDown, Grid2x2PlusIcon, MenuIcon, SearchIcon, LinkIcon, Trash2 } from "lucide-react";
 import TetrisLoading from "@/components/ui/tetris-loader";
 import { useSession } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
@@ -16,6 +16,7 @@ import { Dropdown } from "@/components/ui/dropdown";
 import { signOut } from "@/lib/auth-client";
 import { DeleteAccountDialog } from "@/components/ui/delete-account-dialog";
 import { GeneralDiaryEditorDialog } from "@/components/ui/general-diary-editor-dialog";
+import { toast } from "sonner";
 
 // Links will be dynamic based on authentication status
 // We'll handle Activity link specially in the component
@@ -363,7 +364,7 @@ export function Header({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                router.push("/books");
+                router.push("/feed");
               }}
               className={buttonVariants({
                 variant: "ghost",
@@ -464,8 +465,23 @@ export function Header({
                 </Dropdown.Trigger>
                 <Dropdown.Popover>
                   <Dropdown.Menu>
-                    <Dropdown.Item label="Share profile link" icon={LinkIcon} />
-                    <Dropdown.Item label="Show QR code" icon={QrCodeIcon} />
+                    <Dropdown.Item 
+                      label="Share profile link" 
+                      icon={LinkIcon}
+                      onClick={async () => {
+                        if (session?.user?.username) {
+                          const profileUrl = `${window.location.origin}/u/${session.user.username}`;
+                          try {
+                            await navigator.clipboard.writeText(profileUrl);
+                            toast.success('Profile link copied to clipboard!');
+                          } catch (err) {
+                            console.error('Failed to copy profile link:', err);
+                            toast.error('Failed to copy profile link');
+                          }
+                        }
+                        setInternalProfileMenuOpen(false);
+                      }}
+                    />
                     <Dropdown.Separator />
                     <Dropdown.Item 
                       label="Delete account" 
@@ -546,7 +562,7 @@ export function Header({
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    router.push("/books");
+                    router.push("/feed");
                     setOpen(false);
                   }}
                   className={buttonVariants({

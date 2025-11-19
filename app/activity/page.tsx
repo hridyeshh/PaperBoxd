@@ -9,6 +9,9 @@ import { useRouter } from "next/navigation";
 import { Header } from "@/components/ui/layout/header-with-search";
 import TetrisLoading from "@/components/ui/tetris-loader";
 import { DiaryEntryDialog } from "@/components/ui/diary-entry-dialog";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { createBookSlug } from "@/lib/utils/book-slug";
 import {
   Pagination,
   PaginationContent,
@@ -30,7 +33,7 @@ type ActivityEntry = {
   timeAgo: string;
   cover: string | null;
   bookTitle?: string | null;
-  type?: string; // Activity type: "diary_entry", "read", "rated", "shared_list", etc.
+  type?: string; // Activity type: "diary_entry", "read", "rated", "shared_list", "collaboration_request", etc.
   diaryEntryId?: string; // For diary entries
   bookId?: string | null; // For diary entries
   bookAuthor?: string | null; // For diary entries
@@ -40,9 +43,10 @@ type ActivityEntry = {
   isLiked?: boolean; // For diary entries
   likesCount?: number; // For diary entries
   isGeneralEntry?: boolean; // For general diary entries (no book)
-  listId?: string; // For shared_list activities
-  sharedByUsername?: string; // For shared_list activities
-  listBooksCount?: number; // For shared_list activities
+  listId?: string; // For shared_list, collaboration_request, and granted_access activities
+  listTitle?: string; // For granted_access activities
+  sharedByUsername?: string; // For shared_list, collaboration_request, and granted_access activities
+  listBooksCount?: number; // For shared_list and collaboration_request activities
 };
 
 const ACTIVITY_PAGE_SIZE = 10;
@@ -61,6 +65,7 @@ export default function ActivityPage() {
   const [hasFriendsActivities, setHasFriendsActivities] = React.useState(false);
   const [selectedDiaryEntry, setSelectedDiaryEntry] = React.useState<any | null>(null);
   const [selectedDiaryEntryUsername, setSelectedDiaryEntryUsername] = React.useState<string | null>(null);
+  const [processingRequest, setProcessingRequest] = React.useState<string | null>(null);
 
   // Redirect if not authenticated
   React.useEffect(() => {
@@ -143,6 +148,15 @@ export default function ActivityPage() {
     } else if (activity.type === "shared_list") {
       action = "shared their list";
       bookTitle = activity.listTitle;
+    } else if (activity.type === "shared_book") {
+      action = "shared";
+      // bookTitle is already set from the activity
+    } else if (activity.type === "collaboration_request") {
+      action = "invited you to collaborate on";
+      bookTitle = activity.listTitle;
+    } else if (activity.type === "granted_access") {
+      action = "granted access to";
+      bookTitle = activity.listTitle;
     } else {
       console.warn(`Unknown activity type: "${activity.type}"`);
     }
@@ -188,10 +202,10 @@ export default function ActivityPage() {
                   action,
                   detail: activity.isGeneralEntry 
                     ? (activity.subject && activity.subject.trim() ? activity.subject : "a diary entry")
-                    : (activity.type === "shared_list" ? activity.listTitle : bookTitle),
-                  bookTitle: activity.type === "shared_list" ? activity.listTitle : bookTitle,
+                    : (activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? activity.listTitle : bookTitle),
+                  bookTitle: activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? activity.listTitle : bookTitle,
                   timeAgo: formatTimeAgo(activity.timestamp),
-                  cover: activity.type === "shared_list" 
+                  cover: activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access"
                     ? (activity.listCover || "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80")
                     : (activity.bookCover || (activity.isGeneralEntry ? null : "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80")),
                 type: activity.type,
@@ -210,11 +224,19 @@ export default function ActivityPage() {
                 baseEntry.isGeneralEntry = activity.isGeneralEntry;
               }
               
-              // Add shared list specific fields
-              if (activity.type === "shared_list") {
+              // Add shared list and collaboration request specific fields
+              if (activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access") {
                 baseEntry.listId = activity.listId;
+                baseEntry.listTitle = activity.listTitle;
                 baseEntry.sharedByUsername = activity.sharedByUsername;
-                baseEntry.listBooksCount = activity.listBooksCount;
+                if (activity.type !== "granted_access") {
+                  baseEntry.listBooksCount = activity.listBooksCount;
+                }
+              }
+              
+              // Add shared book specific fields
+              if (activity.type === "shared_book") {
+                baseEntry.bookId = activity.bookId;
               }
               
               return baseEntry;
@@ -261,6 +283,103 @@ export default function ActivityPage() {
         console.error("Failed to fetch friends activities count:", error);
       });
   }, [isAuthenticated, session?.user?.username]);
+
+  // Handle collaboration request accept/reject
+  const handleCollaborationRequest = async (entry: ActivityEntry, action: "accept" | "reject") => {
+    if (!entry.listId || !entry.sharedByUsername || !session?.user?.username) return;
+
+    setProcessingRequest(entry.id);
+    try {
+      const response = await fetch(
+        `/api/users/${encodeURIComponent(entry.sharedByUsername)}/lists/${encodeURIComponent(entry.listId)}/collaborate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action,
+            activityId: entry.id,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || `Failed to ${action} collaboration request`);
+      }
+
+      toast.success(`Collaboration request ${action}ed successfully`);
+      
+      // Remove the activity from the list
+      setActivities(activities.filter(a => a.id !== entry.id));
+      
+      // Refresh activities
+      if (session?.user?.username) {
+        const username = session.user.username;
+        fetch(`/api/users/${encodeURIComponent(username)}/activities/following?page=${currentPage}&pageSize=${ACTIVITY_PAGE_SIZE}`)
+          .then((res) => res.json())
+          .then((data) => {
+            const transformedActivities: ActivityEntry[] = Array.isArray(data.activities)
+              ? data.activities.map((activity: any, idx: number) => {
+                  const { action, bookTitle } = formatActivity(activity);
+                  const baseEntry: ActivityEntry = {
+                    id: activity._id?.toString() || `activity-${idx}`,
+                    name: activity.userName || activity.username || "User",
+                    username: activity.username,
+                    userAvatar: activity.userAvatar,
+                    action,
+                    detail: activity.isGeneralEntry 
+                      ? (activity.subject && activity.subject.trim() ? activity.subject : "a diary entry")
+                      : (activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? activity.listTitle : bookTitle),
+                    bookTitle: activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? activity.listTitle : bookTitle,
+                    timeAgo: formatTimeAgo(activity.timestamp),
+                    cover: activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access"
+                      ? (activity.listCover || "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80")
+                      : (activity.bookCover || (activity.isGeneralEntry ? null : "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80")),
+                    type: activity.type,
+                  };
+                  
+                  if (activity.type === "diary_entry") {
+                    baseEntry.diaryEntryId = activity.diaryEntryId;
+                    baseEntry.bookId = activity.bookId;
+                    baseEntry.bookAuthor = activity.bookAuthor;
+                    baseEntry.content = activity.content;
+                    baseEntry.createdAt = activity.createdAt;
+                    baseEntry.updatedAt = activity.updatedAt;
+                    baseEntry.isLiked = activity.isLiked;
+                    baseEntry.likesCount = activity.likesCount;
+                    baseEntry.isGeneralEntry = activity.isGeneralEntry;
+                  }
+                  
+                  if (activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access") {
+                    baseEntry.listId = activity.listId;
+                    baseEntry.listTitle = activity.listTitle;
+                    baseEntry.sharedByUsername = activity.sharedByUsername;
+                    if (activity.type !== "granted_access") {
+                      baseEntry.listBooksCount = activity.listBooksCount;
+                    }
+                  }
+                  
+                  if (activity.type === "shared_book") {
+                    baseEntry.bookId = activity.bookId;
+                  }
+                  
+                  return baseEntry;
+                })
+              : [];
+            setActivities(transformedActivities);
+            setTotalPages(data.totalPages || 1);
+          })
+          .catch((error) => {
+            console.error("Failed to refresh activities:", error);
+          });
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing collaboration request:`, error);
+      toast.error(error instanceof Error ? error.message : `Failed to ${action} collaboration request`);
+    } finally {
+      setProcessingRequest(null);
+    }
+  };
 
   // Removed view switching logic
 
@@ -324,13 +443,39 @@ export default function ActivityPage() {
                         });
                         setSelectedDiaryEntryUsername(entry.username || null);
                       }
-                      // If it's a shared list, navigate to the list
-                      else if (entry.type === "shared_list" && entry.listId && entry.sharedByUsername) {
+                      // If it's a shared list or granted access, navigate to the list
+                      else if ((entry.type === "shared_list" || entry.type === "granted_access") && entry.listId && entry.sharedByUsername) {
                         router.push(`/u/${entry.sharedByUsername}/lists/${entry.listId}`);
                       }
+                      // If it's a shared book, navigate to the book page
+                      else if (entry.type === "shared_book" && entry.bookId) {
+                        try {
+                          const bookId = entry.bookId.toString();
+                          // Check if it's an ISBN (10 or 13 digits)
+                          const isISBN = /^(\d{10}|\d{13})$/.test(bookId);
+                          // Check if it's an Open Library ID
+                          const isOpenLibraryId = bookId.startsWith("OL") || bookId.startsWith("/works/");
+                          // Check if it's a MongoDB ObjectId (24 hex characters)
+                          const isMongoObjectId = /^[0-9a-fA-F]{24}$/.test(bookId);
+                          // Check if it's a valid ID format (alphanumeric, no spaces, no +)
+                          const isValidId = /^[a-zA-Z0-9_-]+$/.test(bookId) && !bookId.includes(" ") && !bookId.includes("+");
+                          
+                          // Use ID directly if it's a recognized format
+                          if (isISBN || isOpenLibraryId || isMongoObjectId || isValidId) {
+                            router.push(`/b/${bookId}`);
+                          } else {
+                            // Create slug from title for unrecognized formats
+                            const slug = createBookSlug(entry.bookTitle || "Book", undefined, bookId);
+                            router.push(`/b/${slug}`);
+                          }
+                        } catch (error) {
+                          console.error("Error navigating to book:", error);
+                        }
+                      }
+                      // Don't navigate for collaboration requests - they have buttons
                     }}
                     className={`flex gap-4 rounded-3xl border border-border/70 bg-background/90 p-4 shadow-sm transition hover:-translate-y-1 ${
-                      (entry.type === "diary_entry" || entry.type === "shared_list") ? "cursor-pointer" : ""
+                      (entry.type === "diary_entry" || entry.type === "shared_list" || entry.type === "shared_book" || entry.type === "granted_access") ? "cursor-pointer" : ""
                     }`}
                   >
                     {/* Show profile picture of the person who did the activity */}
@@ -354,15 +499,42 @@ export default function ActivityPage() {
                         {entry.detail && (
                           <span className="font-medium text-muted-foreground">{entry.detail}</span>
                         )}
-                        {entry.type === "shared_list" && entry.listBooksCount !== undefined && (
+                        {(entry.type === "shared_list" || entry.type === "collaboration_request") && entry.listBooksCount !== undefined && (
                           <span className="text-sm text-muted-foreground ml-1">
                             ({entry.listBooksCount} {entry.listBooksCount === 1 ? "book" : "books"})
                           </span>
                         )}
                       </p>
+                      {/* Accept/Reject buttons for collaboration requests */}
+                      {entry.type === "collaboration_request" && (
+                        <div className="flex gap-2 mt-2">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCollaborationRequest(entry, "accept");
+                            }}
+                            disabled={processingRequest === entry.id}
+                          >
+                            {processingRequest === entry.id ? "Processing..." : "Accept"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCollaborationRequest(entry, "reject");
+                            }}
+                            disabled={processingRequest === entry.id}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                    {/* Show cover for shared lists */}
-                    {entry.type === "shared_list" && entry.cover && (
+                    {/* Show cover for shared lists and collaboration requests */}
+                    {(entry.type === "shared_list" || entry.type === "collaboration_request") && entry.cover && (
                       <div className="relative h-16 w-12 flex-shrink-0 overflow-hidden rounded-lg">
                         <Image
                           src={entry.cover}
@@ -454,13 +626,18 @@ export default function ActivityPage() {
                           username: activity.username,
                           userAvatar: activity.userAvatar,
                           action,
-                          detail: activity.isGeneralEntry ? "a diary entry" : bookTitle,
-                          bookTitle,
+                          detail: activity.isGeneralEntry 
+                            ? (activity.subject && activity.subject.trim() ? activity.subject : "a diary entry")
+                            : (activity.type === "shared_list" || activity.type === "collaboration_request" ? activity.listTitle : bookTitle),
+                          bookTitle: activity.type === "shared_list" || activity.type === "collaboration_request" ? activity.listTitle : bookTitle,
                           timeAgo: formatTimeAgo(activity.timestamp),
-                          cover: activity.bookCover || (activity.isGeneralEntry ? null : "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80"),
+                          cover: activity.type === "shared_list" || activity.type === "collaboration_request"
+                            ? (activity.listCover || "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80")
+                            : (activity.bookCover || (activity.isGeneralEntry ? null : "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80")),
                           type: activity.type,
                         };
                         
+                        // Add diary entry specific fields if it's a diary entry
                         if (activity.type === "diary_entry") {
                           baseEntry.diaryEntryId = activity.diaryEntryId;
                           baseEntry.bookId = activity.bookId;
@@ -471,6 +648,17 @@ export default function ActivityPage() {
                           baseEntry.isLiked = activity.isLiked;
                           baseEntry.likesCount = activity.likesCount;
                           baseEntry.isGeneralEntry = activity.isGeneralEntry;
+                        }
+                        
+                        // Add shared list and collaboration request specific fields
+                        if (activity.type === "shared_list" || activity.type === "collaboration_request") {
+                          baseEntry.listId = activity.listId;
+                          baseEntry.sharedByUsername = activity.sharedByUsername;
+                          baseEntry.listBooksCount = activity.listBooksCount;
+                        }
+                        
+                        if (activity.type === "shared_book") {
+                          baseEntry.bookId = activity.bookId;
                         }
                         
                         return baseEntry;

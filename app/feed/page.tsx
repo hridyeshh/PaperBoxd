@@ -28,6 +28,8 @@ type Book = {
   cover: string;
   isbn?: string;
   isbn13?: string;
+  openLibraryId?: string;
+  isbndbId?: string;
   averageRating?: number;
   ratingsCount?: number;
   pageCount?: number;

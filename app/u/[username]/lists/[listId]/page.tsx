@@ -38,6 +38,7 @@ interface ReadingList {
   books: Book[];
   booksCount: number;
   isPublic: boolean;
+  allowedUsers?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -52,6 +53,7 @@ export default function ListDetailPage() {
   const [list, setList] = React.useState<ReadingList | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [isPrivateList, setIsPrivateList] = React.useState(false);
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [searchResults, setSearchResults] = React.useState<any[]>([]);
@@ -61,6 +63,9 @@ export default function ListDetailPage() {
   const [following, setFollowing] = React.useState<any[]>([]);
   const [isLoadingFollowing, setIsLoadingFollowing] = React.useState(false);
   const [shareSearchQuery, setShareSearchQuery] = React.useState("");
+  const [allowedUsers, setAllowedUsers] = React.useState<any[]>([]);
+  const [isLoadingAllowedUsers, setIsLoadingAllowedUsers] = React.useState(false);
+  const [isGrantingAccess, setIsGrantingAccess] = React.useState(false);
   const [isSavingList, setIsSavingList] = React.useState(false);
   const [isListSaved, setIsListSaved] = React.useState(false);
   const [savedListId, setSavedListId] = React.useState<string | null>(null);
@@ -174,9 +179,20 @@ export default function ListDetailPage() {
         if (!response.ok) {
           if (response.status === 404) {
             setError("List not found");
+            setIsPrivateList(false);
+          } else if (response.status === 403) {
+            const errorData = await response.json().catch(() => ({}));
+            if (errorData.isPrivate) {
+              setIsPrivateList(true);
+              setError(null); // Don't show error, show private message instead
+            } else {
+              setError(errorData.error || "Access denied");
+              setIsPrivateList(false);
+            }
           } else {
             const errorData = await response.json().catch(() => ({}));
             setError(errorData.error || "Failed to load list");
+            setIsPrivateList(false);
           }
           setLoading(false);
           return;
@@ -187,8 +203,10 @@ export default function ListDetailPage() {
         
         if (data.list) {
           setList(data.list);
+          setIsPrivateList(false);
         } else {
           setError("Invalid response from server");
+          setIsPrivateList(false);
         }
       } catch (err) {
         if (!isMounted) return;
@@ -221,21 +239,36 @@ export default function ListDetailPage() {
     const listTitle = list?.title;
     const listDescription = list?.description;
 
-    if (!sessionUsername || !listId || !listTitle) return;
+    if (!sessionUsername || !listId || !listTitle) {
+      setIsListSaved(false);
+      setSavedListId(null);
+      return;
+    }
 
     const currentIsOwnList = sessionUsername === username;
     const currentIsSavedList = listDescription?.includes("from @") || false;
 
-    // If viewing own saved list, it's already saved
+    // If viewing own list that you saved from someone else, it's already saved
     if (currentIsOwnList && currentIsSavedList) {
       setIsListSaved(true);
       setSavedListId(listId);
       return;
     }
 
+    // If viewing your own list that you created (not saved), it's not saved
+    if (currentIsOwnList && !currentIsSavedList) {
+      setIsListSaved(false);
+      setSavedListId(null);
+      return;
+    }
+
     // If viewing someone else's list, check if it's saved
     const currentIsSharedList = !currentIsOwnList && sessionUsername;
-    if (!currentIsSharedList) return;
+    if (!currentIsSharedList) {
+      setIsListSaved(false);
+      setSavedListId(null);
+      return;
+    }
 
     let isMounted = true;
 
@@ -246,7 +279,13 @@ export default function ListDetailPage() {
 
         if (response.ok) {
           const data = await response.json().catch(() => ({}));
-          if (!isMounted || !data.lists) return;
+          if (!isMounted || !data.lists) {
+            if (isMounted) {
+              setIsListSaved(false);
+              setSavedListId(null);
+            }
+            return;
+          }
 
           // Find if user has a saved list with matching title and "from @username" in description
           const savedList = data.lists.find((l: any) => 
@@ -257,22 +296,35 @@ export default function ListDetailPage() {
           if (savedList) {
             setIsListSaved(true);
             setSavedListId(savedList.id);
+          } else {
+            setIsListSaved(false);
+            setSavedListId(null);
+          }
+        } else {
+          if (isMounted) {
+            setIsListSaved(false);
+            setSavedListId(null);
           }
         }
       } catch (err) {
         if (!isMounted) return;
         console.error("Error checking if list is saved:", err);
+        setIsListSaved(false);
+        setSavedListId(null);
       }
     };
 
     checkIfSaved().catch((err) => {
       console.error("Unhandled error in checkIfSaved:", err);
+      setIsListSaved(false);
+      setSavedListId(null);
     });
 
     return () => {
       isMounted = false;
     };
   }, [session?.user?.username, list?.id, list?.title, list?.description, username]);
+
 
   // Debounced book search
   React.useEffect(() => {
@@ -421,6 +473,30 @@ export default function ListDetailPage() {
     }
   };
 
+  const fetchAllowedUsers = React.useCallback(async () => {
+    if (!username || !listId || !isOwnList || list?.isPublic !== false) return;
+
+    setIsLoadingAllowedUsers(true);
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(username)}/lists/${listId}/access`);
+      if (response.ok) {
+        const data = await response.json();
+        setAllowedUsers(data.allowedUsers || []);
+      }
+    } catch (err) {
+      console.error("Error fetching allowed users:", err);
+    } finally {
+      setIsLoadingAllowedUsers(false);
+    }
+  }, [username, listId, isOwnList, list?.isPublic]);
+
+  // Fetch allowed users when share modal opens for private lists
+  React.useEffect(() => {
+    if (isShareOpen && list?.isPublic === false && isOwnList) {
+      fetchAllowedUsers();
+    }
+  }, [isShareOpen, list?.isPublic, isOwnList, fetchAllowedUsers]);
+
   // Fetch following list when share modal opens
   React.useEffect(() => {
     if (isShareOpen && session?.user?.username) {
@@ -520,6 +596,12 @@ export default function ListDetailPage() {
   const handleSendToList = async (targetUsername: string) => {
     if (!username || !listId || !session?.user?.username) return;
 
+    // For private lists, grant access instead of sharing
+    if (list?.isPublic === false) {
+      await handleGrantAccess(targetUsername);
+      return;
+    }
+
     try {
       const response = await fetch(`/api/users/${encodeURIComponent(username)}/lists/${listId}/share`, {
         method: "POST",
@@ -545,6 +627,78 @@ export default function ListDetailPage() {
     } catch (err) {
       console.error("Error sharing list:", err);
       const errorMessage = err instanceof Error ? err.message : "Failed to share list";
+      toast.error(errorMessage);
+    }
+  };
+
+  const handleGrantAccess = async (targetUsername: string) => {
+    if (!username || !listId || !session?.user?.username) return;
+
+    setIsGrantingAccess(true);
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(username)}/lists/${listId}/access`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetUsername: targetUsername,
+          action: "grant",
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(`Access granted to @${targetUsername}!`);
+        // Refresh allowed users list
+        fetchAllowedUsers();
+      } else {
+        let error: any = {};
+        try {
+          const text = await response.text();
+          error = text ? JSON.parse(text) : {};
+        } catch (e) {
+          console.error("Failed to parse error response:", e);
+        }
+        toast.error(error.error || error.details || `Failed to grant access (${response.status})`);
+      }
+    } catch (err) {
+      console.error("Error granting access:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to grant access";
+      toast.error(errorMessage);
+    } finally {
+      setIsGrantingAccess(false);
+    }
+  };
+
+  const handleRevokeAccess = async (targetUsername: string) => {
+    if (!username || !listId || !session?.user?.username) return;
+
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(username)}/lists/${listId}/access`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetUsername: targetUsername,
+          action: "revoke",
+        }),
+      });
+
+      if (response.ok) {
+        toast.success(`Access revoked from @${targetUsername}`);
+        // Refresh allowed users list
+        fetchAllowedUsers();
+      } else {
+        let error: any = {};
+        try {
+          const text = await response.text();
+          error = text ? JSON.parse(text) : {};
+        } catch (e) {
+          console.error("Failed to parse error response:", e);
+        }
+        toast.error(error.error || error.details || `Failed to revoke access (${response.status})`);
+      }
+    } catch (err) {
+      console.error("Error revoking access:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to revoke access";
       toast.error(errorMessage);
     }
   };
@@ -627,6 +781,22 @@ export default function ListDetailPage() {
     );
   }
 
+  // Show private list message
+  if (isPrivateList) {
+    return (
+      <main className="min-h-screen bg-background">
+        <Header />
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 mt-16">
+          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+            <div className="max-w-md space-y-4">
+              <h1 className="text-2xl font-bold text-foreground">This list is private</h1>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   if (error || !list) {
     return <NotFoundPage />;
   }
@@ -670,7 +840,8 @@ export default function ListDetailPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              {(isSharedList || (isOwnList && isSavedList)) && (
+              {/* Show Save/Remove button for non-owners or saved lists */}
+              {((isSharedList && !isOwnList) || (isOwnList && isSavedList)) && (
                 <Button 
                   variant={isListSaved ? "outline" : "default"}
                   size="sm" 
@@ -684,10 +855,14 @@ export default function ListDetailPage() {
                   }
                 </Button>
               )}
-              <Button variant="outline" size="sm" onClick={() => setIsShareOpen(true)}>
-                <Share2 className="mr-2 h-4 w-4" />
-                Share
-              </Button>
+              {/* Show share button only for owners (for private lists, only owner can see/manage access) */}
+              {isOwnList && (
+                <Button variant="outline" size="sm" onClick={() => setIsShareOpen(true)}>
+                  <Share2 className="mr-2 h-4 w-4" />
+                  Share
+                </Button>
+              )}
+              {/* Show edit/delete dropdown only for owners */}
               {canEdit && (
                 <Dropdown.Root isOpen={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
                   <Dropdown.Trigger
@@ -853,16 +1028,19 @@ export default function ListDetailPage() {
           </>
         )}
 
-        {/* Share Modal */}
+        {/* Share/Access Modal */}
         <Dialog open={isShareOpen} onOpenChange={setIsShareOpen}>
           <DialogContent className="max-w-md max-h-[80vh] p-0 flex flex-col">
             <div className="p-6 flex flex-col min-w-0 flex-1 overflow-hidden">
               <DialogHeader className="flex-shrink-0">
-                <DialogTitle>Share</DialogTitle>
+                <DialogTitle>
+                  {list?.isPublic === false ? "Manage Access" : "Share"}
+                </DialogTitle>
               </DialogHeader>
 
-              {/* Quick Share Options */}
-              <div className="flex gap-4 mt-6 mb-6 justify-center">
+              {/* Quick Share Options - Only for public lists */}
+              {list?.isPublic !== false && (
+                <div className="flex gap-4 mt-6 mb-6 justify-center">
                 <button
                   onClick={handleCopyLink}
                   className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
@@ -917,6 +1095,62 @@ export default function ListDetailPage() {
                   <span className="text-xs text-muted-foreground">X</span>
                 </button>
               </div>
+              )}
+
+              {/* Show allowed users for private lists */}
+              {list?.isPublic === false && isOwnList && (
+                <>
+                  <div className="mt-4 mb-4">
+                    <h3 className="text-sm font-medium mb-2">Users with access</h3>
+                    {isLoadingAllowedUsers ? (
+                      <p className="text-sm text-muted-foreground">Loading...</p>
+                    ) : allowedUsers.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No users have access yet</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {allowedUsers.map((user: any) => (
+                          <div
+                            key={user.username}
+                            className="flex items-center justify-between p-2 rounded-lg bg-muted/50"
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className="relative h-8 w-8 rounded-full overflow-hidden bg-muted">
+                                {user.avatar ? (
+                                  <Image
+                                    src={user.avatar}
+                                    alt={user.name || user.username}
+                                    fill
+                                    className="object-cover"
+                                    sizes="32px"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-xs font-medium">
+                                    {(user.name || user.username)?.[0]?.toUpperCase() || "?"}
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium">@{user.username}</p>
+                                {user.name && (
+                                  <p className="text-xs text-muted-foreground">{user.name}</p>
+                                )}
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRevokeAccess(user.username)}
+                            >
+                              Revoke
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="border-t border-border my-4"></div>
+                </>
+              )}
 
               <div className="border-t border-border my-4"></div>
 
@@ -925,7 +1159,7 @@ export default function ListDetailPage() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
                   <Input
-                    placeholder="Search by name or email"
+                    placeholder={list?.isPublic === false ? "Search by username to grant access" : "Search by name or email"}
                     value={shareSearchQuery}
                     onChange={(e) => setShareSearchQuery(e.target.value)}
                     className="w-full !pl-10 pr-4 focus-visible:border-foreground dark:focus-visible:border-white"
@@ -990,9 +1224,25 @@ export default function ListDetailPage() {
                             variant="outline"
                             onClick={() => handleSendToList(user.username)}
                             className="flex-shrink-0"
+                            disabled={isGrantingAccess || (list?.isPublic === false && allowedUsers.some((u: any) => u.username === user.username))}
                           >
-                            <Send className="h-4 w-4 mr-1" />
-                            Send
+                            {list?.isPublic === false ? (
+                              <>
+                                {allowedUsers.some((u: any) => u.username === user.username) ? (
+                                  "Has Access"
+                                ) : (
+                                  <>
+                                    <Send className="h-4 w-4 mr-1" />
+                                    Grant Access
+                                  </>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <Send className="h-4 w-4 mr-1" />
+                                Send
+                              </>
+                            )}
                           </Button>
                         </div>
                       );
@@ -1007,6 +1257,9 @@ export default function ListDetailPage() {
         {/* Edit List Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="max-w-md p-0 sm:rounded-2xl">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Edit list details</DialogTitle>
+            </DialogHeader>
             <div className="p-6">
               {/* List Image Placeholder */}
               <div className="mt-6 mb-6">
@@ -1050,7 +1303,7 @@ export default function ListDetailPage() {
                       Make this list secret
                     </Label>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Only you and collaborators will see this list
+                      Only people you share the link with can see this list
                     </p>
                   </div>
                   <Switch

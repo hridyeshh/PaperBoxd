@@ -89,6 +89,7 @@ All data operations flow through well-defined RESTful API routes (`/app/api/*`),
 │   ├── [username]/lists/[listId]/ # List operations (update, delete)
 │   ├── [username]/lists/[listId]/share # Share list with followers
 │   ├── [username]/lists/[listId]/save # Save/remove list
+│   ├── [username]/lists/[listId]/access # Grant/revoke access to private lists
 │   ├── [username]/activities/check-new # Check for new friend activities
 │   ├── [username]/activities/following # Get activities from followed users
 │   ├── register            # User registration
@@ -96,6 +97,7 @@ All data operations flow through well-defined RESTful API routes (`/app/api/*`),
 │   └── check-username      # Username availability check
 ├── books/
 │   ├── [id]/               # Book details (with caching)
+│   ├── [id]/share          # Share book with followers
 │   ├── search              # Book search (hybrid: DB + Google Books)
 │   ├── public              # Public home page carousels (newly published, popular, trending)
 │   ├── personalized        # Personalized carousels for authenticated users
@@ -293,6 +295,10 @@ We use a **hybrid state management approach**:
 **Privacy**:
 - User data stored securely in MongoDB Atlas (encrypted at rest)
 - Avatar images stored separately (not in session cookies)
+- **Private Lists**: Users can create private lists that are only visible to:
+  - The list owner
+  - Users explicitly granted access by the owner
+  - Access is managed through username-based access control
 - Public/private profile toggle (currently all public, architecture supports private)
 - GDPR-ready architecture (users can request data deletion)
 
@@ -331,6 +337,7 @@ We use a **hybrid state management approach**:
 - **Framer Motion** - Animation library for smooth transitions
 - **Lucide React** - Icon library
 - **class-variance-authority** - Variant management for components
+- **Adobe Fonts** - Custom typography (CoFo Glassier, Helvetica, El Paso, Brooklyn Heritage Script)
 
 ### Data & Authentication
 - **MongoDB Atlas** - Cloud database (free tier: 512MB)
@@ -349,6 +356,9 @@ We use a **hybrid state management approach**:
 - **cmdk** - Command palette component
 - **react-aria-components** - Advanced accessibility components
 - **react-day-picker** - Date picker component
+- **@tiptap/react** - Rich text editor with full formatting capabilities
+- **@tiptap/starter-kit** - Essential Tiptap extensions
+- **@tiptap/extension-*** - Additional Tiptap extensions (underline, link, text-align, highlight, subscript, superscript)
 
 ### External APIs
 - **Google Books API** - Book metadata and search
@@ -366,8 +376,9 @@ We use a **hybrid state management approach**:
 **Profile Sections**:
 - **Profile Summary**: Avatar, username, name, bio, pronouns, follower/following counts
 - **Dock Navigation**: Tabs for Bookshelf, Diary, Authors, Lists, To-Be-Read, Likes
-- **Owner-Specific Content**: "Your saved ideas" vs "{username}'s saved ideas" based on profile ownership
+- **Owner-Specific Content**: "Your Library, organised" (owner) vs "{username}'s library" (others) with custom CoFo Glassier font
 - **Edit Profile**: Side sheet modal with comprehensive form (username, bio, gender, pronouns, birthday, links)
+- **Profile Link Sharing**: Copy profile link to clipboard from header dropdown menu
 
 **Consistent Grid Layouts & Pagination**:
 - **Bookshelf**: 3-column grid with pagination, clickable books that navigate to book detail pages
@@ -406,7 +417,13 @@ We use a **hybrid state management approach**:
 - **Home Page Carousels**: 
   - Public users: "Newly Published This Week", "People Love These", "Trending Now"
   - Authenticated users: Personalized carousels based on preferences, favorites, authors, genres, and friend activity
-- **Book Detail Page**: "Similar to [book]" and "More from [author]" carousels
+- **Book Detail Page** (`/b/[slug]`): 
+  - Enhanced description with timeline card styling and Helvetica font
+  - "Similar to [book]" and "More from [author]" carousels
+  - "Write about it" button with rich text editor for book-specific diary entries
+  - Share book functionality with followers
+  - Clean button styling (no borders) for Bookshelf, Like, and TBR actions
+- **Feed Page** (`/feed`): Main book discovery feed (renamed from `/books`)
 - **Recommendation System**: Sophisticated rule-based engine with multi-signal learning, friend-based recommendations, and diversity injection
 
 ### Social Features
@@ -429,33 +446,43 @@ We use a **hybrid state management approach**:
 
 **Activity Feed**:
 - Dedicated `/activity` page for logged-in user's activity
-- Tracks book additions, list creations, profile updates, list shares
+- Tracks book additions, list creations, profile updates, list shares, book shares, and granted access notifications
 - Filterable by "Friends" and "Me"
 - Real-time activity indicator in header ("Updates" button) when new friend activities are available
 - Activity format: `[username] [action] [bookname]` for clear readability
-- Clickable activities that navigate to relevant content (e.g., shared lists)
+- Clickable activities that navigate to relevant content (e.g., shared lists, shared books, granted access lists)
+- **Activity Types**:
+  - `shared_list`: When a follower shares a list with you
+  - `shared_book`: When a follower shares a book with you
+  - `granted_access`: When someone grants you access to their private list
 
 **Reading Lists**:
-- **List Creation**: Pinterest-style modal for creating new lists with title, description, secret/group options
+- **List Creation**: Pinterest-style modal for creating new lists with title, description, and privacy options
+  - **Private Lists**: "Make this list secret" toggle - only people with the shared link can see it
+  - **Access Management**: For private lists, owners can grant access to specific users by username
 - **List Detail Pages**: Full-featured list pages (`/u/[username]/lists/[listId]`) with:
   - Book search modal for adding books to lists
-  - Book removal functionality (cross button on hover)
-  - Share functionality with followers and social media options
-  - Save/Remove list functionality for other users
-  - Edit details and delete list options (for list owners)
+  - Book removal functionality (cross button on hover over book covers)
+  - **Public Lists**: Share functionality with followers and social media options
+  - **Private Lists**: "Manage Access" dialog to grant/revoke access to specific users
+  - Save/Remove list functionality for other users (toggles between "Save list" and "Remove" buttons)
+  - Edit details and delete list options (for list owners only)
+  - Private list access control: Non-owners see "This list is private" message if not granted access
 - **List Cards**: 3-column grid layout in profile dock, each card displays:
   - 3-book cover grid (with gray placeholders if fewer than 3 books)
   - List title, description, book count, and last updated timestamp
   - Clickable to navigate to list detail page
-- **List Sharing**: 
-  - Share lists with specific followers via share modal
-  - Shared lists appear as notifications in recipient's "Updates" section
+- **List Sharing & Access**:
+  - **Public Lists**: Share lists with specific followers via share modal
+  - **Private Lists**: Grant access to specific users by username (not traditional sharing)
+  - Shared lists and granted access appear as notifications in recipient's "Updates" section
   - Recipients can save shared lists to their own profile
-  - Saved lists retain original creator's username
+  - Saved lists retain original creator's username (displayed as clickable `@username`)
 - **List Management**:
-  - Edit list details (title, description, secret/group settings)
+  - Edit list details (title, description, privacy settings) via dropdown menu
   - Delete lists with confirmation (removes from owner and all saved instances)
   - View-only access for saved lists (no editing permissions)
+  - Access management for private lists (grant/revoke access to specific users)
 
 ### Recommendation System
 
@@ -527,6 +554,36 @@ We use a **hybrid state management approach**:
 - Essential cookies only (NextAuth session cookies)
 - GDPR-ready architecture
 
+### Rich Text Editor (Tiptap)
+
+**Full-Featured Text Editor**:
+- Comprehensive rich text editing powered by Tiptap
+- **Toolbar Features**:
+  - Text formatting: Bold, Italic, Underline, Strikethrough
+  - Headings: H1, H2, H3
+  - Lists: Bulleted and numbered lists
+  - Text alignment: Left, Center, Right
+  - Code blocks and inline code
+  - Blockquotes
+  - Text highlighting (multicolor)
+  - Subscript and superscript
+  - Undo/Redo functionality
+  - Custom link dialog (replaces browser prompt) - accepts any URL, auto-prepends `https://` if needed
+- **Usage**:
+  - **General Diary Entries**: "Write" button in header opens full-featured editor
+  - **Book-Specific Entries**: "Write about it" button on book detail pages opens editor with book context
+- **Accessibility**: Proper ARIA labels, keyboard navigation, and screen reader support
+- **Responsive**: Dropdown menus escape container boundaries for better UX
+
+### Book Sharing
+
+**Share Books with Followers**:
+- Share button on book detail pages opens share modal
+- Search and select followers to share with
+- Shared books appear as notifications in recipient's "Updates" section
+- Clickable notifications navigate to the shared book page
+- Activity format: `[username] shared [bookname]`
+
 ### Authentication Flow
 
 **Registration**:
@@ -582,7 +639,7 @@ paperboxd/
 │   ├── choose-username/          # Username selection page
 │   ├── onboarding/               # Onboarding questionnaire page
 │   ├── activity/                 # User activity feed
-│   ├── books/                    # Latest books page
+│   ├── feed/                     # Main book feed page (renamed from /books)
 │   ├── auth/                     # Authentication pages
 │   ├── layout.tsx                # Root layout (theme script, providers)
 │   ├── page.tsx                  # Homepage (public/authenticated)
@@ -607,6 +664,9 @@ paperboxd/
 │       ├── about-us-dialog.tsx           # About us dialog
 │       ├── signup-prompt-dialog.tsx      # Sign-up prompt for non-authenticated users
 │       ├── tetris-loader.tsx             # Tetris loading animation
+│       ├── tiptap-editor.tsx             # Rich text editor component
+│       ├── diary-editor-dialog.tsx       # Book-specific diary entry editor
+│       ├── general-diary-editor-dialog.tsx # General diary entry editor
 │       └── [primitives]/         # Base UI components
 │
 ├── lib/                          # Utilities & Configurations
@@ -705,6 +765,10 @@ paperboxd/
 
 - **Book Reviews**: Full review system with ratings (infrastructure in place)
 - **Recommendations**: ✅ Implemented - Sophisticated rule-based recommendation system with multi-signal learning
+- **Rich Text Editor**: ✅ Implemented - Full-featured Tiptap editor for diary entries
+- **Book Sharing**: ✅ Implemented - Share books with followers via activity feed
+- **Private Lists**: ✅ Implemented - Private lists with username-based access management
+- **Profile Link Sharing**: ✅ Implemented - Copy profile link to clipboard from header dropdown
 - **Social Groups**: Book clubs and reading groups
 - **Reading Challenges**: Annual/yearly reading goals
 - **Export Data**: Export reading history (CSV, JSON)

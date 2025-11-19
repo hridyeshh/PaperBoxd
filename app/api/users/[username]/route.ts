@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
 import Book from "@/lib/db/models/Book"; // Import Book model to register it with Mongoose
+import { auth } from "@/lib/auth";
 
 /**
  * Get user profile by username
@@ -24,6 +25,11 @@ export async function GET(
 
     // Connect to database
     await connectDB();
+
+    // Check authentication to determine if user is the owner
+    const session = await auth();
+    const currentUser = session?.user?.email ? await User.findOne({ email: session.user.email }).select("username").lean() : null;
+    const isOwner = currentUser?.username === username;
 
     // Find user by username with optional populate
     // IMPORTANT: Don't use .lean() yet - we need to check the raw Mongoose document first
@@ -142,7 +148,23 @@ export async function GET(
         likedBooks: Array.isArray(userPlain.likedBooks) ? userPlain.likedBooks : [],
         tbrBooks: Array.isArray(userPlain.tbrBooks) ? userPlain.tbrBooks : [],
         currentlyReading: Array.isArray(userPlain.currentlyReading) ? userPlain.currentlyReading : [],
-        readingLists: Array.isArray(userPlain.readingLists) ? userPlain.readingLists : [],
+        // Filter reading lists: if not owner, return public lists OR private lists the user has access to
+        readingLists: Array.isArray(userPlain.readingLists) 
+          ? (isOwner 
+              ? userPlain.readingLists 
+              : (() => {
+                  const currentUsername = currentUser?.username;
+                  return userPlain.readingLists.filter((list: any) => {
+                    // Include public lists
+                    if (list.isPublic !== false) return true;
+                    // Include private lists if user has been granted access
+                    if (currentUsername && Array.isArray(list.allowedUsers) && list.allowedUsers.includes(currentUsername)) {
+                      return true;
+                    }
+                    return false;
+                  });
+                })())
+          : [],
         diaryEntries: Array.isArray(userPlain.diaryEntries) ? userPlain.diaryEntries : [],
 
         // Social

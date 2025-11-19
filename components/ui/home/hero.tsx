@@ -16,7 +16,10 @@ function Hero({ showButton = true }: HeroProps) {
   const titles = useMemo(
     () => [
       "Save the books you've read", 
-      "Like the book", 
+      "Like the book",
+      "Follow your friends",
+      "Get book recommendations", 
+      "Share your lists",
       "Show off your taste", 
       "Share your collection"],
     [],
@@ -73,8 +76,11 @@ function Hero({ showButton = true }: HeroProps) {
               </span>
             </h1>
 
-            <p className="text-lg md:text-xl leading-relaxed tracking-tight text-muted-foreground max-w-2xl text-center">
-              PaperBoxd lets you save the books you've read
+            <p 
+              className="text-lg md:text-xl leading-relaxed tracking-tight text-muted-foreground max-w-2xl text-center"
+              style={{ fontFamily: '"El Paso", sans-serif' }}
+            >
+              Create lists, share books, add favourites, and much more on PaperBoxd.
             </p>
           </div>
           {showButton && (

@@ -1,6 +1,8 @@
 @import url("https://use.typekit.net/fabulosa.css");
 @import url("https://use.typekit.net/el-paso.css");
 @import url("https://use.typekit.net/brooklyn-heritage-script.css");
+@import url("https://use.typekit.net/cofo-glassier.css");
+@import url("https://use.typekit.net/helvetica.css");
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -138,5 +140,61 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  
+  /* Tiptap Editor Styles */
+  .ProseMirror {
+    outline: none;
+  }
+  
+  .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    color: hsl(var(--muted-foreground));
+    pointer-events: none;
+    height: 0;
+  }
+  
+  .ProseMirror-focused {
+    outline: none;
+  }
+  
+  /* Highlight extension */
+  .ProseMirror mark {
+    background-color: #fef08a;
+    border-radius: 0.25rem;
+    padding: 0.125rem 0;
+  }
+  
+  .dark .ProseMirror mark {
+    background-color: #713f12;
+  }
+  
+  /* Link styles */
+  .ProseMirror a {
+    color: hsl(var(--primary));
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  
+  .ProseMirror a:hover {
+    text-decoration: underline;
+  }
+  
+  /* Subscript and Superscript */
+  .ProseMirror sub,
+  .ProseMirror sup {
+    font-size: 0.75em;
+    line-height: 0;
+    position: relative;
+    vertical-align: baseline;
+  }
+  
+  .ProseMirror sub {
+    bottom: -0.25em;
+  }
+  
+  .ProseMirror sup {
+    top: -0.5em;
   }
 }

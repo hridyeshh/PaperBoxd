@@ -160,12 +160,159 @@ export async function GET(
 
     console.log(`[DEBUG ${username}] After adding shared_list: allActivities.length = ${allActivities.length}, shared_list count = ${allActivities.filter((a: any) => a.type === 'shared_list').length}`);
 
+    // Add shared_book activities from current user's activities
+    const sharedBookActivities = currentUserActivities.filter((activity: any) =>
+      activity.type === "shared_book"
+    );
+    console.log(`[DEBUG ${username}] Found ${sharedBookActivities.length} shared_book activities`);
+
+    // Get unique usernames of people who shared books
+    const sharedBookByUsernames = [...new Set(sharedBookActivities.map((a: any) => a.sharedByUsername).filter(Boolean))];
+    
+    // Fetch user info for people who shared books (even if not followed)
+    const sharedBookByUsers = sharedBookByUsernames.length > 0
+      ? await User.find({ username: { $in: sharedBookByUsernames } })
+          .select("_id username name avatar")
+          .lean()
+      : [];
+    
+    sharedBookActivities.forEach((activity: any) => {
+      // For shared_book activities, the username should be the person who shared it
+      // Convert Mongoose subdocument to plain object
+      const activityObj = activity.toObject ? activity.toObject() : {
+        _id: activity._id,
+        type: activity.type,
+        bookId: activity.bookId,
+        sharedBy: activity.sharedBy,
+        sharedByUsername: activity.sharedByUsername,
+        timestamp: activity.timestamp,
+      };
+      
+      if (activityObj.sharedByUsername) {
+        // Find the user who shared it to get their avatar and name
+        const sharedByUser = sharedBookByUsers.find((u: any) => u.username === activityObj.sharedByUsername) ||
+                            followedUsers.find((u: any) => u.username === activityObj.sharedByUsername);
+        const activityToAdd = {
+          ...activityObj,
+          userId: activityObj.sharedBy?.toString() || (currentUser._id as any)?.toString() || '',
+          username: activityObj.sharedByUsername,
+          userName: sharedByUser?.name || activityObj.sharedByUsername,
+          userAvatar: sharedByUser?.avatar,
+        };
+        console.log(`[DEBUG ${username}] Adding shared_book activity - type: ${activityToAdd.type}, timestamp: ${activityToAdd.timestamp}`);
+        allActivities.push(activityToAdd);
+      } else {
+        console.log(`[DEBUG ${username}] SKIPPING shared_book activity - no sharedByUsername`);
+      }
+    });
+
+    console.log(`[DEBUG ${username}] After adding shared_book: allActivities.length = ${allActivities.length}, shared_book count = ${allActivities.filter((a: any) => a.type === 'shared_book').length}`);
+
+    // Add collaboration_request activities from current user's activities
+    const collaborationRequestActivities = currentUserActivities.filter((activity: any) =>
+      activity.type === "collaboration_request"
+    );
+    console.log(`[DEBUG ${username}] Found ${collaborationRequestActivities.length} collaboration_request activities`);
+
+    // Get unique usernames of people who sent collaboration requests
+    const collaborationSenderUsernames = [...new Set(collaborationRequestActivities.map((a: any) => a.sharedByUsername).filter(Boolean))];
+
+    // Fetch user info for people who sent collaboration requests
+    const collaborationSenderUsers = collaborationSenderUsernames.length > 0
+      ? await User.find({ username: { $in: collaborationSenderUsernames } })
+          .select("_id username name avatar")
+          .lean()
+      : [];
+
+    collaborationRequestActivities.forEach((activity: any) => {
+      // Convert Mongoose subdocument to plain object
+      const activityObj = activity.toObject ? activity.toObject() : {
+        _id: activity._id,
+        type: activity.type,
+        listId: activity.listId,
+        sharedBy: activity.sharedBy,
+        sharedByUsername: activity.sharedByUsername,
+        timestamp: activity.timestamp,
+      };
+
+      if (activityObj.sharedByUsername) {
+        // Find the user who sent the request
+        const senderUser = collaborationSenderUsers.find((u: any) => u.username === activityObj.sharedByUsername) ||
+                          followedUsers.find((u: any) => u.username === activityObj.sharedByUsername);
+        const activityToAdd = {
+          ...activityObj,
+          userId: activityObj.sharedBy?.toString() || '',
+          username: activityObj.sharedByUsername,
+          userName: senderUser?.name || activityObj.sharedByUsername,
+          userAvatar: senderUser?.avatar,
+        };
+        console.log(`[DEBUG ${username}] Adding collaboration_request activity - type: ${activityToAdd.type}, timestamp: ${activityToAdd.timestamp}`);
+        allActivities.push(activityToAdd);
+      } else {
+        console.log(`[DEBUG ${username}] SKIPPING collaboration_request activity - no sharedByUsername`);
+      }
+    });
+
+    console.log(`[DEBUG ${username}] After adding collaboration_request: allActivities.length = ${allActivities.length}, collaboration_request count = ${allActivities.filter((a: any) => a.type === 'collaboration_request').length}`);
+
+    // Add granted_access activities from current user's activities
+    const grantedAccessActivities = currentUserActivities.filter((activity: any) =>
+      activity.type === "granted_access"
+    );
+    console.log(`[DEBUG ${username}] Found ${grantedAccessActivities.length} granted_access activities`);
+
+    // Get unique usernames of people who granted access
+    const grantedAccessByUsernames = [...new Set(grantedAccessActivities.map((a: any) => a.sharedByUsername).filter(Boolean))];
+    
+    // Fetch user info for people who granted access (even if not followed)
+    const grantedAccessByUsers = grantedAccessByUsernames.length > 0
+      ? await User.find({ username: { $in: grantedAccessByUsernames } })
+          .select("_id username name avatar")
+          .lean()
+      : [];
+    
+    grantedAccessActivities.forEach((activity: any) => {
+      // Convert Mongoose subdocument to plain object
+      const activityObj = activity.toObject ? activity.toObject() : {
+        _id: activity._id,
+        type: activity.type,
+        listId: activity.listId,
+        listTitle: activity.listTitle,
+        sharedBy: activity.sharedBy,
+        sharedByUsername: activity.sharedByUsername,
+        timestamp: activity.timestamp,
+      };
+      
+      if (activityObj.sharedByUsername) {
+        // Find the user who granted access
+        const grantedByUser = grantedAccessByUsers.find((u: any) => u.username === activityObj.sharedByUsername) ||
+                              followedUsers.find((u: any) => u.username === activityObj.sharedByUsername);
+        const activityToAdd = {
+          ...activityObj,
+          userId: activityObj.sharedBy?.toString() || '',
+          username: activityObj.sharedByUsername,
+          userName: grantedByUser?.name || activityObj.sharedByUsername,
+          userAvatar: grantedByUser?.avatar,
+        };
+        console.log(`[DEBUG ${username}] Adding granted_access activity - type: ${activityToAdd.type}, timestamp: ${activityToAdd.timestamp}`);
+        allActivities.push(activityToAdd);
+      } else {
+        console.log(`[DEBUG ${username}] SKIPPING granted_access activity - no sharedByUsername`);
+      }
+    });
+
+    console.log(`[DEBUG ${username}] After adding granted_access: allActivities.length = ${allActivities.length}, granted_access count = ${allActivities.filter((a: any) => a.type === 'granted_access').length}`);
+
     followedUsers.forEach((user: any) => {
-      // Add regular activities (excluding shared_list as those are handled above)
+      // Add regular activities (excluding shared_list, shared_book, collaboration_request, and granted_access as those are handled above)
       const activities = Array.isArray(user.activities) ? user.activities : [];
-      // Filter out any search-related activities and shared_list (handled separately)
-      const filteredActivities = activities.filter((activity: any) => 
-        activity.type !== "search" && activity.type !== "shared_list"
+      // Filter out any search-related activities, shared_list, shared_book, collaboration_request, and granted_access (handled separately)
+      const filteredActivities = activities.filter((activity: any) =>
+        activity.type !== "search" &&
+        activity.type !== "shared_list" &&
+        activity.type !== "shared_book" &&
+        activity.type !== "collaboration_request" &&
+        activity.type !== "granted_access"
       );
       filteredActivities.forEach((activity: any) => {
         // Convert Mongoose subdocument to plain object
@@ -247,8 +394,8 @@ export async function GET(
           };
         }
 
-        // For shared_list activities, populate list information
-        if (activity.type === "shared_list" && activity.listId && activity.sharedByUsername) {
+        // For shared_list, collaboration_request, and granted_access activities, populate list information
+        if ((activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access") && activity.listId && activity.sharedByUsername) {
           try {
             const sharedByUser = await User.findOne({ username: activity.sharedByUsername })
               .select("readingLists")
@@ -307,12 +454,34 @@ export async function GET(
               }
             }
           } catch (error) {
-            console.warn(`Failed to fetch list for shared_list activity ${activity._id}:`, error);
+            console.warn(`Failed to fetch list for ${activity.type} activity ${activity._id}:`, error);
+          }
+        }
+
+        // For shared_book activities, populate book information
+        if (activity.type === "shared_book" && activity.bookId) {
+          try {
+            // Convert bookId to ObjectId if it's a string
+            const bookId = activity.bookId?.toString ? activity.bookId.toString() : activity.bookId;
+            const book = await Book.findById(bookId).lean();
+            if (book) {
+              return {
+                ...activity,
+                bookTitle: book.volumeInfo?.title || activity.bookTitle || undefined,
+                bookCover: book.volumeInfo?.imageLinks?.thumbnail || 
+                          book.volumeInfo?.imageLinks?.smallThumbnail ||
+                          book.volumeInfo?.imageLinks?.medium ||
+                          activity.bookCover ||
+                          undefined,
+              };
+            }
+          } catch (error) {
+            console.warn(`Failed to fetch book for shared_book activity ${activity._id}:`, error);
           }
         }
 
         // For regular activities, populate book information
-        if (activity.bookId) {
+        if (activity.bookId && activity.type !== "shared_book") {
           try {
             // Convert bookId to ObjectId if it's a string
             const bookId = activity.bookId?.toString ? activity.bookId.toString() : activity.bookId;
@@ -336,8 +505,9 @@ export async function GET(
       })
     );
 
-    const sharedListCount = activitiesWithBooks.filter((a: any) => a.type === 'shared_list').length;
-    console.log(`[${username}] Returning ${activitiesWithBooks.length} activities (${sharedListCount} shared_list)`);
+    const finalSharedListCount = activitiesWithBooks.filter((a: any) => a.type === 'shared_list').length;
+    const finalCollabRequestCount = activitiesWithBooks.filter((a: any) => a.type === 'collaboration_request').length;
+    console.log(`[${username}] Returning ${activitiesWithBooks.length} activities (${finalSharedListCount} shared_list, ${finalCollabRequestCount} collaboration_request)`);
 
     return NextResponse.json({
       activities: activitiesWithBooks,

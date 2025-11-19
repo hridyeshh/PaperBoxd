@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
-import { Calendar, BookOpen, Users, Star, MapPin, Globe, FileText, Loader2, Heart, Library, Hand, Share2, PenTool } from "lucide-react";
+import { Calendar, BookOpen, Users, Star, MapPin, Globe, FileText, Loader2, Heart, Library, Hand, Share2, PenTool, NotebookPen, Link2, Search, Send } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -17,6 +17,8 @@ import { stripHtmlTags } from "@/lib/utils";
 import { SignupPromptDialog } from "@/components/ui/signup-prompt-dialog";
 import { BookCarousel, BookCarouselBook } from "@/components/ui/home/book-carousel";
 import { DiaryEditorDialog } from "@/components/ui/diary-editor-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 interface BookDetails {
   id: string;
@@ -92,6 +94,12 @@ export default function BookDetailPage() {
   // Diary editor dialog state
   const [showDiaryEditor, setShowDiaryEditor] = React.useState(false);
   const [existingDiaryContent, setExistingDiaryContent] = React.useState<string>("");
+  
+  // Share dialog state
+  const [isShareOpen, setIsShareOpen] = React.useState(false);
+  const [following, setFollowing] = React.useState<any[]>([]);
+  const [isLoadingFollowing, setIsLoadingFollowing] = React.useState(false);
+  const [shareSearchQuery, setShareSearchQuery] = React.useState("");
   
   // Carousel data
   const [similarBooks, setSimilarBooks] = React.useState<BookCarouselBook[]>([]);
@@ -224,6 +232,162 @@ export default function BookDetailPage() {
       console.error("Unhandled error in checkBookStatus:", error);
     });
   }, [book, isAuthenticated, session?.user?.username]);
+
+  // Fetch following list when share modal opens
+  React.useEffect(() => {
+    if (isShareOpen && session?.user?.username) {
+      let isMounted = true;
+      
+      setIsLoadingFollowing(true);
+      fetch(`/api/users/${encodeURIComponent(session.user.username)}/following`)
+        .then((res) => {
+          if (!isMounted) return null;
+          if (!res.ok) {
+            throw new Error(`Failed to fetch following: ${res.status}`);
+          }
+          return res.json();
+        })
+        .then((data) => {
+          if (!isMounted || !data) return;
+          setFollowing(Array.isArray(data.following) ? data.following : []);
+        })
+        .catch((err) => {
+          if (!isMounted) return;
+          console.error("Error fetching following:", err);
+          setFollowing([]);
+        })
+        .finally(() => {
+          if (isMounted) {
+            setIsLoadingFollowing(false);
+          }
+        });
+
+      return () => {
+        isMounted = false;
+      };
+    } else if (!isShareOpen) {
+      // Reset when modal closes
+      setFollowing([]);
+      setShareSearchQuery("");
+    }
+  }, [isShareOpen, session?.user?.username]);
+
+  // Filter following based on search query
+  const filteredFollowing = React.useMemo(() => {
+    if (!shareSearchQuery.trim()) return following;
+    const query = shareSearchQuery.toLowerCase();
+    return following.filter((user) => {
+      const name = (user.name || "").toLowerCase();
+      const username = (user.username || "").toLowerCase();
+      const email = (user.email || "").toLowerCase();
+      return name.includes(query) || username.includes(query) || email.includes(query);
+    });
+  }, [following, shareSearchQuery]);
+
+  const handleCopyLink = async () => {
+    try {
+      const url = window.location.href;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+        toast.success("Link copied to clipboard!");
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement("textarea");
+        textArea.value = url;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+        toast.success("Link copied to clipboard!");
+      }
+    } catch (err) {
+      console.error("Error copying link:", err);
+      toast.error("Failed to copy link");
+    }
+  };
+
+  const handleShareToSocial = (platform: string) => {
+    try {
+      const url = encodeURIComponent(window.location.href);
+      const title = encodeURIComponent(book?.volumeInfo?.title || "Check out this book");
+      let shareUrl = "";
+
+      switch (platform) {
+        case "whatsapp":
+          shareUrl = `https://wa.me/?text=${title}%20${url}`;
+          break;
+        case "messenger":
+          shareUrl = `https://www.facebook.com/dialog/send?link=${url}&app_id=YOUR_APP_ID`;
+          break;
+        case "facebook":
+          shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
+          break;
+        case "x":
+          shareUrl = `https://twitter.com/intent/tweet?url=${url}&text=${title}`;
+          break;
+      }
+
+      if (shareUrl) {
+        const opened = window.open(shareUrl, "_blank", "width=600,height=400");
+        if (!opened) {
+          toast.error("Popup blocked. Please allow popups for this site.");
+        }
+      }
+    } catch (err) {
+      console.error("Error sharing to social:", err);
+      toast.error("Failed to share");
+    }
+  };
+
+  const handleSendToUser = async (targetUsername: string) => {
+    if (!book || !session?.user?.username) return;
+
+    try {
+      const bookId = book._id || book.bookId || book.id;
+      if (!bookId) {
+        toast.error("Book ID not found");
+        return;
+      }
+
+      const url = `/api/books/${encodeURIComponent(bookId as string)}/share`;
+      console.log("Sharing book to user:", { bookId, targetUsername, url });
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetUsername: targetUsername,
+        }),
+      });
+
+      if (response.ok) {
+        toast.success(`Book shared with @${targetUsername}!`);
+      } else {
+        let error: any = {};
+        try {
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const text = await response.text();
+            error = text ? JSON.parse(text) : {};
+          } else {
+            // Handle HTML responses (404 pages, etc.)
+            error = { error: `Failed to share book (${response.status})` };
+          }
+        } catch (e) {
+          console.error("Failed to parse error response:", e);
+          error = { error: `Failed to share book (${response.status})` };
+        }
+        console.error("Share book error response:", error, "Status:", response.status);
+        toast.error(error.error || error.details || `Failed to share book (${response.status})`);
+      }
+    } catch (err) {
+      console.error("Error sharing book:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to share book";
+      toast.error(errorMessage);
+    }
+  };
 
   // Fetch carousel data when book is loaded
   React.useEffect(() => {
@@ -400,7 +564,7 @@ export default function BookDetailPage() {
                 accentColor="bg-amber-700"
                 invert={true}
                 hideIcon={true}
-                className="w-full"
+                className="w-full border-0"
                 disabled={isUpdating}
               />
               
@@ -450,7 +614,7 @@ export default function BookDetailPage() {
                 invert={true}
                 accentColor="#e31b23"
                 hideIcon={true}
-                className="flex-1"
+                className="flex-1 border-0"
                 disabled={isUpdating}
               />
               
@@ -499,7 +663,7 @@ export default function BookDetailPage() {
                 accentColor="bg-green-700"
                 invert={true}
                 hideIcon={true}
-                className="flex-1"
+                className="flex-1 border-0"
                 disabled={isUpdating}
               />
               </div>
@@ -647,11 +811,22 @@ export default function BookDetailPage() {
 
             {/* Description */}
             {volumeInfo.description && (
-              <div className="space-y-2">
+              <div className="space-y-4">
                 <h2 className="text-lg font-semibold">Description</h2>
-                <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
-                  {stripHtmlTags(volumeInfo.description)}
-                </p>
+                {/* Card with gradient behind - same style as timeline */}
+                <div className="relative rounded-lg p-6 md:p-8">
+                  {/* Gradient background element */}
+                  <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-primary/30 via-primary/20 to-primary/5 -z-10" />
+                  {/* Card content */}
+                  <div className="relative bg-background/90 backdrop-blur-sm rounded-lg border border-border/50 p-6 md:p-8 -m-6 md:-m-8">
+                    <p 
+                      className="text-lg leading-relaxed text-muted-foreground whitespace-pre-wrap"
+                      style={{ fontFamily: '"Helvetica", sans-serif' }}
+                    >
+                      {stripHtmlTags(volumeInfo.description)}
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -668,27 +843,18 @@ export default function BookDetailPage() {
                 }}
                 variant="default"
               >
-                <PenTool className="mr-2 size-4" />
+                <NotebookPen className="mr-2 size-4" />
                 {existingDiaryContent ? "Edit your notes" : "Write about it"}
               </Button>
               
               <Button
                 onClick={() => {
-                  // TODO: Implement share functionality
-                  if (navigator.share) {
-                    navigator.share({
-                      title: volumeInfo.title,
-                      text: `Check out "${volumeInfo.title}" on PaperBoxd`,
-                      url: window.location.href,
-                    }).catch(() => {
-                      // Fallback: copy to clipboard
-                      navigator.clipboard.writeText(window.location.href);
-                      toast.success("Link copied to clipboard!");
-                    });
-                  } else {
-                    navigator.clipboard.writeText(window.location.href);
-                    toast.success("Link copied to clipboard!");
+                  if (!isAuthenticated) {
+                    setSignupAction("general");
+                    setShowSignupPrompt(true);
+                    return;
                   }
+                  setIsShareOpen(true);
                 }}
                 variant="outline"
               >
@@ -718,8 +884,159 @@ export default function BookDetailPage() {
               subtitle="Other books by this author"
               books={authorBooks}
             />
-          )}
-        </div>
+            )}
+          </div>
+
+        {/* Share Dialog */}
+        <Dialog open={isShareOpen} onOpenChange={setIsShareOpen}>
+          <DialogContent className="max-w-md max-h-[80vh] p-0 flex flex-col">
+            <div className="p-6 flex flex-col min-w-0 flex-1 overflow-hidden">
+              <DialogHeader className="flex-shrink-0">
+                <DialogTitle>Share</DialogTitle>
+              </DialogHeader>
+
+              {/* Quick Share Options */}
+              <div className="flex gap-4 mt-6 mb-6 justify-center">
+                <button
+                  onClick={handleCopyLink}
+                  className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
+                >
+                  <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                    <Link2 className="h-6 w-6 text-foreground" />
+                  </div>
+                  <span className="text-xs text-muted-foreground">Copy link</span>
+                </button>
+                <button
+                  onClick={() => handleShareToSocial("whatsapp")}
+                  className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
+                >
+                  <div className="h-12 w-12 rounded-full bg-[#25D366] flex items-center justify-center">
+                    <svg className="h-6 w-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                    </svg>
+                  </div>
+                  <span className="text-xs text-muted-foreground">WhatsApp</span>
+                </button>
+                <button
+                  onClick={() => handleShareToSocial("messenger")}
+                  className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
+                >
+                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[#0084FF] to-[#006AFF] flex items-center justify-center">
+                    <svg className="h-6 w-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.568 8.16l-1.97 9.272c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.12l-6.87 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
+                    </svg>
+                  </div>
+                  <span className="text-xs text-muted-foreground">Messenger</span>
+                </button>
+                <button
+                  onClick={() => handleShareToSocial("facebook")}
+                  className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
+                >
+                  <div className="h-12 w-12 rounded-full bg-[#1877F2] flex items-center justify-center">
+                    <svg className="h-6 w-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                    </svg>
+                  </div>
+                  <span className="text-xs text-muted-foreground">Facebook</span>
+                </button>
+                <button
+                  onClick={() => handleShareToSocial("x")}
+                  className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
+                >
+                  <div className="h-12 w-12 rounded-full bg-black dark:bg-white flex items-center justify-center">
+                    <svg className="h-6 w-6 text-white dark:text-black" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    </svg>
+                  </div>
+                  <span className="text-xs text-muted-foreground">X</span>
+                </button>
+              </div>
+
+              <div className="border-t border-border my-4"></div>
+
+              {/* Search Bar */}
+              <div className="flex-shrink-0 mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                  <Input
+                    placeholder="Search by name or email"
+                    value={shareSearchQuery}
+                    onChange={(e) => setShareSearchQuery(e.target.value)}
+                    className="w-full !pl-10 pr-4 focus-visible:border-foreground dark:focus-visible:border-white"
+                  />
+                </div>
+              </div>
+
+              {/* Following List */}
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                {isLoadingFollowing ? (
+                  <div className="flex items-center justify-center py-8">
+                    <p className="text-muted-foreground">Loading...</p>
+                  </div>
+                ) : filteredFollowing.length === 0 ? (
+                  <div className="flex items-center justify-center py-8">
+                    <p className="text-muted-foreground">
+                      {shareSearchQuery.trim() ? "No users found" : "No people to share with"}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredFollowing.map((user) => {
+                      const defaultAvatar = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%239ca3af'/%3E%3Cpath d='M50 30c-8.284 0-15 6.716-15 15 0 5.989 3.501 11.148 8.535 13.526C37.514 62.951 32 70.16 32 78.5h36c0-8.34-5.514-15.549-13.535-19.974C59.499 56.148 63 50.989 63 45c0-8.284-6.716-15-15-15z' fill='white' opacity='0.8'/%3E%3C/svg%3E`;
+                      const avatar = user.avatar || defaultAvatar;
+                      const initials = user.name
+                        ?.split(" ")
+                        .map((n: string) => n[0])
+                        .join("")
+                        .toUpperCase()
+                        .slice(0, 2) || user.username?.[0]?.toUpperCase() || "?";
+
+                      return (
+                        <div
+                          key={user.id}
+                          className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                        >
+                          <div className="relative h-10 w-10 flex-shrink-0 rounded-full overflow-hidden bg-muted">
+                            {user.avatar ? (
+                              <Image
+                                src={avatar}
+                                alt={user.name || user.username}
+                                fill
+                                className="object-cover"
+                                sizes="40px"
+                              />
+                            ) : (
+                              <div className="h-full w-full flex items-center justify-center text-sm font-medium text-foreground">
+                                {initials}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-foreground truncate">
+                              {user.name || user.username}
+                            </p>
+                            <p className="text-sm text-muted-foreground truncate">
+                              @{user.username}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleSendToUser(user.username)}
+                            className="flex-shrink-0"
+                          >
+                            <Send className="h-4 w-4 mr-1" />
+                            Send
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </main>
   );

@@ -34,8 +34,12 @@ export async function GET(
 
     await connectDB();
 
+    // Check authentication to determine if user is the owner
+    const session = await auth();
+    const isOwner = session?.user?.email ? (await User.findOne({ email: session.user.email }))?.username === username : false;
+
     const user = await User.findOne({ username })
-      .select("readingLists")
+      .select("readingLists email")
       .populate({
         path: "readingLists.books",
         model: Book,
@@ -54,6 +58,23 @@ export async function GET(
       return NextResponse.json({ error: "List not found" }, { status: 404 });
     }
 
+    // If list is private and user is not the owner, check if they have access
+    if (!list.isPublic && !isOwner) {
+      const currentUser = session?.user?.email ? await User.findOne({ email: session.user.email }).select("username").lean() : null;
+      const currentUsername = currentUser?.username;
+      
+      // Check if current user has been granted access
+      const hasAccess = currentUsername && Array.isArray(list.allowedUsers) && list.allowedUsers.includes(currentUsername);
+      
+      if (!hasAccess) {
+        return NextResponse.json({ 
+          error: "This list is private",
+          isPrivate: true,
+          ownerUsername: username,
+        }, { status: 403 });
+      }
+    }
+
     return NextResponse.json({
       list: {
         id: list._id,
@@ -62,6 +83,7 @@ export async function GET(
         books: list.books || [],
         booksCount: list.books?.length || 0,
         isPublic: list.isPublic,
+        allowedUsers: Array.isArray(list.allowedUsers) ? list.allowedUsers : [],
         createdAt: list.createdAt,
         updatedAt: list.updatedAt,
       },

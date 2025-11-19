@@ -10,8 +10,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Bold, Italic, Underline, List, ListOrdered, Save, X } from "lucide-react";
+import { Save, X } from "lucide-react";
 import { toast } from "sonner";
+import { TiptapEditor } from "@/components/ui/tiptap-editor";
 
 interface DiaryEditorDialogProps {
   open: boolean;
@@ -38,39 +39,22 @@ export function DiaryEditorDialog({
 }: DiaryEditorDialogProps) {
   const [content, setContent] = React.useState(initialContent);
   const [isSaving, setIsSaving] = React.useState(false);
-  const editorRef = React.useRef<HTMLDivElement>(null);
 
-  // Update content when initialContent changes (for editing existing entries)
+  // Reset content when dialog opens/closes
   React.useEffect(() => {
-    if (open && initialContent) {
-      setContent(initialContent);
-      if (editorRef.current) {
-        editorRef.current.innerHTML = initialContent;
-      }
-    } else if (open && !initialContent) {
-      setContent("");
-      if (editorRef.current) {
-        editorRef.current.innerHTML = "";
-      }
+    if (open) {
+      setContent(initialContent || "");
     }
   }, [open, initialContent]);
 
-  const handleContentChange = () => {
-    if (editorRef.current) {
-      setContent(editorRef.current.innerHTML);
-    }
-  };
-
-  const formatText = (command: string, value?: string) => {
-    document.execCommand(command, false, value);
-    if (editorRef.current) {
-      editorRef.current.focus();
-      handleContentChange();
-    }
+  const handleContentChange = (html: string) => {
+    setContent(html);
   };
 
   const handleSave = async () => {
-    if (!content || content.trim() === "" || content === "<br>") {
+    // Check if content is empty (Tiptap returns <p></p> for empty content)
+    const textContent = content.replace(/<[^>]*>/g, "").trim();
+    if (!textContent) {
       toast.error("Please write something before saving");
       return;
     }
@@ -136,7 +120,7 @@ export function DiaryEditorDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+        <div className="flex-1 flex flex-col gap-4 overflow-visible">
           {/* Book Info */}
           <div className="flex gap-4 p-4 rounded-lg border bg-muted/50">
             {bookCover && (
@@ -154,88 +138,17 @@ export function DiaryEditorDialog({
             </div>
           </div>
 
-          {/* Formatting Toolbar */}
-          <div className="flex gap-2 p-2 border rounded-lg bg-muted/30">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => formatText("bold")}
-              className="h-8 w-8 p-0"
-              title="Bold"
-            >
-              <Bold className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => formatText("italic")}
-              className="h-8 w-8 p-0"
-              title="Italic"
-            >
-              <Italic className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => formatText("underline")}
-              className="h-8 w-8 p-0"
-              title="Underline"
-            >
-              <Underline className="h-4 w-4" />
-            </Button>
-            <div className="w-px h-6 bg-border mx-1" />
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => formatText("insertUnorderedList")}
-              className="h-8 w-8 p-0"
-              title="Bullet List"
-            >
-              <List className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => formatText("insertOrderedList")}
-              className="h-8 w-8 p-0"
-              title="Numbered List"
-            >
-              <ListOrdered className="h-4 w-4" />
-            </Button>
+          {/* Tiptap Editor */}
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="flex-1 overflow-y-auto">
+              <TiptapEditor
+                content={content}
+                onChange={handleContentChange}
+                placeholder="Start writing your thoughts about this book..."
+                editable={true}
+              />
+            </div>
           </div>
-
-          {/* Rich Text Editor */}
-          <div className="flex-1 flex flex-col overflow-hidden border rounded-lg">
-            <div
-              ref={editorRef}
-              contentEditable
-              onInput={handleContentChange}
-              onPaste={(e) => {
-                e.preventDefault();
-                const text = e.clipboardData.getData("text/plain");
-                document.execCommand("insertText", false, text);
-                handleContentChange();
-              }}
-              className="flex-1 p-4 overflow-y-auto focus:outline-none min-h-[300px] prose prose-sm dark:prose-invert max-w-none"
-              style={{
-                wordBreak: "break-word",
-              }}
-              data-placeholder="Start writing your thoughts about this book..."
-            />
-          </div>
-
-          <style jsx>{`
-            [contenteditable][data-placeholder]:empty:before {
-              content: attr(data-placeholder);
-              color: #9ca3af;
-              pointer-events: none;
-            }
-          `}</style>
         </div>
 
         <DialogFooter>
@@ -251,7 +164,7 @@ export function DiaryEditorDialog({
           <Button
             type="button"
             onClick={handleSave}
-            disabled={isSaving || !content || content.trim() === "" || content === "<br>"}
+            disabled={isSaving || !content || content.replace(/<[^>]*>/g, "").trim() === ""}
           >
             <Save className="mr-2 h-4 w-4" />
             {isSaving ? "Saving..." : "Save"}

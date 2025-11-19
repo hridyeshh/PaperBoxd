@@ -47,6 +47,8 @@ export interface IReadingList {
   description?: string;
   books: mongoose.Types.ObjectId[]; // References to Book collection
   isPublic: boolean;
+  collaborators?: mongoose.Types.ObjectId[]; // References to User collection
+  allowedUsers?: string[]; // Usernames who have access to this private list
   createdAt: Date;
   updatedAt: Date;
   _id?: mongoose.Types.ObjectId;
@@ -65,14 +67,15 @@ export interface IDiaryEntry {
 }
 
 export interface IActivity {
-  type: "read" | "rated" | "liked" | "added_to_list" | "started_reading" | "reviewed" | "shared_list";
+  type: "read" | "rated" | "liked" | "added_to_list" | "started_reading" | "reviewed" | "shared_list" | "shared_book" | "collaboration_request" | "granted_access";
   bookId?: mongoose.Types.ObjectId;
   listId?: string;
+  listTitle?: string; // Title of the list for granted_access activities
   rating?: number;
   review?: string;
   timestamp: Date;
-  sharedBy?: mongoose.Types.ObjectId; // User who shared the list
-  sharedByUsername?: string; // Username of the person who shared
+  sharedBy?: mongoose.Types.ObjectId; // User who shared the list/book
+  sharedByUsername?: string; // Username of the person who shared/granted access
 }
 
 export interface IAuthorStats {
@@ -177,6 +180,8 @@ const ReadingListSchema = new Schema({
   description: { type: String },
   books: [{ type: Schema.Types.ObjectId, ref: "Book" }],
   isPublic: { type: Boolean, default: true },
+  collaborators: [{ type: Schema.Types.ObjectId, ref: "User" }],
+  allowedUsers: [{ type: String }], // Usernames who have access to this private list
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
@@ -219,11 +224,12 @@ const DiaryEntrySchema = new Schema({
 const ActivitySchema = new Schema({
   type: {
     type: String,
-    enum: ["read", "rated", "liked", "added_to_list", "started_reading", "reviewed", "shared_list"],
+    enum: ["read", "rated", "liked", "added_to_list", "started_reading", "reviewed", "shared_list", "shared_book", "collaboration_request", "granted_access"],
     required: true,
   },
   bookId: { type: Schema.Types.ObjectId, ref: "Book" },
   listId: { type: String },
+  listTitle: { type: String }, // Title of the list for granted_access activities
   rating: { type: Number, min: 1, max: 5 },
   review: { type: String },
   timestamp: { type: Date, default: Date.now },

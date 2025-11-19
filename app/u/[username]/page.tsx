@@ -28,7 +28,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Edit, Image as ImageIcon, MoreVertical, Trash2, Plus, X, Heart } from "lucide-react";
+import { Edit, Image as ImageIcon, MoreVertical, Trash2, Plus, X, Heart, ArrowLeft, Search as SearchIcon, Send, AlertTriangle } from "lucide-react";
 import TetrisLoading from "@/components/ui/tetris-loader";
 import { createBookSlug } from "@/lib/utils/book-slug";
 import {
@@ -43,8 +43,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
-const dockLabels = ["Profile", "Bookshelf", "Diary", "Authors", "Lists", "'to-be-read'", "Likes"] as const;
+const dockLabels = ["Favourites", "Bookshelf", "Diary", "Authors", "Lists", "'to-be-read'", "Likes"] as const;
 type DockLabel = (typeof dockLabels)[number] | "Activity";
 type ActivityView = "Friends" | "Me";
 const BOOKSHELF_PAGE_SIZE = 12;
@@ -61,7 +62,7 @@ type ActivityEntry = {
   detail: string;
   timeAgo: string;
   cover: string;
-  type?: string; // Activity type: "diary_entry", "read", "rated", etc.
+  type?: string; // Activity type: "diary_entry", "read", "rated", "collaboration_request", etc.
   diaryEntryId?: string; // For diary entries
   bookId?: string; // For diary entries
   bookTitle?: string; // For diary entries
@@ -71,6 +72,9 @@ type ActivityEntry = {
   updatedAt?: string; // For diary entries
   isLiked?: boolean; // For diary entries
   likesCount?: number; // For diary entries
+  listId?: string; // For collaboration requests
+  listName?: string; // For collaboration requests
+  inviter?: string; // For collaboration requests
 };
 
 
@@ -1760,13 +1764,13 @@ function AuthorsSection({
                       className="relative aspect-[2/3] overflow-hidden rounded-sm bg-muted/50"
                     >
                       {cover ? (
-                        <Image
+              <Image
                           src={cover}
                           alt={(book && book.title) ? book.title : `Book ${index + 1}`}
-                          fill
+                fill
                           className="object-cover"
                           sizes="(max-width: 640px) 33vw, 120px"
-                          quality={100}
+                quality={100}
                           unoptimized={cover?.includes('isbndb.com') || cover?.includes('images.isbndb.com') || cover?.includes('covers.isbndb.com') || true}
                           onError={(e) => {
                             // Fallback to gray placeholder on image error
@@ -1779,7 +1783,7 @@ function AuthorsSection({
                       ) : (
                         <div className="w-full h-full bg-muted/50" />
                       )}
-                    </div>
+            </div>
                   );
                 })}
               </div>
@@ -1789,9 +1793,9 @@ function AuthorsSection({
                 <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{author.name || "Unknown Author"}</h3>
                 <p className="text-xs text-muted-foreground">
                   {author.read || 0} read • {author.tbr || 0} to-be-read
-                </p>
-              </div>
+              </p>
             </div>
+          </div>
           );
         })}
       </div>
@@ -1890,19 +1894,50 @@ function ListCard({
   list,
   canEdit,
   username,
+  onListDeleted,
 }: {
   list: ReadingList;
   canEdit: boolean;
   username: string;
+  onListDeleted?: () => void;
 }) {
   const router = useRouter();
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
   
   // Check if this is a saved list (has "from @" in description)
   const isSavedList = list.description?.includes("from @") || false;
   
   // User can only edit if they own the list AND it's not a saved list
   const canEditList = canEdit && !isSavedList;
+
+  const handleDeleteList = async () => {
+    if (!list || !username || !list.id || isDeleting) return;
+
+    try {
+      setIsDeleting(true);
+      const response = await fetch(`/api/users/${encodeURIComponent(username)}/lists/${list.id}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        toast.success("List deleted successfully!");
+        setIsDeleteDialogOpen(false);
+        if (onListDeleted) {
+          onListDeleted();
+        }
+      } else {
+        const error = await response.json().catch(() => ({}));
+        toast.error(error.error || "Failed to delete list");
+      }
+    } catch (err) {
+      console.error("Error deleting list:", err);
+      toast.error("Failed to delete list");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Get first 3 books for display
   const displayBooks = list.books?.slice(0, 3) || [];
@@ -1933,13 +1968,13 @@ function ListCard({
               className="relative aspect-[2/3] overflow-hidden rounded-sm bg-muted/50"
             >
               {cover ? (
-                <Image
+        <Image
                   src={cover}
                   alt={(book?.volumeInfo?.title) ? book.volumeInfo.title : `Book ${index + 1}`}
-                  fill
+          fill
                   className="object-cover"
                   sizes="(max-width: 640px) 33vw, 120px"
-                  quality={100}
+          quality={100}
                   unoptimized={cover?.includes('isbndb.com') || cover?.includes('images.isbndb.com') || cover?.includes('covers.isbndb.com') || true}
                   onError={(e) => {
                     // Fallback to gray placeholder on image error
@@ -1952,7 +1987,7 @@ function ListCard({
               ) : (
                 <div className="w-full h-full bg-muted/50" />
               )}
-            </div>
+      </div>
           );
         })}
       </div>
@@ -1988,21 +2023,17 @@ function ListCard({
                       setIsDropdownOpen(false);
                     }}
                   />
-                  <Dropdown.Item
-                    label="Change cover"
-                    icon={ImageIcon}
-                    onClick={() => {
-                      // TODO: Implement change cover
-                      setIsDropdownOpen(false);
-                    }}
-                  />
+                  <Dropdown.Separator />
                   <Dropdown.Item
                     label="Delete list"
                     icon={Trash2}
-                    onClick={() => {
-                      // TODO: Implement delete list
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       setIsDropdownOpen(false);
+                      setIsDeleteDialogOpen(true);
                     }}
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive [&_svg]:text-destructive"
                   />
                 </Dropdown.Menu>
               </Dropdown.Popover>
@@ -2010,22 +2041,73 @@ function ListCard({
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md p-0 sm:rounded-2xl">
+          <div className="p-6">
+            {/* Warning Icon */}
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+              <AlertTriangle className="h-6 w-6 text-destructive" />
+            </div>
+
+            <DialogHeader className="space-y-2 text-left">
+              <DialogTitle className="text-2xl font-semibold">Delete list?</DialogTitle>
+            </DialogHeader>
+
+            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+              This will permanently delete <span className="font-medium text-foreground">"{list?.title}"</span> from your profile and remove it from anyone who saved it. This action cannot be undone.
+            </p>
+
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setIsDeleteDialogOpen(false)}
+                className="flex-1 font-medium"
+                disabled={isDeleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleDeleteList();
+                }}
+                className="flex-1 font-medium shadow-sm"
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete List
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function ListsCarousel({ lists, canEdit, username, onListCreated, page, pageSize, onPageChange }: { lists: ReadingList[]; canEdit: boolean; username: string; onListCreated?: () => void; page: number; pageSize: number; onPageChange: (page: number) => void }) {
+function ListsCarousel({ lists, canEdit, username, onListCreated, onListDeleted, page, pageSize, onPageChange }: { lists: ReadingList[]; canEdit: boolean; username: string; onListCreated?: () => void; onListDeleted?: () => void; page: number; pageSize: number; onPageChange: (page: number) => void }) {
   const router = useRouter();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
   const [listName, setListName] = React.useState("");
   const [isSecret, setIsSecret] = React.useState(false);
-  const [isGroup, setIsGroup] = React.useState(false);
   const [isCreating, setIsCreating] = React.useState(false);
 
   const resetForm = () => {
     setListName("");
     setIsSecret(false);
-    setIsGroup(false);
   };
 
   const handleDialogOpenChange = (open: boolean) => {
@@ -2034,6 +2116,7 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, page, pageSize
       resetForm();
     }
   };
+
 
   const handleCreateList = async () => {
     if (!listName.trim() || !username) {
@@ -2045,12 +2128,12 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, page, pageSize
       const response = await fetch(`/api/users/${encodeURIComponent(username)}/lists`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: listName.trim(),
-          description: "",
-          isPublic: !isSecret,
-          books: [],
-        }),
+          body: JSON.stringify({
+            title: listName.trim(),
+            description: "",
+            isPublic: !isSecret,
+            books: [],
+          }),
       });
 
       if (!response.ok) {
@@ -2089,12 +2172,12 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, page, pageSize
         </div>
         {canEdit && (
           <>
-            <InteractiveHoverButton
-              text="Create list"
-              showIdleAccent={false}
-              invert
-              className="min-w-[120px]"
-              onClick={() => {
+          <InteractiveHoverButton
+            text="Create list"
+            showIdleAccent={false}
+            invert
+            className="min-w-[120px]"
+            onClick={() => {
                 setIsCreateDialogOpen(true);
               }}
             />
@@ -2147,7 +2230,7 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, page, pageSize
                           Make this list secret
                         </Label>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Only you and collaborators will see this list
+                          Only people you share the link with can see this list
                         </p>
                       </div>
                       <Switch
@@ -2158,22 +2241,6 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, page, pageSize
                     </div>
                   </div>
 
-                  {/* Group list */}
-                  <div className="mb-6">
-                    <div className="flex items-center justify-between rounded-lg border border-border/50 p-4 hover:bg-muted/30 transition-colors cursor-pointer"
-                      onClick={() => setIsGroup(!isGroup)}
-                    >
-                      <div className="flex-1">
-                        <Label htmlFor="group-toggle" className="text-sm font-medium cursor-pointer">
-                          Group list
-                        </Label>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Invite others to collaborate on this list
-                        </p>
-                      </div>
-                      <Users className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                  </div>
 
                   {/* Create Button */}
                   <Button
@@ -2187,6 +2254,7 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, page, pageSize
                 </div>
               </DialogContent>
             </Dialog>
+
           </>
         )}
       </div>
@@ -2201,9 +2269,9 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, page, pageSize
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
             {lists.slice((page - 1) * pageSize, page * pageSize).map((list) => (
-              <ListCard key={list.id} list={list} canEdit={canEdit} username={username} />
-            ))}
-          </div>
+              <ListCard key={list.id} list={list} canEdit={canEdit} username={username} onListDeleted={onListDeleted} />
+          ))}
+        </div>
           {Math.ceil(lists.length / pageSize) > 1 && (
             <Pagination>
               <PaginationContent>
@@ -2333,13 +2401,35 @@ function DiarySection({
           {paginatedEntries.map((entry) => {
             const isLiked = entry.isLiked || false;
             const likesCount = entry.likesCount || 0;
+            const hasBookCover = entry.bookCover && entry.bookCover.trim();
 
             return (
               <div
                 key={entry.id}
                 onClick={() => handleEntryClick(entry)}
-                className="group flex flex-col gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md cursor-pointer"
+                className="group flex gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md cursor-pointer"
               >
+                {/* Book Cover (if entry is about a book) */}
+                {hasBookCover && (
+                  <div className="relative aspect-[2/3] h-20 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-muted shadow-sm">
+                    <Image
+                      src={entry.bookCover}
+                      alt={entry.bookTitle || "Book cover"}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 640px) 56px, 56px"
+                      quality={100}
+                      unoptimized={entry.bookCover?.includes('isbndb.com') || entry.bookCover?.includes('images.isbndb.com') || entry.bookCover?.includes('covers.isbndb.com') || true}
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        if (target && target.parentElement) {
+                          target.style.display = 'none';
+                        }
+                      }}
+                    />
+                  </div>
+                )}
+                
                 {/* Entry Content */}
                 <div className="flex-1 min-w-0 space-y-1">
                   <div>
@@ -2350,8 +2440,8 @@ function DiarySection({
                       </>
                     ) : (
                       <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">
-                        {(entry.subject && entry.subject.trim()) ? entry.subject : "Diary Entry"}
-                      </h3>
+                          {(entry.subject && entry.subject.trim()) ? entry.subject : "Diary Entry"}
+                        </h3>
                     )}
                     {entry.updatedAt && (
                       <p className="text-xs text-muted-foreground/80 mt-1 truncate">
@@ -2462,6 +2552,53 @@ function DiarySection({
   );
 }
 
+function CollaborationRequestCard({
+  activity,
+  onAccept,
+  onReject,
+}: {
+  activity: ActivityEntry;
+  onAccept: (listId: string) => void;
+  onReject: (listId: string) => void;
+}) {
+  console.log("[CollaborationRequestCard] props:", { activity });
+  return (
+    <article
+      key={activity.id}
+      className="flex gap-4 rounded-3xl border border-border/70 bg-background/90 p-4 shadow-sm"
+    >
+      <div className="relative h-24 w-24 overflow-hidden rounded-2xl bg-muted">
+        <Image
+          src={activity.cover}
+          alt={activity.detail}
+          fill
+          className="object-cover"
+          sizes="96px"
+          quality={100}
+          unoptimized={activity.cover?.includes('isbndb.com') || activity.cover?.includes('images.isbndb.com') || activity.cover?.includes('covers.isbndb.com') || true}
+        />
+      </div>
+      <div className="flex flex-1 flex-col justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground">{activity.timeAgo}</p>
+          <p className="text-base font-semibold text-foreground">
+            {activity.inviter} {activity.action}
+          </p>
+          <p className="text-sm text-muted-foreground">{activity.detail}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => onAccept(activity.listId!)}>
+            Accept
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => onReject(activity.listId!)}>
+            Reject
+          </Button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function UserProfilePage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -2470,7 +2607,7 @@ export default function UserProfilePage() {
   
   // Check if tab is specified in URL params
   const tabFromUrl = searchParams.get("tab");
-  let initialTab: DockLabel = "Profile";
+  let initialTab: DockLabel = "Favourites";
   if (tabFromUrl === "Activity") {
     initialTab = "Activity" as DockLabel;
   } else if (tabFromUrl && dockLabels.includes(tabFromUrl as (typeof dockLabels)[number])) {
@@ -2505,6 +2642,58 @@ export default function UserProfilePage() {
   // Activities from API
   const [activities, setActivities] = React.useState<ActivityEntry[]>([]);
   const [selectedActivityDiaryEntry, setSelectedActivityDiaryEntry] = React.useState<any | null>(null);
+
+  const handleAccept = async (listId: string) => {
+    try {
+      const response = await fetch(`/api/lists/${listId}/collaborators`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: session?.user?.id, action: "accept" }),
+      });
+
+      if (response.ok) {
+        setActivities((prev) =>
+          prev.filter(
+            (activity) =>
+              !(
+                activity.type === "collaboration_request" &&
+                activity.listId === listId
+              )
+          )
+        );
+      } else {
+        console.error("Failed to accept collaboration request");
+      }
+    } catch (error) {
+      console.error("Error accepting collaboration request:", error);
+    }
+  };
+
+  const handleReject = async (listId: string) => {
+    try {
+      const response = await fetch(`/api/lists/${listId}/collaborators`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: session?.user?.id, action: "reject" }),
+      });
+
+      if (response.ok) {
+        setActivities((prev) =>
+          prev.filter(
+            (activity) =>
+              !(
+                activity.type === "collaboration_request" &&
+                activity.listId === listId
+              )
+          )
+        );
+      } else {
+        console.error("Failed to reject collaboration request");
+      }
+    } catch (error) {
+      console.error("Error rejecting collaboration request:", error);
+    }
+  };
   
   // Function to fetch diary entries
   const fetchDiaryEntries = React.useCallback(async (username: string) => {
@@ -2661,6 +2850,7 @@ export default function UserProfilePage() {
         })
         .then((data) => {
           if (data?.user) {
+            console.log("[Profile] Received user data:", data.user);
             console.log(`[Profile] Received user data for: ${data.user.username}`);
             console.log(`[Profile] Avatar from API:`, data.user.avatar ? `"${data.user.avatar.substring(0, 100)}..."` : 'null/undefined');
             console.log(`[Profile] Default avatar:`, defaultProfile.avatar ? `"${defaultProfile.avatar.substring(0, 50)}..."` : 'null/undefined');
@@ -2843,6 +3033,8 @@ export default function UserProfilePage() {
             // Determine if this is the owner's profile before mapping
             const isOwnerProfile = isAuthenticated && session?.user?.username === data.user.username;
             
+            console.log("[Profile] Raw recentActivities:", data.user.recentActivities);
+            
             // Transform regular activities
             const transformedActivities: ActivityEntry[] = Array.isArray(data.user.recentActivities)
               ? data.user.recentActivities.map((activity: any, idx: number) => {
@@ -2885,16 +3077,22 @@ export default function UserProfilePage() {
                   } else if (activity.type === "reviewed") {
                     action = "reviewed";
                     detail = activity.bookTitle || "a book";
+                  } else if (activity.type === "collaboration_request") {
+                    action = "invited you to collaborate on";
+                    detail = activity.listName || "a list";
                   }
                   
                   return {
                     id: activity._id?.toString() || `activity-${idx}`,
-                    name: isOwnerProfile ? "You" : data.user.name || "User",
+                    name: isOwnerProfile ? "You" : activity.userName || "User",
                     action,
                     detail,
                     timeAgo,
                     cover: activity.bookCover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
                     type: activity.type,
+                    listId: activity.listId,
+                    listName: activity.listName,
+                    inviter: activity.userName,
                   };
                 })
               : [];
@@ -2967,6 +3165,7 @@ export default function UserProfilePage() {
               return getSortValue(a.timeAgo) - getSortValue(b.timeAgo);
             });
             
+            console.log("[Profile] Transformed and sorted activities:", allActivities);
             setActivities(allActivities);
             
             // Set follower/following counts
@@ -3113,21 +3312,21 @@ export default function UserProfilePage() {
       return map.get(name)!;
     };
     try {
-      bookshelfBooks.forEach((book) => {
+    bookshelfBooks.forEach((book) => {
         if (!book || !book.author) return;
-        const entry = ensureEntry(book.author, book.cover);
-        entry.read += 1;
+      const entry = ensureEntry(book.author, book.cover);
+      entry.read += 1;
         // Add book to author's books array (only from bookshelf, not TBR)
         if (!entry.books) {
           entry.books = [];
         }
         entry.books.push(book);
-      });
-      tbrBooks.forEach((book) => {
+    });
+    tbrBooks.forEach((book) => {
         if (!book || !book.author) return;
-        const entry = ensureEntry(book.author, book.cover);
-        entry.tbr += 1;
-      });
+      const entry = ensureEntry(book.author, book.cover);
+      entry.tbr += 1;
+    });
       // Sort books for each author (by finishedOn date, newest first)
       map.forEach((entry) => {
         if (entry.books) {
@@ -3270,15 +3469,18 @@ export default function UserProfilePage() {
         <div className="space-y-8">
           <div className="grid gap-6 lg:grid-cols-[1fr_2fr] lg:gap-12">
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+              <h1 
+                className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl"
+                style={{ fontFamily: '"CoFo Glassier", sans-serif' }}
+              >
                 {isOwnProfile 
-                  ? "Your saved ideas" 
-                  : `${profileData.username}'s saved ideas`}
+                  ? "Your Library, organised" 
+                  : `${profileData.username}'s library`}
               </h1>
               <p className="text-sm text-muted-foreground">
                 {isOwnProfile 
-                  ? "All your boards, pins, and collages in one place."
-                  : `All ${profileData.username}'s boards, pins, and collages in one place.`}
+                  ? "All your books, lists, and all time favourites in one place."
+                  : `${profileData.username}'s books, lists, and all time favourites in one place.`}
               </p>
             </div>
             <div className="flex justify-end w-full items-start">
@@ -3309,7 +3511,7 @@ export default function UserProfilePage() {
             <>
               <Dock items={dockItems} activeLabel={activeTab} />
 
-              {activeTab === "Profile" ? (
+              {activeTab === "Favourites" ? (
                 <div className="space-y-10">
                   <BookCarousel
                     title="Top 4 books"
@@ -3404,10 +3606,26 @@ export default function UserProfilePage() {
                           if (activityView === "Me") {
                             return entry.name === "You";
                           } else {
+                            // in "Friends" view, show collaboration requests for the current user
+                            if (entry.type === "collaboration_request") {
+                              return true;
+                            }
                             return entry.name !== "You";
                           }
                         })
-                        .map((entry) => (
+                        .map((entry) => {
+                          console.log("[Activity Tab] Rendering activity:", entry);
+                          if (entry.type === "collaboration_request") {
+                            return (
+                              <CollaborationRequestCard
+                                key={entry.id}
+                                activity={entry}
+                                onAccept={handleAccept}
+                                onReject={handleReject}
+                              />
+                            );
+                          }
+                          return (
                           <article
                             key={entry.id}
                             onClick={() => {
@@ -3461,7 +3679,8 @@ export default function UserProfilePage() {
                               )}
                             </div>
                           </article>
-                        ))}
+                        )})
+}
                     </div>
                   )}
                   
@@ -3649,6 +3868,54 @@ export default function UserProfilePage() {
                   onPageChange={setListsPage}
                   onListCreated={async () => {
                     // Refresh lists after creation
+                    try {
+                      const response = await fetch(`/api/users/${encodeURIComponent(activeUsername)}/lists`);
+                      if (response.ok) {
+                        const data = await response.json();
+                        const transformedLists: ReadingList[] = Array.isArray(data.lists)
+                          ? data.lists.map((list: any, idx: number) => {
+                              const updatedAt = list.updatedAt ? new Date(list.updatedAt) : new Date(list.createdAt || Date.now());
+                              const now = new Date();
+                              const diffMs = now.getTime() - updatedAt.getTime();
+                              const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                              let updatedAgo = "";
+                              if (diffDays === 0) updatedAgo = "Today";
+                              else if (diffDays === 1) updatedAgo = "1d";
+                              else if (diffDays < 7) updatedAgo = `${diffDays}d`;
+                              else if (diffDays < 30) updatedAgo = `${Math.floor(diffDays / 7)}w`;
+                              else if (diffDays < 365) updatedAgo = `${Math.floor(diffDays / 30)}mo`;
+                              else updatedAgo = `${Math.floor(diffDays / 365)}y`;
+                              
+                              // Get cover from first book if available
+                              let cover = "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80";
+                              if (Array.isArray(list.books) && list.books.length > 0) {
+                                const firstBook = list.books[0];
+                                if (firstBook?.volumeInfo?.imageLinks?.thumbnail) {
+                                  cover = firstBook.volumeInfo.imageLinks.thumbnail;
+                                } else if (firstBook?.volumeInfo?.imageLinks?.smallThumbnail) {
+                                  cover = firstBook.volumeInfo.imageLinks.smallThumbnail;
+                                }
+                              }
+                              
+                              return {
+                                id: list.id || list._id?.toString() || `list-${idx}`,
+                                title: list.title || "Untitled List",
+                                booksCount: list.booksCount || (Array.isArray(list.books) ? list.books.length : 0),
+                                updatedAgo,
+                                cover,
+                                description: list.description,
+                                books: Array.isArray(list.books) ? list.books.slice(0, 3) : [], // Store first 3 books for display
+                              };
+                            })
+                          : [];
+                        setReadingLists(transformedLists);
+                      }
+                    } catch (error) {
+                      console.error("Failed to refresh lists:", error);
+                    }
+                  }}
+                  onListDeleted={async () => {
+                    // Refresh lists after deletion
                     try {
                       const response = await fetch(`/api/users/${encodeURIComponent(activeUsername)}/lists`);
                       if (response.ok) {

@@ -126,14 +126,14 @@ const OnboardingSchema = new Schema({
 
 const ImplicitPreferencesSchema = new Schema({
   genreWeights: {
-    type: Map,
+    type: Schema.Types.Map,
     of: Number,
-    default: new Map(),
+    default: () => new Map(),
   },
   authorWeights: {
-    type: Map,
+    type: Schema.Types.Map,
     of: Number,
-    default: new Map(),
+    default: () => new Map(),
   },
   avgPageLength: { type: Number, default: 0 },
   diversityScore: { type: Number, default: 0, min: 0, max: 1 },
@@ -158,7 +158,6 @@ const UserPreferenceSchema = new Schema<IUserPreference>(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      unique: true,
       // Index is created explicitly below to avoid duplicate index warning
     },
 
@@ -166,15 +165,16 @@ const UserPreferenceSchema = new Schema<IUserPreference>(
 
     implicitPreferences: {
       type: ImplicitPreferencesSchema,
+      required: true,
       default: () => ({
-        genreWeights: new Map(),
-        authorWeights: new Map(),
+        genreWeights: {},
+        authorWeights: {},
         avgPageLength: 0,
         diversityScore: 0,
         readingVelocity: 0,
         lastComputed: new Date(),
       }),
-    },
+    } as any,
 
     interactions: {
       type: InteractionsSchema,
@@ -191,6 +191,31 @@ const UserPreferenceSchema = new Schema<IUserPreference>(
     collection: 'userpreferences',
   }
 );
+
+// Transform plain objects to Maps when loading documents
+UserPreferenceSchema.post('init', function(doc: IUserPreference) {
+  if (doc.implicitPreferences) {
+    // Convert genreWeights from plain object to Map if needed
+    if (doc.implicitPreferences.genreWeights && !(doc.implicitPreferences.genreWeights instanceof Map)) {
+      const genreMap = new Map<string, number>();
+      Object.entries(doc.implicitPreferences.genreWeights as any).forEach(([key, value]) => {
+        genreMap.set(key, value as number);
+      });
+      doc.implicitPreferences.genreWeights = genreMap;
+      doc.markModified('implicitPreferences.genreWeights');
+    }
+    
+    // Convert authorWeights from plain object to Map if needed
+    if (doc.implicitPreferences.authorWeights && !(doc.implicitPreferences.authorWeights instanceof Map)) {
+      const authorMap = new Map<string, number>();
+      Object.entries(doc.implicitPreferences.authorWeights as any).forEach(([key, value]) => {
+        authorMap.set(key, value as number);
+      });
+      doc.implicitPreferences.authorWeights = authorMap;
+      doc.markModified('implicitPreferences.authorWeights');
+    }
+  }
+});
 
 // ============================================
 // INDEXES
@@ -292,56 +317,45 @@ UserPreferenceSchema.methods = {
 // STATIC METHODS
 // ============================================
 
-UserPreferenceSchema.statics = {
-  /**
-   * Find or create user preference document
-   */
-  async findOrCreate(
-    this: Model<IUserPreference>,
-    userId: mongoose.Types.ObjectId
-  ): Promise<IUserPreference> {
-    let preference = await this.findOne({ userId });
+UserPreferenceSchema.statics.findOrCreate = async function(
+  userId: mongoose.Types.ObjectId
+): Promise<IUserPreference> {
+  let preference = await this.findOne({ userId });
 
-    if (!preference) {
-      preference = await this.create({
-        userId,
-        implicitPreferences: {
-          genreWeights: new Map(),
-          authorWeights: new Map(),
-          avgPageLength: 0,
-          diversityScore: 0,
-          readingVelocity: 0,
-          lastComputed: new Date(),
-        },
-        interactions: {
-          views: [],
-          searches: [],
-        },
-      });
-    }
+  if (!preference) {
+    preference = await this.create({
+      userId,
+      implicitPreferences: {
+        genreWeights: {},
+        authorWeights: {},
+        avgPageLength: 0,
+        diversityScore: 0,
+        readingVelocity: 0,
+        lastComputed: new Date(),
+      },
+      interactions: {
+        views: [],
+        searches: [],
+      },
+    });
+  }
 
-    return preference;
-  },
+  return preference;
+};
 
-  /**
-   * Get all users who need profile recomputation
-   * Used by background job to update stale profiles
-   */
-  async getUsersNeedingRecomputation(
-    this: Model<IUserPreference>,
-    limit: number = 100
-  ): Promise<IUserPreference[]> {
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+UserPreferenceSchema.statics.getUsersNeedingRecomputation = async function(
+  limit: number = 100
+): Promise<IUserPreference[]> {
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    return this.find({
-      $or: [
-        { 'implicitPreferences.lastComputed': { $lt: oneDayAgo } },
-        { 'implicitPreferences.lastComputed': { $exists: false } },
-      ],
-    })
-      .limit(limit)
-      .exec();
-  },
+  return this.find({
+    $or: [
+      { 'implicitPreferences.lastComputed': { $lt: oneDayAgo } },
+      { 'implicitPreferences.lastComputed': { $exists: false } },
+    ],
+  })
+    .limit(limit)
+    .exec();
 };
 
 // ============================================
