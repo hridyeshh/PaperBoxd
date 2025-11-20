@@ -29,6 +29,7 @@ import {
 } from "@/lib/auth-client";
 import { PrivacyPolicyDialog } from "@/components/ui/dialogs/privacy-policy-dialog";
 import { TermsOfServiceDialog } from "@/components/ui/dialogs/terms-of-service-dialog";
+import { useIsMobile } from "@/hooks/use-media-query";
 
 enum AuthView {
   SIGN_IN = "sign-in",
@@ -222,6 +223,7 @@ interface AuthSignInProps {
 
 function AuthSignIn({ onForgotPassword, onSignUp }: AuthSignInProps) {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [formState, setFormState] = React.useState<FormState>({
     isLoading: false,
     error: null,
@@ -256,9 +258,9 @@ function AuthSignIn({ onForgotPassword, onSignUp }: AuthSignInProps) {
       
       if (result?.ok) {
         toast.success("Signed in successfully!");
-        // Redirect to profile page - it will redirect to /u/[username]
-        // We use /profile as an intermediary since we need to wait for the session to load
-        window.location.href = "/profile";
+        // Redirect based on device type: mobile -> /feed, desktop -> /
+        const redirectUrl = isMobile ? "/feed" : "/";
+        window.location.href = redirectUrl;
       }
     } catch (error) {
       // Set error message from the caught error
@@ -310,6 +312,23 @@ function AuthSignIn({ onForgotPassword, onSignUp }: AuthSignInProps) {
             Sign in to your account & save it!
           </p>
         </div>
+
+        {/* Video - Only show on mobile */}
+        {isMobile && (
+          <div className="relative w-full overflow-hidden rounded-2xl">
+            <video
+              src="/auth-video.mov"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full h-auto"
+              style={{ maxWidth: '100%', height: 'auto' }}
+            >
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        )}
 
         <AuthError message={formState.error} />
 
@@ -433,11 +452,18 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
       });
 
       // Automatically sign in after successful registration
-      await signInWithCredentials(data.email, data.password);
+      const signInResult = await signInWithCredentials(data.email, data.password);
       
-      // Redirect to choose username page after successful registration
-      toast.success("Account created successfully!");
-      window.location.href = "/choose-username";
+      if (signInResult?.ok) {
+        // Redirect to choose username page after successful registration
+        toast.success("Account created successfully!");
+        // Use a small delay to ensure session is established
+        setTimeout(() => {
+          window.location.href = "/choose-username";
+        }, 100);
+      } else {
+        throw new Error("Failed to sign in after registration");
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Registration failed. Please try again.";
       toast.error(errorMessage);

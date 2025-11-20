@@ -350,37 +350,55 @@ const SphereImageGrid: React.FC<SphereImageGridProps> = ({
     setIsDragging(false);
   }, []);
 
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  const hasMoved = useRef(false);
+  const touchThreshold = 10; // pixels
+
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    e.preventDefault();
+    // Don't prevent default immediately - let image taps work
     const touch = e.touches[0];
-    setIsDragging(true);
-    setVelocity({ x: 0, y: 0 });
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    hasMoved.current = false;
     lastMousePos.current = { x: touch.clientX, y: touch.clientY };
   }, []);
 
   const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (!isDragging) return;
-    e.preventDefault();
+    if (!touchStartPos.current) return;
     const touch = e.touches[0];
-    const deltaX = touch.clientX - lastMousePos.current.x;
-    const deltaY = touch.clientY - lastMousePos.current.y;
-    const rotationDelta = {
-      x: -deltaY * dragSensitivity,
-      y: deltaX * dragSensitivity
-    };
-    setRotation(prev => ({
-      x: SPHERE_MATH.normalizeAngle(prev.x + clampRotationSpeed(rotationDelta.x)),
-      y: SPHERE_MATH.normalizeAngle(prev.y + clampRotationSpeed(rotationDelta.y)),
-      z: prev.z
-    }));
-    setVelocity({
-      x: clampRotationSpeed(rotationDelta.x),
-      y: clampRotationSpeed(rotationDelta.y)
-    });
-    lastMousePos.current = { x: touch.clientX, y: touch.clientY };
+    const deltaX = Math.abs(touch.clientX - touchStartPos.current.x);
+    const deltaY = Math.abs(touch.clientY - touchStartPos.current.y);
+    const totalMovement = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    
+    // If movement exceeds threshold, it's a drag
+    if (totalMovement > touchThreshold) {
+      hasMoved.current = true;
+      e.preventDefault();
+      if (!isDragging) {
+        setIsDragging(true);
+        setVelocity({ x: 0, y: 0 });
+      }
+      
+      const rotationDelta = {
+        x: -(touch.clientY - lastMousePos.current.y) * dragSensitivity,
+        y: (touch.clientX - lastMousePos.current.x) * dragSensitivity
+      };
+      setRotation(prev => ({
+        x: SPHERE_MATH.normalizeAngle(prev.x + clampRotationSpeed(rotationDelta.x)),
+        y: SPHERE_MATH.normalizeAngle(prev.y + clampRotationSpeed(rotationDelta.y)),
+        z: prev.z
+      }));
+      setVelocity({
+        x: clampRotationSpeed(rotationDelta.x),
+        y: clampRotationSpeed(rotationDelta.y)
+      });
+      lastMousePos.current = { x: touch.clientX, y: touch.clientY };
+    }
   }, [isDragging, dragSensitivity, clampRotationSpeed]);
 
   const handleTouchEnd = useCallback(() => {
+    // Reset touch tracking
+    touchStartPos.current = null;
+    hasMoved.current = false;
     setIsDragging(false);
   }, []);
 
@@ -463,6 +481,42 @@ const SphereImageGrid: React.FC<SphereImageGridProps> = ({
   }) => {
     const imageSize = baseImageSize * position.scale;
     const finalScale = isHovered ? Math.min(1.2, 1.2 / position.scale) : 1;
+    const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+    const hasMovedRef = useRef(false);
+    const touchThreshold = 10;
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+      const touch = e.touches[0];
+      touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+      hasMovedRef.current = false;
+      // Stop propagation to prevent container from handling it
+      e.stopPropagation();
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+      if (!touchStartRef.current) return;
+      const touch = e.touches[0];
+      const deltaX = Math.abs(touch.clientX - touchStartRef.current.x);
+      const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
+      const totalMovement = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      
+      if (totalMovement > touchThreshold) {
+        hasMovedRef.current = true;
+        // Stop propagation so container doesn't handle it as drag
+        e.stopPropagation();
+      }
+    };
+
+    const handleTouchEnd = (e: React.TouchEvent) => {
+      // If it was a tap (no significant movement), trigger click
+      if (!hasMovedRef.current && touchStartRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }
+      touchStartRef.current = null;
+      hasMovedRef.current = false;
+    };
     
     return (
       <div
@@ -479,6 +533,9 @@ const SphereImageGrid: React.FC<SphereImageGridProps> = ({
         onMouseEnter={onHover}
         onMouseLeave={onLeave}
         onClick={onClick}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         <div className="relative w-full h-full rounded-lg overflow-hidden shadow-lg border-2 border-white/20">
           <img

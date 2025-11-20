@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/primitives/label";
 import { Switch } from "@/components/ui/primitives/switch";
 import { Textarea } from "@/components/ui/primitives/textarea";
 import { AvatarEditor } from "@/components/ui/features/avatar-editor";
-import { cn } from "@/lib/utils";
+import { cn, DEFAULT_AVATAR } from "@/lib/utils";
 
 export type EditableProfile = {
   username: string;
@@ -35,12 +35,12 @@ export const defaultProfile: EditableProfile = {
   name: "name",
   birthday: "1998-09-15",
   email: "username@example.com",
-  bio: "Designing bookish experiences with a soft spot for cozy sci-fi and dragon politics.",
+  bio: "",
   pronouns: ["", ""],
   links: "",
   gender: "",
   isPublic: true,
-  avatar: "",
+  avatar: DEFAULT_AVATAR,
 };
 
 const fieldGroupClass = "space-y-2";
@@ -52,6 +52,7 @@ type EditProfileFormProps = {
   profile: EditableProfile;
   onProfileChange: (profile: EditableProfile) => void;
   onSubmitProfile?: () => Promise<void> | void;
+  onCancel?: () => void;
   isSubmitting?: boolean;
   submitError?: string | null;
 };
@@ -60,6 +61,7 @@ export function EditProfileForm({
   profile,
   onProfileChange,
   onSubmitProfile,
+  onCancel,
   isSubmitting = false,
   submitError,
 }: EditProfileFormProps) {
@@ -228,6 +230,13 @@ export function EditProfileForm({
       // Update profile with Cloudinary URL
       updateProfile({ avatar: data.avatar });
       setSelectedImage(null);
+
+      // Dispatch custom event to notify other components (like mobile dock) that avatar was updated
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("profileAvatarUpdated", {
+          detail: { avatar: data.avatar, username: profile.username }
+        }));
+      }
     } catch (error) {
       console.error('Avatar upload error:', error);
       setAvatarError(
@@ -257,6 +266,13 @@ export function EditProfileForm({
 
       // Remove avatar from profile
       updateProfile({ avatar: '' });
+
+      // Dispatch custom event to notify other components (like mobile dock) that avatar was removed
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("profileAvatarUpdated", {
+          detail: { avatar: '', username: profile.username }
+        }));
+      }
     } catch (error) {
       console.error('Avatar delete error:', error);
       setAvatarError(
@@ -265,7 +281,7 @@ export function EditProfileForm({
     } finally {
       setIsUploadingAvatar(false);
     }
-  }, [profile.avatar, updateProfile]);
+  }, [profile.avatar, updateProfile, profile.username]);
 
   const handlePronounSelection = React.useCallback(
     (selection: Selection) => {
@@ -315,9 +331,6 @@ export function EditProfileForm({
     [onSubmitProfile],
   );
 
-  // Gray placeholder avatar as SVG data URI
-  const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%239ca3af'/%3E%3Cpath d='M50 30c-8.284 0-15 6.716-15 15 0 5.989 3.501 11.148 8.535 13.526C37.514 62.951 32 70.16 32 78.5h36c0-8.34-5.514-15.549-13.535-19.974C59.499 56.148 63 50.989 63 45c0-8.284-6.716-15-15-15z' fill='white' opacity='0.8'/%3E%3C/svg%3E";
-
   return (
     <form className="flex flex-col gap-8" onSubmit={handleSubmit}>
       <section className="flex flex-col gap-6 rounded-3xl border border-border/60 bg-muted/20 p-6 shadow-sm">
@@ -327,7 +340,7 @@ export function EditProfileForm({
         </div>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <div className="relative h-24 w-24 overflow-hidden rounded-2xl border border-border/70 bg-background">
-            <Image src={profile.avatar || defaultAvatar} alt={profile.name} fill className="object-cover" sizes="96px" />
+            <Image src={profile.avatar || DEFAULT_AVATAR} alt={profile.name} fill className="object-cover" sizes="96px" />
             {isUploadingAvatar && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                 <Loader2 className="h-6 w-6 animate-spin text-white" />
@@ -580,7 +593,13 @@ export function EditProfileForm({
           ) : null}
         </div>
         <div className="flex gap-3">
-          <Button variant="ghost" type="button" className="rounded-full px-6" disabled={isSubmitting}>
+          <Button 
+            variant="ghost" 
+            type="button" 
+            className="rounded-full px-6" 
+            disabled={isSubmitting}
+            onClick={onCancel}
+          >
             Cancel
           </Button>
           <Button type="submit" className="rounded-full px-6" disabled={isSubmitting}>

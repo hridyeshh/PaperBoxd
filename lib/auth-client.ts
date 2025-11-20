@@ -54,8 +54,10 @@ export async function signInWithCredentials(email: string, password: string) {
  * Sign in with Google
  */
 export async function signInWithGoogle() {
-  // Redirect to /profile, which will redirect to /u/[username]
-  await nextAuthSignIn("google", { callbackUrl: "/profile" });
+  // Detect mobile and set appropriate callback URL
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const callbackUrl = isMobile ? "/feed" : "/";
+  await nextAuthSignIn("google", { callbackUrl });
 }
 
 /**

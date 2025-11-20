@@ -14,6 +14,8 @@ import {
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import { useIsMobile } from "@/hooks/use-media-query";
+import { cn } from "@/lib/utils";
 
 interface DiaryEntryDialogProps {
   open: boolean;
@@ -54,6 +56,7 @@ export function DiaryEntryDialog({
   const [isAnimating, setIsAnimating] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
+  const isMobile = useIsMobile();
 
   // Update state when entry prop changes
   React.useEffect(() => {
@@ -207,27 +210,40 @@ export function DiaryEntryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-4">
-          <DialogTitle>
+      <DialogContent className={cn(
+        "max-h-[85vh] flex flex-col p-0",
+        isMobile ? "max-w-[95vw] w-full" : "max-w-2xl"
+      )}>
+        <DialogHeader className={cn(
+          "pb-3",
+          isMobile ? "px-3 pt-3" : "px-4 pt-4"
+        )}>
+          <DialogTitle className={cn(isMobile ? "text-base" : "text-lg")}>
             {entry.bookTitle || ((entry.subject && entry.subject.trim()) ? entry.subject : "Your notes")}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-sm">
             {entry.bookAuthor ? entry.bookAuthor : (entry.bookTitle ? null : "You")}
           </DialogDescription>
         </DialogHeader>
 
-        <div className={`flex-1 flex ${entry.bookCover ? 'gap-6' : ''} overflow-hidden px-6 pb-6`}>
+        <div className={cn(
+          "flex-1 flex overflow-hidden pb-4",
+          entry.bookCover ? (isMobile ? 'flex-col gap-3' : 'gap-4') : '',
+          isMobile ? "px-3" : "px-4"
+        )}>
           {/* Book Cover - Left Side (only show if book exists) */}
           {entry.bookCover && (
-            <div className="flex-shrink-0 w-48">
+            <div className={cn(
+              "flex-shrink-0",
+              isMobile ? "w-24 mx-auto" : "w-32"
+            )}>
               <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-muted">
                 <Image
                   src={entry.bookCover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80"}
                   alt={entry.bookTitle ? `${entry.bookTitle} cover` : "Book cover"}
                   fill
                   className="object-cover"
-                  sizes="192px"
+                  sizes={isMobile ? "96px" : "128px"}
                   quality={100}
                   unoptimized={entry.bookCover?.includes('isbndb.com') || entry.bookCover?.includes('images.isbndb.com') || entry.bookCover?.includes('covers.isbndb.com') || true}
                 />
@@ -239,13 +255,13 @@ export function DiaryEntryDialog({
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             <div className="flex-1 overflow-y-auto pr-2">
               <div
-                className="prose prose-sm dark:prose-invert max-w-none text-foreground/90"
+                className="prose prose-sm dark:prose-invert max-w-none text-foreground/90 text-sm"
                 dangerouslySetInnerHTML={{ __html: entry.content }}
               />
             </div>
 
             {/* Footer with date, delete button (if owner), and like button */}
-            <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
               <div className="flex items-center gap-3">
                 <div className="text-xs text-muted-foreground">
                   {entry.updatedAt !== entry.createdAt ? `Updated ${entry.updatedAt}` : entry.createdAt}

@@ -19,7 +19,7 @@ import {
 import { DockToggle } from '@/components/ui/dock';
 
 import { LucideIcon, SearchIcon, Loader2, BookOpen, User } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, DEFAULT_AVATAR } from '@/lib/utils';
 import { createBookSlug } from '@/lib/utils/book-slug';
 
 export type CommandItem = {
@@ -228,8 +228,6 @@ export function SearchModal({ children, data }: SearchModalProps) {
 		searchType === 'Books' ? bookResults :
 		userResults;
 
-	const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%239ca3af'/%3E%3Cpath d='M50 30c-8.284 0-15 6.716-15 15 0 5.989 3.501 11.148 8.535 13.526C37.514 62.951 32 70.16 32 78.5h36c0-8.34-5.514-15.549-13.535-19.974C59.499 56.148 63 50.989 63 45c0-8.284-6.716-15-15-15z' fill='white' opacity='0.8'/%3E%3C/svg%3E";
-
 	return (
 		<Modal open={open} onOpenChange={setOpen}>
 			<ModalTrigger asChild>{children}</ModalTrigger>
@@ -421,7 +419,7 @@ export function SearchModal({ children, data }: SearchModalProps) {
 												>
 												<div className="relative size-12 flex-shrink-0 overflow-hidden rounded-full bg-muted pointer-events-none">
 													<Image
-														src={user.avatar || defaultAvatar}
+														src={user.avatar || DEFAULT_AVATAR}
 														alt={user.username}
 														fill
 														className="object-cover pointer-events-none"

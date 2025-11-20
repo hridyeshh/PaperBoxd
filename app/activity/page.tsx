@@ -12,6 +12,7 @@ import { DiaryEntryDialog } from "@/components/ui/dialogs/diary-entry-dialog";
 import { Button } from "@/components/ui/primitives/button";
 import { toast } from "sonner";
 import { createBookSlug } from "@/lib/utils/book-slug";
+import { DEFAULT_AVATAR } from "@/lib/utils";
 import {
   Pagination,
   PaginationContent,
@@ -50,9 +51,6 @@ type ActivityEntry = {
 };
 
 const ACTIVITY_PAGE_SIZE = 10;
-
-// Default avatar placeholder (gray circle with user icon)
-const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%239ca3af'/%3E%3Cpath d='M50 30c-8.284 0-15 6.716-15 15 0 5.989 3.501 11.148 8.535 13.526C37.514 62.951 32 70.16 32 78.5h36c0-8.34-5.514-15.549-13.535-19.974C59.499 56.148 63 50.989 63 45c0-8.284-6.716-15-15-15z' fill='white' opacity='0.8'/%3E%3C/svg%3E";
 
 export default function ActivityPage() {
   const { data: session, status } = useSession();
@@ -405,7 +403,7 @@ export default function ActivityPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8 mt-16">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8 mt-16 pb-24 md:pb-8">
         <div className="space-y-10">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -481,7 +479,7 @@ export default function ActivityPage() {
                     {/* Show profile picture of the person who did the activity */}
                       <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-full bg-muted border-2 border-border">
                         <Image
-                          src={entry.userAvatar || defaultAvatar}
+                          src={entry.userAvatar || DEFAULT_AVATAR}
                           alt={entry.name}
                           fill
                           className="object-cover"

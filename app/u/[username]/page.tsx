@@ -31,6 +31,7 @@ import {
 import { Edit, Image as ImageIcon, MoreVertical, Trash2, Plus, X, Heart, ArrowLeft, Search as SearchIcon, Send, AlertTriangle } from "lucide-react";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { createBookSlug } from "@/lib/utils/book-slug";
+import { cn, DEFAULT_AVATAR } from "@/lib/utils";
 import {
   type BookshelfBook,
   type LikedBook,
@@ -44,6 +45,7 @@ import { Label } from "@/components/ui/primitives/label";
 import { Switch } from "@/components/ui/primitives/switch";
 import { Button } from "@/components/ui/primitives/button";
 import { toast } from "sonner";
+import { useIsMobile } from "@/hooks/use-media-query";
 
 const dockLabels = ["Favourites", "Bookshelf", "Diary", "Authors", "Lists", "'to-be-read'", "Likes"] as const;
 type DockLabel = (typeof dockLabels)[number] | "Activity";
@@ -162,9 +164,6 @@ function FollowersFollowingDialog({
   const [users, setUsers] = React.useState<UserListItem[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  
-  // Gray placeholder avatar as SVG data URI
-  const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%239ca3af'/%3E%3Cpath d='M50 30c-8.284 0-15 6.716-15 15 0 5.989 3.501 11.148 8.535 13.526C37.514 62.951 32 70.16 32 78.5h36c0-8.34-5.514-15.549-13.535-19.974C59.499 56.148 63 50.989 63 45c0-8.284-6.716-15-15-15z' fill='white' opacity='0.8'/%3E%3C/svg%3E";
 
   const fetchUsers = React.useCallback(() => {
     if (!isAuthenticated || !username) return;
@@ -282,7 +281,7 @@ function FollowersFollowingDialog({
                     >
                       <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-full bg-muted">
                         <Image
-                          src={user.avatar || defaultAvatar}
+                          src={user.avatar || DEFAULT_AVATAR}
                           alt={user.username}
                           fill
                           className="object-cover"
@@ -334,9 +333,6 @@ function ProfileSummary({
   authPromptOpen: boolean;
   onAuthPromptChange: (open: boolean) => void;
 }) {
-  // Gray placeholder avatar as SVG data URI
-  const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%239ca3af'/%3E%3Cpath d='M50 30c-8.284 0-15 6.716-15 15 0 5.989 3.501 11.148 8.535 13.526C37.514 62.951 32 70.16 32 78.5h36c0-8.34-5.514-15.549-13.535-19.974C59.499 56.148 63 50.989 63 45c0-8.284-6.716-15-15-15z' fill='white' opacity='0.8'/%3E%3C/svg%3E";
-  
   const bioRef = React.useRef<HTMLParagraphElement>(null);
   const [showReadMore, setShowReadMore] = React.useState(false);
 
@@ -373,9 +369,9 @@ function ProfileSummary({
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        <div className="relative h-28 w-28 flex-shrink-0">
+        <div className="relative h-24 w-24 sm:h-28 sm:w-28 flex-shrink-0">
           {(() => {
-            const avatarSrc = profile.avatar || defaultAvatar;
+            const avatarSrc = profile.avatar || DEFAULT_AVATAR;
             console.log(`[ProfileSummary] Rendering avatar:`, avatarSrc ? `"${avatarSrc.substring(0, 100)}..."` : 'null/undefined');
             console.log(`[ProfileSummary] Using default:`, !profile.avatar);
             return (
@@ -598,10 +594,12 @@ function BookCarousel({
 
   return (
     <section className="space-y-4">
+      {title && (
       <div>
         <h3 className="text-xl font-semibold text-foreground">{title}</h3>
-        <p className="text-sm text-muted-foreground">{subtitle}</p>
+          {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
       </div>
+      )}
       <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
         {books.map((book) => (
           <BookCard key={book.id} {...book} />
@@ -1275,11 +1273,13 @@ function BookshelfSection({
   page,
   pageSize,
   onPageChange,
+  isMobile = false,
 }: {
   books: BookshelfBook[];
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
+  isMobile?: boolean;
 }) {
   const router = useRouter();
   const totalPages = Math.ceil(books.length / pageSize);
@@ -1331,24 +1331,45 @@ function BookshelfSection({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+      <div className={cn(
+        "grid gap-4",
+        isMobile ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
+      )}>
         {paginatedBooks.map((book) => (
           <div 
             key={book.id} 
             onClick={() => handleBookClick(book)}
-            className="group flex gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md cursor-pointer"
+            className={cn(
+              "group rounded-lg border border-border/70 bg-card shadow-sm transition-shadow hover:shadow-md cursor-pointer overflow-hidden",
+              isMobile ? "flex flex-col" : "flex gap-3 p-3"
+            )}
           >
-            <div className="relative aspect-[2/3] h-20 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-muted shadow-sm">
+            <div className={cn(
+              "relative aspect-[2/3] overflow-hidden bg-muted",
+              isMobile ? "w-full" : "h-20 w-14 flex-shrink-0 rounded-lg"
+            )}>
               <Image
                 src={book.cover}
                 alt={`${book.title} cover`}
                 fill
                 className="object-cover transition-transform duration-500 group-hover:scale-105"
-                sizes="56px"
+                sizes={isMobile ? "50vw" : "56px"}
                 quality={100}
                 unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
               />
             </div>
+            {isMobile ? (
+              <div className="p-2 space-y-1">
+                <h3 className="text-xs font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
+                <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+                {book.rating ? (
+                  <p className="text-xs text-yellow-500">
+                    {"★".repeat(book.rating)}
+                    {"☆".repeat(5 - book.rating)}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
             <div className="flex-1 min-w-0 space-y-1">
               <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
               <p className="text-xs text-muted-foreground truncate">{book.author}</p>
@@ -1359,6 +1380,7 @@ function BookshelfSection({
                 </p>
               ) : null}
             </div>
+            )}
           </div>
         ))}
       </div>
@@ -1411,11 +1433,13 @@ function LikesSection({
   page,
   pageSize,
   onPageChange,
+  isMobile = false,
 }: {
   books: LikedBook[];
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
+  isMobile?: boolean;
 }) {
   const router = useRouter();
   const totalPages = Math.ceil(books.length / pageSize);
@@ -1459,29 +1483,46 @@ function LikesSection({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+      <div className={cn(
+        "grid gap-4",
+        isMobile ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
+      )}>
         {paginatedBooks.map((book) => (
           <div 
             key={book.id} 
             onClick={() => handleBookClick(book)}
-            className="group flex gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md cursor-pointer"
+            className={cn(
+              "group rounded-lg border border-border/70 bg-card shadow-sm transition-shadow hover:shadow-md cursor-pointer overflow-hidden",
+              isMobile ? "flex flex-col" : "flex gap-3 p-3"
+            )}
           >
-            <div className="relative aspect-[2/3] h-20 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-muted shadow-sm">
+            <div className={cn(
+              "relative aspect-[2/3] overflow-hidden bg-muted",
+              isMobile ? "w-full" : "h-20 w-14 flex-shrink-0 rounded-lg"
+            )}>
               <Image
                 src={book.cover}
                 alt={`${book.title} cover`}
                 fill
                 className="object-cover transition-transform duration-500 group-hover:scale-105"
-                sizes="56px"
+                sizes={isMobile ? "50vw" : "56px"}
                 quality={100}
                 unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
               />
             </div>
-            <div className="flex-1 min-w-0 space-y-1">
-              <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
-              <p className="text-xs text-muted-foreground truncate">{book.author}</p>
-              {book.reason ? <p className="text-xs text-muted-foreground/80 line-clamp-1">{book.reason}</p> : null}
+            {isMobile ? (
+              <div className="p-2 space-y-1">
+                <h3 className="text-xs font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
+                <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+                {book.reason ? <p className="text-xs text-muted-foreground/80 line-clamp-1">{book.reason}</p> : null}
             </div>
+            ) : (
+              <div className="flex-1 min-w-0 space-y-1">
+                <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
+                <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+                {book.reason ? <p className="text-xs text-muted-foreground/80 line-clamp-1">{book.reason}</p> : null}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -1534,11 +1575,13 @@ function TbrSection({
   page,
   pageSize,
   onPageChange,
+  isMobile = false,
 }: {
   books: TbrBook[];
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
+  isMobile?: boolean;
 }) {
   const router = useRouter();
   const totalPages = Math.ceil(books.length / pageSize);
@@ -1586,32 +1629,52 @@ function TbrSection({
         <h2 className="text-xl font-semibold text-foreground">The procrastination wall</h2>
         <p className="text-sm text-muted-foreground">All the books waiting to be read</p>
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+      <div className={cn(
+        "grid gap-4",
+        isMobile ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
+      )}>
         {paginatedBooks.map((book) => (
           <div 
             key={book.id} 
             onClick={() => handleBookClick(book)}
-            className="group flex gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md cursor-pointer"
+            className={cn(
+              "group rounded-lg border border-border/70 bg-card shadow-sm transition-shadow hover:shadow-md cursor-pointer overflow-hidden",
+              isMobile ? "flex flex-col" : "flex gap-3 p-3"
+            )}
           >
-            <div className="relative aspect-[2/3] h-20 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-muted shadow-sm">
+            <div className={cn(
+              "relative aspect-[2/3] overflow-hidden bg-muted",
+              isMobile ? "w-full" : "h-20 w-14 flex-shrink-0 rounded-lg"
+            )}>
               <Image
                 src={book.cover}
                 alt={`${book.title} cover`}
                 fill
                 className="object-cover transition-transform duration-500 group-hover:scale-105"
-                sizes="56px"
+                sizes={isMobile ? "50vw" : "56px"}
                 quality={100}
                 unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
               />
             </div>
-            <div className="flex-1 min-w-0 space-y-1">
-              <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
-              <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+            {isMobile ? (
+              <div className="p-2 space-y-1">
+                <h3 className="text-xs font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
+                <p className="text-xs text-muted-foreground truncate">{book.author}</p>
               <p className="text-xs text-muted-foreground/80">{book.addedOn}</p>
               {book.urgency ? (
-                <p className="text-xs font-semibold text-muted-foreground">{book.urgency}</p>
+                  <p className="text-xs font-semibold text-muted-foreground">{book.urgency}</p>
               ) : null}
             </div>
+            ) : (
+              <div className="flex-1 min-w-0 space-y-1">
+                <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
+                <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+                <p className="text-xs text-muted-foreground/80">{book.addedOn}</p>
+                {book.urgency ? (
+                  <p className="text-xs font-semibold text-muted-foreground">{book.urgency}</p>
+                ) : null}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -1666,6 +1729,7 @@ function AuthorsSection({
   onPageChange,
   username,
   bookshelfBooks,
+  isMobile = false,
 }: {
   authors: AuthorStat[];
   page: number;
@@ -1673,6 +1737,7 @@ function AuthorsSection({
   onPageChange: (page: number) => void;
   username: string;
   bookshelfBooks: BookshelfBook[];
+  isMobile?: boolean;
 }) {
   const [selectedAuthor, setSelectedAuthor] = React.useState<AuthorStat | null>(null);
   const [isAuthorDialogOpen, setIsAuthorDialogOpen] = React.useState(false);
@@ -1741,7 +1806,10 @@ function AuthorsSection({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+      <div className={cn(
+        "grid gap-4",
+        isMobile ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
+      )}>
         {paginatedAuthors.map((author) => {
           if (!author || !author.name) return null;
           const displayBooks = (author.books && Array.isArray(author.books)) ? author.books.slice(0, 3) : [];
@@ -2098,7 +2166,7 @@ function ListCard({
   );
 }
 
-function ListsCarousel({ lists, canEdit, username, onListCreated, onListDeleted, page, pageSize, onPageChange }: { lists: ReadingList[]; canEdit: boolean; username: string; onListCreated?: () => void; onListDeleted?: () => void; page: number; pageSize: number; onPageChange: (page: number) => void }) {
+function ListsCarousel({ lists, canEdit, username, onListCreated, onListDeleted, page, pageSize, onPageChange, isMobile = false }: { lists: ReadingList[]; canEdit: boolean; username: string; onListCreated?: () => void; onListDeleted?: () => void; page: number; pageSize: number; onPageChange: (page: number) => void; isMobile?: boolean }) {
   const router = useRouter();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
   const [listName, setListName] = React.useState("");
@@ -2182,17 +2250,17 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, onListDeleted,
               }}
             />
             <Dialog open={isCreateDialogOpen} onOpenChange={handleDialogOpenChange}>
-              <DialogContent className="max-w-md p-0 sm:rounded-2xl">
-                <div className="p-6">
+              <DialogContent className="max-w-md w-[95vw] sm:w-full p-0 sm:rounded-2xl">
+                <div className="p-4 sm:p-6">
                   <DialogHeader>
-                    <DialogTitle className="text-2xl font-semibold">Create a list</DialogTitle>
+                    <DialogTitle className="text-xl sm:text-2xl font-semibold">Create a list</DialogTitle>
                   </DialogHeader>
                   
                   {/* List Image Placeholder */}
-                  <div className="mt-6 mb-6">
+                  <div className="mt-4 sm:mt-6 mb-4 sm:mb-6">
                     <div className="relative w-full rounded-lg bg-muted/40 border border-border/60 overflow-hidden">
                       <div className="aspect-[4/3] flex items-center justify-center">
-                        <div className="grid grid-cols-2 gap-1.5 w-full h-full p-2.5">
+                        <div className="grid grid-cols-2 gap-1.5 w-full h-full p-2 sm:p-2.5">
                           <div className="bg-muted/50 rounded-sm"></div>
                           <div className="bg-muted/50 rounded-sm"></div>
                         </div>
@@ -2201,7 +2269,7 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, onListDeleted,
                   </div>
 
                   {/* List Name Input */}
-                  <div className="space-y-2 mb-6">
+                  <div className="space-y-2 mb-4 sm:mb-6">
                     <Label htmlFor="list-name" className="text-sm font-medium">
                       List name
                     </Label>
@@ -2222,10 +2290,10 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, onListDeleted,
 
                   {/* Make this list secret */}
                   <div className="mb-4">
-                    <div className="flex items-center justify-between rounded-lg border border-border/50 p-4 hover:bg-muted/30 transition-colors cursor-pointer"
+                    <div className="flex items-center justify-between rounded-lg border border-border/50 p-3 sm:p-4 hover:bg-muted/30 transition-colors cursor-pointer"
                       onClick={() => setIsSecret(!isSecret)}
                     >
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0 pr-2">
                         <Label htmlFor="secret-toggle" className="text-sm font-medium cursor-pointer">
                           Make this list secret
                         </Label>
@@ -2247,7 +2315,7 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, onListDeleted,
                     onClick={handleCreateList}
                     disabled={!listName.trim() || isCreating}
                     variant={listName.trim() ? "default" : "secondary"}
-                    className="w-full h-11 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full h-10 sm:h-11 text-sm sm:text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCreating ? "Creating..." : "Create"}
                   </Button>
@@ -2267,7 +2335,10 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, onListDeleted,
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+          <div className={cn(
+            "grid gap-4",
+            isMobile ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
+          )}>
             {lists.slice((page - 1) * pageSize, page * pageSize).map((list) => (
               <ListCard key={list.id} list={list} canEdit={canEdit} username={username} onListDeleted={onListDeleted} />
           ))}
@@ -2336,6 +2407,7 @@ function DiarySection({
   page,
   pageSize,
   onPageChange,
+  isMobile = false,
 }: { 
   entries: any[]; 
   isOwnProfile: boolean;
@@ -2345,6 +2417,7 @@ function DiarySection({
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
+  isMobile?: boolean;
 }) {
   const { data: session } = useSession();
   const [selectedEntry, setSelectedEntry] = React.useState<any | null>(null);
@@ -2397,7 +2470,10 @@ function DiarySection({
           <h2 className="text-xl font-semibold text-foreground">Diary</h2>
           <p className="text-sm text-muted-foreground">Thoughts and reflections on books</p>
         </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+        <div className={cn(
+          "grid gap-4",
+          isMobile ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
+        )}>
           {paginatedEntries.map((entry) => {
             const isLiked = entry.isLiked || false;
             const likesCount = entry.likesCount || 0;
@@ -2407,17 +2483,23 @@ function DiarySection({
               <div
                 key={entry.id}
                 onClick={() => handleEntryClick(entry)}
-                className="group flex gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md cursor-pointer"
+                className={cn(
+                  "group rounded-lg border border-border/70 bg-card shadow-sm transition-shadow hover:shadow-md cursor-pointer overflow-hidden",
+                  isMobile ? "flex flex-col" : "flex gap-3 p-3"
+                )}
               >
                 {/* Book Cover (if entry is about a book) */}
                 {hasBookCover && (
-                  <div className="relative aspect-[2/3] h-20 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-muted shadow-sm">
+                  <div className={cn(
+                    "relative aspect-[2/3] overflow-hidden bg-muted",
+                    isMobile ? "w-full" : "h-20 w-14 flex-shrink-0 rounded-lg"
+                  )}>
                     <Image
                       src={entry.bookCover}
                       alt={entry.bookTitle || "Book cover"}
                       fill
                       className="object-cover"
-                      sizes="(max-width: 640px) 56px, 56px"
+                      sizes={isMobile ? "50vw" : "56px"}
                       quality={100}
                       unoptimized={entry.bookCover?.includes('isbndb.com') || entry.bookCover?.includes('images.isbndb.com') || entry.bookCover?.includes('covers.isbndb.com') || true}
                       onError={(e) => {
@@ -2431,26 +2513,44 @@ function DiarySection({
                 )}
                 
                 {/* Entry Content */}
-                <div className="flex-1 min-w-0 space-y-1">
+                <div className={cn(
+                  "space-y-1",
+                  isMobile ? "p-2.5" : "flex-1 min-w-0"
+                )}>
                   <div>
                     {entry.bookTitle ? (
                       <>
-                        <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{entry.bookTitle}</h3>
-                        {entry.bookAuthor && <p className="text-xs text-muted-foreground truncate">{entry.bookAuthor}</p>}
+                        <h3 className={cn(
+                          "font-semibold text-foreground line-clamp-2 leading-tight",
+                          isMobile ? "text-xs" : "text-sm"
+                        )}>{entry.bookTitle}</h3>
+                        {entry.bookAuthor && (
+                          <p className={cn(
+                            "text-muted-foreground truncate",
+                            isMobile ? "text-xs mt-0.5" : "text-xs"
+                          )}>{entry.bookAuthor}</p>
+                        )}
                       </>
                     ) : (
-                      <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">
+                      <h3 className={cn(
+                        "font-semibold text-foreground line-clamp-2 leading-tight",
+                        isMobile ? "text-xs" : "text-sm"
+                      )}>
                           {(entry.subject && entry.subject.trim()) ? entry.subject : "Diary Entry"}
                         </h3>
                     )}
                     {entry.updatedAt && (
-                      <p className="text-xs text-muted-foreground/80 mt-1 truncate">
+                      <p className={cn(
+                        "text-muted-foreground/80 truncate",
+                        isMobile ? "text-xs mt-1" : "text-xs mt-1"
+                      )}>
                         {entry.updatedAt !== entry.createdAt ? `Updated ${entry.updatedAt}` : entry.createdAt}
                       </p>
                     )}
                   </div>
+                  {!isMobile && (
                   <div
-                    className="prose prose-sm dark:prose-invert max-w-none text-foreground/90 line-clamp-2 overflow-hidden text-xs"
+                      className="prose prose-sm dark:prose-invert max-w-none text-foreground/90 line-clamp-2 overflow-hidden text-xs"
                     dangerouslySetInnerHTML={{ __html: entry.content }}
                     style={{
                       display: '-webkit-box',
@@ -2459,9 +2559,16 @@ function DiarySection({
                       overflow: 'hidden',
                     }}
                   />
+                  )}
                   {likesCount > 0 && (
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                      <Heart className={`h-3 w-3 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                    <div className={cn(
+                      "flex items-center gap-1 text-muted-foreground",
+                      isMobile ? "text-xs mt-1.5" : "text-xs mt-1"
+                    )}>
+                      <Heart className={cn(
+                        isLiked ? 'fill-red-500 text-red-500' : '',
+                        "h-3 w-3"
+                      )} />
                       <span>{likesCount}</span>
                     </div>
                   )}
@@ -2603,6 +2710,7 @@ export default function UserProfilePage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const isMobile = useIsMobile();
   const username = typeof params.username === "string" ? params.username : null;
   
   // Check if tab is specified in URL params
@@ -2853,9 +2961,9 @@ export default function UserProfilePage() {
             console.log("[Profile] Received user data:", data.user);
             console.log(`[Profile] Received user data for: ${data.user.username}`);
             console.log(`[Profile] Avatar from API:`, data.user.avatar ? `"${data.user.avatar.substring(0, 100)}..."` : 'null/undefined');
-            console.log(`[Profile] Default avatar:`, defaultProfile.avatar ? `"${defaultProfile.avatar.substring(0, 50)}..."` : 'null/undefined');
+            console.log(`[Profile] Default avatar:`, DEFAULT_AVATAR ? `"${DEFAULT_AVATAR.substring(0, 50)}..."` : 'null/undefined');
             
-            const avatarValue = data.user.avatar || defaultProfile.avatar;
+            const avatarValue = data.user.avatar || DEFAULT_AVATAR;
             console.log(`[Profile] Final avatar value:`, avatarValue ? `"${avatarValue.substring(0, 100)}..."` : 'null/undefined');
             console.log(`[Profile] Avatar type:`, typeof avatarValue);
             console.log(`[Profile] Avatar length:`, avatarValue ? avatarValue.length : 0);
@@ -3402,6 +3510,13 @@ export default function UserProfilePage() {
         // Update original avatar after successful save
         setOriginalAvatar(result.user.avatar || "");
 
+        // Dispatch custom event to notify other components (like mobile dock) that avatar was updated
+        if (typeof window !== "undefined" && result.user.avatar) {
+          window.dispatchEvent(new CustomEvent("profileAvatarUpdated", {
+            detail: { avatar: result.user.avatar, username: result.user.username || activeUsername }
+          }));
+        }
+
         if (result.user.username && result.user.username !== activeUsername) {
           setActiveUsername(result.user.username);
           // Redirect to new username URL
@@ -3465,10 +3580,10 @@ export default function UserProfilePage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8 mt-16">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8 mt-16 pb-24 md:pb-8">
         <div className="space-y-8">
           <div className="grid gap-6 lg:grid-cols-[1fr_2fr] lg:gap-12">
-            <div>
+            <div className="hidden md:block">
               <h1 
                 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl"
                 style={{ fontFamily: '"CoFo Glassier", sans-serif' }}
@@ -3509,15 +3624,83 @@ export default function UserProfilePage() {
 
           {isAuthenticated ? (
             <>
-              <Dock items={dockItems} activeLabel={activeTab} />
+              <div className={cn(
+                "w-full",
+                isMobile && "overflow-x-auto scrollbar-hide"
+              )}>
+                <div className={cn(
+                  isMobile && "min-w-max inline-block px-4"
+                )}>
+                  <Dock 
+                    items={dockItems} 
+                    activeLabel={activeTab}
+                    className={isMobile ? "w-auto" : ""}
+                  />
+                </div>
+              </div>
 
               {activeTab === "Favourites" ? (
                 <div className="space-y-10">
+                  {isMobile ? (
+                    <>
+                      {topBooks.length > 0 && (
+                        <div className="grid grid-cols-2 gap-4">
+                          {topBooks.slice(0, 4).map((book) => (
+                            <div key={book.id} className="flex flex-col gap-2">
+                              <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl bg-muted">
+                                <Image
+                                  src={book.cover}
+                                  alt={book.title}
+                                  fill
+                                  className="object-cover"
+                                  sizes="50vw"
+                                  quality={100}
+                                  unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
+                                />
+                              </div>
+                              <div>
+                                <h3 className="text-xs font-semibold text-foreground line-clamp-2">{book.title}</h3>
+                                <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div>
+                        <h2 className="text-xl font-semibold text-foreground mb-2">Books that I love</h2>
+                        <p className="text-sm text-muted-foreground mb-4">Comfort stories and obsessions that always earn a re-read.</p>
+                        <div className="grid grid-cols-2 gap-4">
+                          {favoriteBooks.map((book) => (
+                            <div key={book.id} className="flex flex-col gap-2">
+                              <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl bg-muted">
+                                <Image
+                                  src={book.cover}
+                                  alt={book.title}
+                                  fill
+                                  className="object-cover"
+                                  sizes="50vw"
+                                  quality={100}
+                                  unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
+                                />
+                              </div>
+                              <div>
+                                <h3 className="text-xs font-semibold text-foreground line-clamp-2">{book.title}</h3>
+                                <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                  {topBooks.length > 0 && (
                   <BookCarousel
-                    title="Top 4 books"
-                    subtitle="The ones I keep coming back to."
+                      title=""
+                      subtitle=""
                     books={topBooks}
                   />
+                  )}
                   <EditableFavoriteBooksCarousel
                     title="Books that I love"
                     subtitle="Comfort stories and obsessions that always earn a re-read."
@@ -3555,6 +3738,8 @@ export default function UserProfilePage() {
                       }
                     }}
                   />
+                    </>
+                  )}
                 </div>
               ) : activeTab === "Activity" ? (
                 <div className="space-y-10">
@@ -3848,24 +4033,26 @@ export default function UserProfilePage() {
                   )}
                 </div>
               ) : activeTab === "Authors" ? (
-                <AuthorsSection authors={authorStats} page={authorsPage} pageSize={AUTHORS_PAGE_SIZE} onPageChange={setAuthorsPage} username={activeUsername} bookshelfBooks={bookshelfBooks} />
+                <AuthorsSection authors={authorStats} page={authorsPage} pageSize={isMobile ? 8 : AUTHORS_PAGE_SIZE} onPageChange={setAuthorsPage} username={activeUsername} bookshelfBooks={bookshelfBooks} isMobile={isMobile} />
               ) : activeTab === "Bookshelf" ? (
                 <BookshelfSection
                   books={bookshelfBooks}
                   page={bookshelfPage}
-                  pageSize={BOOKSHELF_PAGE_SIZE}
+                  pageSize={isMobile ? 8 : BOOKSHELF_PAGE_SIZE}
                   onPageChange={setBookshelfPage}
+                  isMobile={isMobile}
                 />
               ) : activeTab === "Likes" ? (
-                <LikesSection books={likedBooks} page={likesPage} pageSize={LIKES_PAGE_SIZE} onPageChange={setLikesPage} />
+                <LikesSection books={likedBooks} page={likesPage} pageSize={isMobile ? 8 : LIKES_PAGE_SIZE} onPageChange={setLikesPage} isMobile={isMobile} />
               ) : activeTab === "Lists" ? (
                 <ListsCarousel 
                   lists={readingLists} 
                   canEdit={isOwnProfile} 
                   username={activeUsername}
                   page={listsPage}
-                  pageSize={LISTS_PAGE_SIZE}
+                  pageSize={isMobile ? 8 : LISTS_PAGE_SIZE}
                   onPageChange={setListsPage}
+                  isMobile={isMobile}
                   onListCreated={async () => {
                     // Refresh lists after creation
                     try {
@@ -3964,15 +4151,16 @@ export default function UserProfilePage() {
                   }}
                 />
               ) : activeTab === "'to-be-read'" ? (
-                <TbrSection books={tbrBooks} page={tbrPage} pageSize={TBR_PAGE_SIZE} onPageChange={setTbrPage} />
+                <TbrSection books={tbrBooks} page={tbrPage} pageSize={isMobile ? 8 : TBR_PAGE_SIZE} onPageChange={setTbrPage} isMobile={isMobile} />
               ) : activeTab === "Diary" ? (
                 <DiarySection
                   entries={diaryEntries}
                   isOwnProfile={isOwnProfile}
                   username={activeUsername}
                   page={diaryPage}
-                  pageSize={DIARY_PAGE_SIZE}
+                  pageSize={isMobile ? 8 : DIARY_PAGE_SIZE}
                   onPageChange={setDiaryPage}
+                  isMobile={isMobile}
                   onEntryClick={() => {
                     // Refresh diary entries after interaction
                     if (activeUsername) {
@@ -4008,6 +4196,7 @@ export default function UserProfilePage() {
             profile={profileData || defaultProfile}
             onProfileChange={setProfileData}
             onSubmitProfile={handleProfileSave}
+            onCancel={() => setIsEditOpen(false)}
             isSubmitting={isSavingProfile}
             submitError={profileSaveError}
           />

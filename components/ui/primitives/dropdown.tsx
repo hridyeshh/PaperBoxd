@@ -94,7 +94,7 @@ const DropdownRoot: React.FC<DropdownRootProps> = ({
 
   return (
     <DropdownContext.Provider value={contextValue}>
-      <div className={cn("relative inline-flex", className)}>{children}</div>
+      <div className={cn("relative inline-flex", className)} style={{ position: 'relative' }}>{children}</div>
     </DropdownContext.Provider>
   );
 };
@@ -144,10 +144,38 @@ interface DropdownPopoverProps extends Omit<MotionDivProps, "ref"> {
 
 const DropdownPopover = React.forwardRef<HTMLDivElement, DropdownPopoverProps>(
   ({ className, align = "end", children, ...props }, forwardedRef) => {
-    const { open, contentRef } = useDropdownContext("Dropdown.Popover");
+    const { open, contentRef, triggerRef } = useDropdownContext("Dropdown.Popover");
+    const [adjustPosition, setAdjustPosition] = React.useState(false);
 
-    const alignmentClass =
-      align === "end" ? "right-0" : align === "start" ? "left-0" : "right-0";
+    // Adjust position on mobile to prevent overflow
+    React.useEffect(() => {
+      if (!open || typeof window === "undefined") return;
+
+      const checkOverflow = () => {
+        if (!contentRef.current || !triggerRef.current) return;
+
+        const dropdown = contentRef.current;
+        const trigger = triggerRef.current;
+        const rect = dropdown.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+
+        // Check if dropdown overflows on the right
+        if (rect.right > viewportWidth - 8) {
+          setAdjustPosition(true);
+        } else {
+          setAdjustPosition(false);
+        }
+      };
+
+      // Check after a short delay to allow positioning
+      const timeoutId = setTimeout(checkOverflow, 10);
+      window.addEventListener("resize", checkOverflow);
+
+      return () => {
+        clearTimeout(timeoutId);
+        window.removeEventListener("resize", checkOverflow);
+      };
+    }, [open, contentRef, triggerRef]);
 
     return (
       <AnimatePresence>
@@ -167,10 +195,27 @@ const DropdownPopover = React.forwardRef<HTMLDivElement, DropdownPopoverProps>(
               }
             }}
             className={cn(
-              "absolute z-50 mt-2 min-w-[200px] overflow-hidden rounded-2xl border border-border/60 bg-background p-1 shadow-xl",
-              alignmentClass,
+              "absolute z-50 mt-2 overflow-hidden rounded-2xl border border-border/60 bg-background p-1 shadow-xl",
+              // Responsive width - ensure it doesn't exceed viewport on mobile
+              "min-w-[200px]",
+              // On mobile, constrain width to viewport. On desktop, no max-width constraint
+              "max-w-[calc(100vw-1rem)] md:max-w-none",
+              // Alignment based on prop
+              align === "end" 
+                ? "right-0 md:right-0" 
+                : "left-0 md:left-0",
               className,
             )}
+            style={{
+              // Adjust position if it would overflow on mobile
+              ...(adjustPosition && align === "end" && typeof window !== "undefined" && window.innerWidth < 768
+                ? { 
+                    right: "0.5rem",
+                    maxWidth: "calc(100vw - 1rem)"
+                  }
+                : {}),
+              ...(props.style || {}),
+            }}
             {...props}
           >
             {children}

@@ -6,10 +6,12 @@ import { useEffect, useState } from "react";
 import { OnboardingQuestionnaire } from "@/components/ui/features/onboarding-questionnaire";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
+import { useIsMobile } from "@/hooks/use-media-query";
 
 export default function OnboardingPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
@@ -109,12 +111,9 @@ export default function OnboardingPage() {
       <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
         <OnboardingQuestionnaire
           onComplete={() => {
-            // Redirect to profile after onboarding
-            if (session?.user?.username) {
-              router.push(`/u/${session.user.username}`);
-            } else {
-              router.push("/profile");
-            }
+            // Redirect based on device type: mobile -> /feed, desktop -> /
+            const redirectUrl = isMobile ? "/feed" : "/";
+            router.push(redirectUrl);
           }}
         />
       </div>

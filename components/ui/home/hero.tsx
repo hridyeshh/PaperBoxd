@@ -16,7 +16,7 @@ function Hero({ showButton = true }: HeroProps) {
   const titles = useMemo(
     () => [
       "Save the books you've read", 
-      "Like the book",
+      "Like the book", 
       "Follow your friends",
       "Get book recommendations", 
       "Share your lists",

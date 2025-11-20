@@ -5,6 +5,7 @@ import Book from '@/lib/db/models/Book';
 import User from '@/lib/db/models/User';
 import UserPreference from '@/lib/db/models/UserPreference';
 import { RecommendationService } from '@/lib/services/RecommendationService';
+import { normalizeGenre, RecommendationConfig } from '@/lib/config/recommendation.config';
 
 /**
  * GET /api/books/personalized
@@ -40,12 +41,18 @@ export async function GET(request: NextRequest) {
         const preference = await UserPreference.findOne({ userId }).lean();
         
         if (!preference || !preference.onboarding) {
+          console.log(`[Personalized API] No onboarding data found for user: ${userId}`);
           break;
         }
 
         const onboarding = preference.onboarding;
         const genreNames = onboarding.genres?.map(g => g.genre) || [];
         const authorNames = onboarding.favoriteAuthors || [];
+
+        console.log(`[Personalized API] Onboarding query for user ${userId}:`, {
+          genres: genreNames,
+          authors: authorNames,
+        });
 
         // Build query for books matching onboarding preferences
         const query: any = {
@@ -57,11 +64,58 @@ export async function GET(request: NextRequest) {
           query.$or = [];
           
           if (genreNames.length > 0) {
-            // Match any of the selected genres (case-insensitive regex match)
-            // Genres in categories array might be stored in different formats
-            for (const genre of genreNames) {
+            // Get all variations for each genre from the genre mapping
+            const genrePatterns: string[] = [];
+            for (const normalizedGenre of genreNames) {
+              // Add the normalized genre itself
+              genrePatterns.push(normalizedGenre);
+              
+              // Find all variations from the genre mapping
+              const genreMapping = RecommendationConfig.genreMapping;
+              for (const [standard, variations] of Object.entries(genreMapping)) {
+                if (standard.toLowerCase() === normalizedGenre.toLowerCase()) {
+                  // Add all variations for this genre
+                  variations.forEach(variation => {
+                    genrePatterns.push(variation);
+                  });
+                }
+              }
+              
+              // Also try common variations (e.g., "Fiction" -> "Fiction / Literary", "Literary Fiction")
+              const commonVariations: Record<string, string[]> = {
+                'fiction': ['literary fiction', 'contemporary fiction', 'general fiction'],
+                'mystery': ['mystery & thriller', 'detective', 'crime'],
+                'thriller': ['mystery & thriller', 'suspense', 'psychological thriller'],
+                'romance': ['romantic', 'love story', 'romantic fiction'],
+                'science-fiction': ['sci-fi', 'science fiction', 'sf'],
+                'fantasy': ['fantasy fiction', 'epic fantasy', 'urban fantasy'],
+                'horror': ['horror fiction', 'supernatural', 'gothic'],
+                'historical': ['historical fiction', 'history'],
+                'biography': ['biography & autobiography', 'memoir', 'autobiography'],
+                'self-help': ['self improvement', 'personal development', 'motivational'],
+                'business': ['business & economics', 'management', 'entrepreneurship'],
+                'non-fiction': ['nonfiction', 'non fiction', 'general nonfiction'],
+                'young-adult': ['ya', 'young adult', 'teen'],
+                'classics': ['classic literature', 'literary classics'],
+                'poetry': ['poems', 'verse', 'poetic'],
+              };
+              
+              const lowerGenre = normalizedGenre.toLowerCase();
+              if (commonVariations[lowerGenre]) {
+                commonVariations[lowerGenre].forEach(variation => {
+                  genrePatterns.push(variation);
+                });
+              }
+            }
+            
+            // Remove duplicates and create regex patterns
+            const uniquePatterns = [...new Set(genrePatterns)];
+            console.log(`[Personalized API] Genre patterns to search:`, uniquePatterns);
+            
+            // Create regex that matches any of the patterns
+            for (const pattern of uniquePatterns) {
               query.$or.push({
-                'volumeInfo.categories': { $regex: genre, $options: 'i' },
+                'volumeInfo.categories': { $regex: pattern, $options: 'i' },
               });
             }
           }
@@ -69,22 +123,111 @@ export async function GET(request: NextRequest) {
           if (authorNames.length > 0) {
             // Match any of the favorite authors (case-insensitive)
             for (const author of authorNames) {
-              query.$or.push({
-                'volumeInfo.authors': { $regex: author, $options: 'i' },
-              });
+              // Split author name and match each part (e.g., "J.K. Rowling" -> match "Rowling")
+              const authorParts = author.trim().split(/\s+/).filter(part => part.length > 2);
+              for (const part of authorParts) {
+                query.$or.push({
+                  'volumeInfo.authors': { $regex: part, $options: 'i' },
+                });
+              }
             }
           }
         }
 
         if (query.$or && query.$or.length > 0) {
+          console.log(`[Personalized API] Executing query with ${query.$or.length} conditions`);
+          
+          // Use userId to create a consistent but unique seed for randomization
+          // This ensures different users get different books even with same genres
+          const userIdHash = userId.toString().split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+          const randomSeed = userIdHash % 1000; // Use modulo to get a seed value
+          
+          // Fetch more books to allow for randomization
+          const fetchLimit = limit * 5;
           books = await Book.find(query)
             .sort({ 
               'volumeInfo.averageRating': -1, 
               'volumeInfo.ratingsCount': -1,
               'volumeInfo.publishedDate': -1 
             })
-            .limit(limit * 2) // Fetch more to account for duplicates
+            .limit(fetchLimit)
             .lean();
+          
+          console.log(`[Personalized API] Found ${books.length} books for onboarding user ${userId}`);
+          
+          // If we found very few books, try a more lenient query
+          if (books.length < limit && genreNames.length > 0) {
+            console.log(`[Personalized API] Found only ${books.length} books, trying more lenient query`);
+            const lenientQuery: any = {
+              'volumeInfo.imageLinks.thumbnail': { $exists: true, $ne: null },
+              $or: genreNames.map(genre => ({
+                'volumeInfo.categories': { $regex: genre.split(' ')[0], $options: 'i' },
+              })),
+            };
+            
+            const additionalBooks = await Book.find(lenientQuery)
+              .sort({ 
+                'volumeInfo.averageRating': -1, 
+                'volumeInfo.ratingsCount': -1,
+              })
+              .limit(limit * 3)
+              .lean();
+            
+            // Merge and deduplicate
+            const existingIds = new Set(books.map((b: any) => b._id.toString()));
+            const newBooks = additionalBooks.filter((b: any) => !existingIds.has(b._id.toString()));
+            books = [...books, ...newBooks];
+            console.log(`[Personalized API] After lenient query: ${books.length} total books`);
+          }
+          
+          // Shuffle books using user-specific seed to ensure different users get different books
+          if (books.length > limit) {
+            // Simple seeded shuffle algorithm
+            const shuffled: any[] = [];
+            const remaining = [...books];
+            
+            // Use seed to determine starting position
+            let currentIndex = randomSeed % remaining.length;
+            
+            while (remaining.length > 0 && shuffled.length < limit * 2) {
+              shuffled.push(remaining.splice(currentIndex, 1)[0]);
+              if (remaining.length > 0) {
+                // Move to next position based on seed
+                currentIndex = (currentIndex + randomSeed + 1) % remaining.length;
+              }
+            }
+            
+            // Take top books (highest rated) and mix with shuffled
+            const topBooks = books.slice(0, Math.floor(limit / 2));
+            const shuffledBooks = shuffled.slice(0, Math.ceil(limit / 2));
+            
+            // Merge top books with shuffled books, prioritizing top books
+            const merged: any[] = [];
+            const usedIds = new Set<string>();
+            
+            // Add top books first
+            for (const book of topBooks) {
+              const id = book._id.toString();
+              if (!usedIds.has(id)) {
+                merged.push(book);
+                usedIds.add(id);
+              }
+            }
+            
+            // Add shuffled books
+            for (const book of shuffledBooks) {
+              const id = book._id.toString();
+              if (!usedIds.has(id) && merged.length < limit * 2) {
+                merged.push(book);
+                usedIds.add(id);
+              }
+            }
+            
+            books = merged;
+            console.log(`[Personalized API] After shuffling: ${books.length} books for user ${userId}`);
+          }
+        } else {
+          console.log(`[Personalized API] No query conditions, returning empty array`);
         }
         break;
       }

@@ -6,7 +6,6 @@ import { Hero } from "@/components/ui/home/hero";
 import { Timeline } from "@/components/ui/features/timeline";
 import { Footerdemo } from "@/components/ui/features/footer-section";
 import SphereImageGrid, { ImageData } from "@/components/ui/demos/img-sphere";
-
 const timelineData = [
   {
     title: "Personalized Recommendations",
@@ -141,57 +140,59 @@ export function PublicHome() {
   const sphereOpacity = useTransform(scrollYProgress, [0, 0.3, 1], [0, 0.5, 1]);
 
   return (
-    <div className="w-full">
-      {/* Hero Section - Centered (Hero component handles its own centering) */}
-      <Hero />
+    <div className="w-full min-h-[calc(100vh-4rem)] flex flex-col">
+      <div className="flex-1">
+        {/* Hero Section - Centered (Hero component handles its own centering) */}
+        <Hero />
 
-      {/* Timeline Section - Below Hero */}
-      <div ref={timelineRef}>
-        <Timeline data={timelineData} />
-      </div>
+        {/* Timeline Section - Below Hero */}
+        <div ref={timelineRef}>
+          <Timeline data={timelineData} />
+        </div>
 
-      {/* Sphere Section - Appears after timeline with zoom effect */}
-      <div 
-        ref={sphereRef}
-        className="w-full min-h-screen flex items-center justify-center py-20 px-4"
-      >
-        <motion.div
-          style={{
-            scale: sphereScale,
-            opacity: sphereOpacity,
-          }}
-          className="flex flex-col items-center justify-center"
+        {/* Sphere Section - Appears after timeline with zoom effect */}
+        <div 
+          ref={sphereRef}
+          className="w-full min-h-screen flex items-center justify-center py-20 px-4"
         >
-          <h2 className="text-3xl md:text-5xl font-bold text-foreground mb-4 text-center">
-            All the books, all in one place.
-          </h2>
-          <p className="text-muted-foreground text-lg mb-12 text-center max-w-2xl">
-            Discover books from every genre - from fiction to manga, comics to non-fiction. 
-            Drag to rotate and explore our diverse library.
-          </p>
-          {isLoadingSphere ? (
-            <div className="w-[700px] h-[700px] flex items-center justify-center">
-              <div className="text-muted-foreground">Loading books...</div>
-            </div>
-          ) : (
-            <SphereImageGrid
-              images={sphereBooks}
-              containerSize={700}
-              sphereRadius={300}
-              dragSensitivity={0.8}
-              momentumDecay={0.96}
-              maxRotationSpeed={6}
-              baseImageScale={0.12}
-              hoverScale={1.3}
-              perspective={1200}
-              autoRotate={true}
-              autoRotateSpeed={0.2}
-            />
-          )}
-        </motion.div>
+          <motion.div
+            style={{
+              scale: sphereScale,
+              opacity: sphereOpacity,
+            }}
+            className="flex flex-col items-center justify-center"
+          >
+            <h2 className="text-3xl md:text-5xl font-bold text-foreground mb-4 text-center">
+              All the books, all in one place.
+            </h2>
+            <p className="text-muted-foreground text-lg mb-12 text-center max-w-2xl">
+              Discover books from every genre - from fiction to manga, comics to non-fiction. 
+              Drag to rotate and explore our diverse library.
+            </p>
+            {isLoadingSphere ? (
+              <div className="w-[700px] h-[700px] flex items-center justify-center">
+                <div className="text-muted-foreground">Loading books...</div>
+              </div>
+            ) : (
+              <SphereImageGrid
+                images={sphereBooks}
+                containerSize={700}
+                sphereRadius={300}
+                dragSensitivity={0.8}
+                momentumDecay={0.96}
+                maxRotationSpeed={6}
+                baseImageScale={0.12}
+                hoverScale={1.3}
+                perspective={1200}
+                autoRotate={true}
+                autoRotateSpeed={0.2}
+              />
+            )}
+          </motion.div>
+        </div>
       </div>
 
-      {/* Footer */}
+      {/* Footer - Sticks to bottom */}
       <Footerdemo />
     </div>
   );

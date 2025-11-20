@@ -4,6 +4,11 @@ export function useMediaQuery(query: string) {
   const [value, setValue] = React.useState(false)
 
   React.useEffect(() => {
+    // Check if matchMedia is available (browser only)
+    if (typeof window === "undefined" || !window.matchMedia) {
+      return
+    }
+
     function onChange(event: MediaQueryListEvent) {
       setValue(event.matches)
     }

@@ -16,6 +16,8 @@ import { Label } from "@/components/ui/primitives/label";
 import { Switch } from "@/components/ui/primitives/switch";
 import { Dropdown } from "@/components/ui/primitives/dropdown";
 import { createBookSlug } from "@/lib/utils/book-slug";
+import { useIsMobile } from "@/hooks/use-media-query";
+import { cn, DEFAULT_AVATAR } from "@/lib/utils";
 
 interface Book {
   _id: string;
@@ -80,6 +82,7 @@ export default function ListDetailPage() {
 
   const isOwnList = session?.user?.username === username;
   const isSharedList = !isOwnList && session?.user?.username; // Viewing someone else's list while logged in
+  const isMobile = useIsMobile();
   
   // Check if this is a saved list (has "from @" in description)
   const isSavedList = React.useMemo(() => {
@@ -810,20 +813,32 @@ export default function ListDetailPage() {
   return (
     <main className="min-h-screen bg-background">
       <Header />
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 mt-16">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 mt-16 pb-24 md:pb-8">
         {/* Header Section */}
-        <div className="mb-8">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h1 className="text-4xl font-bold text-foreground mb-2">{list.title}</h1>
-              <div className="flex items-center gap-2">
-                <p className="text-lg text-muted-foreground">
+        <div className="mb-6 sm:mb-8">
+          <div className={cn(
+            "flex items-start justify-between mb-4",
+            isMobile ? "flex-col gap-4" : ""
+          )}>
+            <div className="flex-1 min-w-0">
+              <h1 className={cn(
+                "font-bold text-foreground mb-2",
+                isMobile ? "text-2xl" : "text-4xl"
+              )}>{list.title}</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className={cn(
+                  "text-muted-foreground",
+                  isMobile ? "text-sm" : "text-lg"
+                )}>
                   {list.booksCount} {list.booksCount === 1 ? "book" : "books"}
                 </p>
                 {isSavedList && creatorUsername && (
                   <>
                     <span className="text-muted-foreground">•</span>
-                    <p className="text-lg text-muted-foreground">
+                    <p className={cn(
+                      "text-muted-foreground",
+                      isMobile ? "text-sm" : "text-lg"
+                    )}>
                       by{" "}
                       <button
                         onClick={(e) => {
@@ -839,7 +854,10 @@ export default function ListDetailPage() {
                 )}
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className={cn(
+              "flex gap-2",
+              isMobile ? "w-full flex-wrap" : "flex-shrink-0"
+            )}>
               {/* Show Save/Remove button for non-owners or saved lists */}
               {((isSharedList && !isOwnList) || (isOwnList && isSavedList)) && (
                 <Button 
@@ -870,7 +888,7 @@ export default function ListDetailPage() {
                   >
                     <MoreVertical className="h-4 w-4 text-muted-foreground" />
                   </Dropdown.Trigger>
-                  <Dropdown.Popover>
+                  <Dropdown.Popover align={isMobile ? "start" : "end"}>
                     <Dropdown.Menu>
                       <Dropdown.Item
                         label="Edit details"
@@ -899,12 +917,18 @@ export default function ListDetailPage() {
         {/* Books Grid */}
         {list.booksCount === 0 ? (
           <div className="flex flex-col items-center justify-center min-h-[calc(100vh-300px)] text-center">
-            <p className="text-xl text-muted-foreground">
+            <p className={cn(
+              "text-muted-foreground",
+              isMobile ? "text-base" : "text-xl"
+            )}>
               There aren't any books on this list yet
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          <div className={cn(
+            "grid gap-3 sm:gap-4",
+            isMobile ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+          )}>
             {list.books.map((book) => (
               <div
                 key={book._id}
@@ -947,15 +971,24 @@ export default function ListDetailPage() {
           <>
             <button
               onClick={() => setIsSearchOpen(true)}
-              className="fixed bottom-8 right-8 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors flex items-center justify-center z-50"
+              className={cn(
+                "fixed rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors flex items-center justify-center z-50",
+                isMobile ? "bottom-24 right-4 h-12 w-12" : "bottom-8 right-8 h-14 w-14"
+              )}
             >
-              <Plus className="h-6 w-6" />
+              <Plus className={cn(isMobile ? "h-5 w-5" : "h-6 w-6")} />
             </button>
 
             {/* Search Modal */}
             <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
-              <DialogContent className="max-w-2xl max-h-[80vh] p-0 flex flex-col">
-                <div className="p-6 flex flex-col min-w-0 flex-1 overflow-hidden">
+              <DialogContent className={cn(
+                "max-h-[85vh] p-0 flex flex-col",
+                isMobile ? "max-w-[95vw] w-full" : "max-w-2xl"
+              )}>
+                <div className={cn(
+                  "flex flex-col min-w-0 flex-1 overflow-hidden",
+                  isMobile ? "p-4" : "p-6"
+                )}>
                   <DialogHeader className="flex-shrink-0">
                     <DialogTitle>Add books to list</DialogTitle>
                   </DialogHeader>
@@ -1030,17 +1063,25 @@ export default function ListDetailPage() {
 
         {/* Share/Access Modal */}
         <Dialog open={isShareOpen} onOpenChange={setIsShareOpen}>
-          <DialogContent className="max-w-md max-h-[80vh] p-0 flex flex-col">
-            <div className="p-6 flex flex-col min-w-0 flex-1 overflow-hidden">
+          <DialogContent className={cn(
+            "max-h-[85vh] p-0 flex flex-col",
+            isMobile ? "max-w-[95vw] w-full" : "max-w-md"
+          )}>
+            <div className={cn(
+              "flex flex-col min-w-0 flex-1 overflow-hidden",
+              isMobile ? "p-4" : "p-6"
+            )}>
               <DialogHeader className="flex-shrink-0">
-                <DialogTitle>
+                <DialogTitle className={cn(isMobile ? "text-lg" : "text-xl")}>
                   {list?.isPublic === false ? "Manage Access" : "Share"}
                 </DialogTitle>
               </DialogHeader>
 
               {/* Quick Share Options - Only for public lists */}
               {list?.isPublic !== false && (
-                <div className="flex gap-4 mt-6 mb-6 justify-center">
+                <div className={cn(
+                  "flex gap-3 sm:gap-4 mt-4 sm:mt-6 mb-4 sm:mb-6 justify-center flex-wrap"
+                )}>
                 <button
                   onClick={handleCopyLink}
                   className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
@@ -1182,8 +1223,7 @@ export default function ListDetailPage() {
                 ) : (
                   <div className="space-y-2">
                     {filteredFollowing.map((user) => {
-                      const defaultAvatar = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%239ca3af'/%3E%3Cpath d='M50 30c-8.284 0-15 6.716-15 15 0 5.989 3.501 11.148 8.535 13.526C37.514 62.951 32 70.16 32 78.5h36c0-8.34-5.514-15.549-13.535-19.974C59.499 56.148 63 50.989 63 45c0-8.284-6.716-15-15-15z' fill='white' opacity='0.8'/%3E%3C/svg%3E`;
-                      const avatar = user.avatar || defaultAvatar;
+                      const avatar = user.avatar || DEFAULT_AVATAR;
                       const initials = user.name
                         ?.split(" ")
                         .map((n: string) => n[0])
@@ -1256,13 +1296,16 @@ export default function ListDetailPage() {
 
         {/* Edit List Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-md p-0 sm:rounded-2xl">
+          <DialogContent className={cn(
+            "p-0 sm:rounded-2xl",
+            isMobile ? "max-w-[95vw] w-full" : "max-w-md"
+          )}>
             <DialogHeader className="sr-only">
               <DialogTitle>Edit list details</DialogTitle>
             </DialogHeader>
-            <div className="p-6">
+            <div className={cn(isMobile ? "p-4" : "p-6")}>
               {/* List Image Placeholder */}
-              <div className="mt-6 mb-6">
+              <div className={cn(isMobile ? "mt-4 mb-4" : "mt-6 mb-6")}>
                 <div className="relative w-full rounded-lg bg-muted/40 border border-border/60 overflow-hidden">
                   <div className="aspect-[4/3] flex items-center justify-center">
                     <div className="grid grid-cols-2 gap-1.5 w-full h-full p-2.5">
@@ -1274,7 +1317,7 @@ export default function ListDetailPage() {
               </div>
 
               {/* List Name Input */}
-              <div className="space-y-2 mb-6">
+              <div className={cn("space-y-2", isMobile ? "mb-4" : "mb-6")}>
                 <Label htmlFor="edit-list-name" className="text-sm font-medium">
                   List name
                 </Label>
@@ -1294,11 +1337,14 @@ export default function ListDetailPage() {
               </div>
 
               {/* Make this list secret */}
-              <div className="mb-6">
-                <div className="flex items-center justify-between rounded-lg border border-border/50 p-4 hover:bg-muted/30 transition-colors cursor-pointer"
+              <div className={cn(isMobile ? "mb-4" : "mb-6")}>
+                <div className={cn(
+                  "flex items-center justify-between rounded-lg border border-border/50 hover:bg-muted/30 transition-colors cursor-pointer",
+                  isMobile ? "p-3" : "p-4"
+                )}
                   onClick={() => setEditIsSecret(!editIsSecret)}
                 >
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0 pr-2">
                     <Label htmlFor="edit-secret-toggle" className="text-sm font-medium cursor-pointer">
                       Make this list secret
                     </Label>
@@ -1319,7 +1365,10 @@ export default function ListDetailPage() {
                 onClick={handleEditList}
                 disabled={!editListName.trim() || isUpdating}
                 variant={editListName.trim() ? "default" : "secondary"}
-                className="w-full h-11 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className={cn(
+                  "w-full font-medium disabled:opacity-50 disabled:cursor-not-allowed",
+                  isMobile ? "h-10 text-sm" : "h-11 text-base"
+                )}
               >
                 {isUpdating ? "Updating..." : "Update"}
               </Button>
@@ -1329,17 +1378,29 @@ export default function ListDetailPage() {
 
         {/* Delete Confirmation Dialog */}
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <DialogContent className="max-w-md p-0 sm:rounded-2xl">
-            <div className="p-6">
+          <DialogContent className={cn(
+            "p-0 sm:rounded-2xl",
+            isMobile ? "max-w-[95vw] w-full" : "max-w-md"
+          )}>
+            <div className={cn(isMobile ? "p-4" : "p-6")}>
               <DialogHeader>
-                <DialogTitle className="text-2xl font-semibold">Delete list?</DialogTitle>
+                <DialogTitle className={cn(
+                  "font-semibold",
+                  isMobile ? "text-xl" : "text-2xl"
+                )}>Delete list?</DialogTitle>
               </DialogHeader>
               
-              <p className="mt-4 text-muted-foreground">
+              <p className={cn(
+                "text-muted-foreground",
+                isMobile ? "mt-3 text-sm" : "mt-4"
+              )}>
                 This will permanently delete "{list?.title}" from your profile and remove it from anyone who saved it. This action cannot be undone.
               </p>
 
-              <div className="mt-6 flex gap-3">
+              <div className={cn(
+                "flex gap-3",
+                isMobile ? "mt-4" : "mt-6"
+              )}>
                 <Button
                   variant="outline"
                   onClick={() => setIsDeleteDialogOpen(false)}

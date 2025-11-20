@@ -318,44 +318,44 @@ UserPreferenceSchema.methods = {
 // ============================================
 
 UserPreferenceSchema.statics.findOrCreate = async function(
-  userId: mongoose.Types.ObjectId
-): Promise<IUserPreference> {
-  let preference = await this.findOne({ userId });
+    userId: mongoose.Types.ObjectId
+  ): Promise<IUserPreference> {
+    let preference = await this.findOne({ userId });
 
-  if (!preference) {
-    preference = await this.create({
-      userId,
-      implicitPreferences: {
+    if (!preference) {
+      preference = await this.create({
+        userId,
+        implicitPreferences: {
         genreWeights: {},
         authorWeights: {},
-        avgPageLength: 0,
-        diversityScore: 0,
-        readingVelocity: 0,
-        lastComputed: new Date(),
-      },
-      interactions: {
-        views: [],
-        searches: [],
-      },
-    });
-  }
+          avgPageLength: 0,
+          diversityScore: 0,
+          readingVelocity: 0,
+          lastComputed: new Date(),
+        },
+        interactions: {
+          views: [],
+          searches: [],
+        },
+      });
+    }
 
-  return preference;
+    return preference;
 };
 
 UserPreferenceSchema.statics.getUsersNeedingRecomputation = async function(
-  limit: number = 100
-): Promise<IUserPreference[]> {
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    limit: number = 100
+  ): Promise<IUserPreference[]> {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-  return this.find({
-    $or: [
-      { 'implicitPreferences.lastComputed': { $lt: oneDayAgo } },
-      { 'implicitPreferences.lastComputed': { $exists: false } },
-    ],
-  })
-    .limit(limit)
-    .exec();
+    return this.find({
+      $or: [
+        { 'implicitPreferences.lastComputed': { $lt: oneDayAgo } },
+        { 'implicitPreferences.lastComputed': { $exists: false } },
+      ],
+    })
+      .limit(limit)
+      .exec();
 };
 
 // ============================================

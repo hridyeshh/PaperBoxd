@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/primitives/label";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useIsMobile } from "@/hooks/use-media-query";
 
 interface Genre {
   id: string;
@@ -21,6 +22,7 @@ interface OnboardingQuestionnaireProps {
 }
 
 export function OnboardingQuestionnaire({ onComplete }: OnboardingQuestionnaireProps) {
+  const isMobile = useIsMobile();
   const [step, setStep] = React.useState<"genres" | "authors">("genres");
   const [genres, setGenres] = React.useState<Genre[]>([]);
   const [selectedGenres, setSelectedGenres] = React.useState<string[]>([]);
@@ -162,22 +164,31 @@ export function OnboardingQuestionnaire({ onComplete }: OnboardingQuestionnaireP
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="w-full max-w-2xl mx-auto"
+      className={cn(
+        "w-full mx-auto",
+        isMobile ? "max-w-[95vw]" : "max-w-2xl"
+      )}
     >
-      <div className="rounded-xl border border-border/50 bg-card/80 shadow-xl backdrop-blur-sm p-8">
+      <div className={cn(
+        "rounded-xl border border-border/50 bg-card/80 shadow-xl backdrop-blur-sm",
+        isMobile ? "p-4" : "p-8"
+      )}>
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
+        <div className={cn("text-center", isMobile ? "mb-6" : "mb-8")}>
+          <div className={cn(
+            "inline-flex items-center justify-center rounded-full bg-primary/10",
+            isMobile ? "w-12 h-12 mb-3" : "w-16 h-16 mb-4"
+          )}>
             {step === "genres" ? (
-              <BookOpen className="w-8 h-8 text-primary" />
+              <BookOpen className={cn("text-primary", isMobile ? "w-6 h-6" : "w-8 h-8")} />
             ) : (
-              <Sparkles className="w-8 h-8 text-primary" />
+              <Sparkles className={cn("text-primary", isMobile ? "w-6 h-6" : "w-8 h-8")} />
             )}
           </div>
-          <h2 className="text-2xl font-bold mb-2">
+          <h2 className={cn("font-bold mb-2", isMobile ? "text-xl" : "text-2xl")}>
             {step === "genres" ? "What genres do you love?" : "Who are your favorite authors?"}
           </h2>
-          <p className="text-muted-foreground text-sm">
+          <p className={cn("text-muted-foreground", isMobile ? "text-xs" : "text-sm")}>
             {step === "genres"
               ? "Select at least one genre to help us recommend books you'll enjoy"
               : "Tell us about authors you love (optional, you can add more later)"}
@@ -185,18 +196,18 @@ export function OnboardingQuestionnaire({ onComplete }: OnboardingQuestionnaireP
         </div>
 
         {/* Progress indicator */}
-        <div className="mb-6">
+        <div className={cn(isMobile ? "mb-4" : "mb-6")}>
           <div className="flex items-center justify-center gap-2">
             <div
               className={cn(
                 "h-2 rounded-full transition-all",
-                step === "genres" ? "w-12 bg-primary" : "w-6 bg-primary/50"
+                step === "genres" ? (isMobile ? "w-10 bg-primary" : "w-12 bg-primary") : (isMobile ? "w-5 bg-primary/50" : "w-6 bg-primary/50")
               )}
             />
             <div
               className={cn(
                 "h-2 rounded-full transition-all",
-                step === "authors" ? "w-12 bg-primary" : "w-6 bg-muted"
+                step === "authors" ? (isMobile ? "w-10 bg-primary" : "w-12 bg-primary") : (isMobile ? "w-5 bg-muted" : "w-6 bg-muted")
               )}
             />
           </div>
@@ -207,9 +218,12 @@ export function OnboardingQuestionnaire({ onComplete }: OnboardingQuestionnaireP
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="space-y-6"
+            className={cn(isMobile ? "space-y-4" : "space-y-6")}
           >
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-[400px] overflow-y-auto pr-2">
+            <div className={cn(
+              "grid gap-2 overflow-y-auto pr-2",
+              isMobile ? "grid-cols-2 max-h-[300px]" : "grid-cols-2 md:grid-cols-3 max-h-[400px]"
+            )}>
               {genres.map((genre) => {
                 const isSelected = selectedGenres.includes(genre.id);
                 return (
@@ -218,20 +232,21 @@ export function OnboardingQuestionnaire({ onComplete }: OnboardingQuestionnaireP
                     type="button"
                     onClick={() => handleGenreToggle(genre.id)}
                     className={cn(
-                      "relative p-4 rounded-lg border-2 text-left transition-all",
+                      "relative rounded-lg border-2 text-left transition-all",
                       "hover:border-primary/50 hover:bg-primary/5",
                       isSelected
                         ? "border-primary bg-primary/10"
-                        : "border-border bg-background"
+                        : "border-border bg-background",
+                      isMobile ? "p-3" : "p-4"
                     )}
                   >
                     {isSelected && (
-                      <div className="absolute top-2 right-2">
-                        <Check className="w-5 h-5 text-primary" />
+                      <div className={cn("absolute", isMobile ? "top-1.5 right-1.5" : "top-2 right-2")}>
+                        <Check className={cn("text-primary", isMobile ? "w-4 h-4" : "w-5 h-5")} />
                       </div>
                     )}
-                    <div className="font-semibold text-sm mb-1">{genre.name}</div>
-                    <div className="text-xs text-muted-foreground">{genre.description}</div>
+                    <div className={cn("font-semibold mb-1", isMobile ? "text-xs" : "text-sm")}>{genre.name}</div>
+                    <div className={cn("text-muted-foreground", isMobile ? "text-[10px] leading-tight" : "text-xs")}>{genre.description}</div>
                   </button>
                 );
               })}
@@ -253,10 +268,12 @@ export function OnboardingQuestionnaire({ onComplete }: OnboardingQuestionnaireP
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="space-y-6"
+            className={cn(isMobile ? "space-y-4" : "space-y-6")}
           >
             <div className="space-y-2">
-              <Label htmlFor="authors">Favorite Authors (Optional)</Label>
+              <Label htmlFor="authors" className={cn(isMobile ? "text-sm" : "")}>
+                Favorite Authors (Optional)
+              </Label>
               <Input
                 id="authors"
                 placeholder="e.g., J.K. Rowling, Stephen King, Jane Austen"
@@ -264,7 +281,7 @@ export function OnboardingQuestionnaire({ onComplete }: OnboardingQuestionnaireP
                 onChange={(e) => setFavoriteAuthors(e.target.value)}
                 className="w-full"
               />
-              <p className="text-xs text-muted-foreground">
+              <p className={cn("text-muted-foreground", isMobile ? "text-[10px]" : "text-xs")}>
                 Separate multiple authors with commas. You can skip this and add them later.
               </p>
             </div>

@@ -6,6 +6,12 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * Default gray profile picture avatar (standard social media style)
+ * A simple gray circle with a white person icon in the center
+ */
+export const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23d1d5db'/%3E%3Ccircle cx='50' cy='38' r='12' fill='white'/%3E%3Cpath d='M50 55c-8 0-15 4-15 9v6h30v-6c0-5-7-9-15-9z' fill='white'/%3E%3C/svg%3E";
+
+/**
  * Strip HTML tags from text and decode HTML entities
  * Works in both browser and server environments
  * @param html - HTML string to clean

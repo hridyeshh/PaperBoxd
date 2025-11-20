@@ -91,9 +91,9 @@ export async function GET(
     // Fetch activities from all followed users (only if following someone)
     const followedUsers = followingIds.length > 0
       ? await User.find({
-          _id: { $in: followingIds },
-        })
-          .select("_id username name avatar activities diaryEntries")
+      _id: { $in: followingIds },
+    })
+      .select("_id username name avatar activities diaryEntries")
           .lean()
       : [];
 
@@ -307,7 +307,7 @@ export async function GET(
       // Add regular activities (excluding shared_list, shared_book, collaboration_request, and granted_access as those are handled above)
       const activities = Array.isArray(user.activities) ? user.activities : [];
       // Filter out any search-related activities, shared_list, shared_book, collaboration_request, and granted_access (handled separately)
-      const filteredActivities = activities.filter((activity: any) =>
+      const filteredActivities = activities.filter((activity: any) => 
         activity.type !== "search" &&
         activity.type !== "shared_list" &&
         activity.type !== "shared_book" &&

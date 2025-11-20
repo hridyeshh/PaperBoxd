@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
-import { Calendar, BookOpen, Users, Star, MapPin, Globe, FileText, Loader2, Heart, Library, Hand, Share2, PenTool, NotebookPen, Link2, Search, Send } from "lucide-react";
+import { Calendar, BookOpen, Users, Star, MapPin, Globe, FileText, Loader2, Heart, Library, Hand, Share2, PenTool, NotebookPen, Link2, Search, Send, BookMarked } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -13,7 +13,7 @@ import { InteractiveHoverButton } from "@/components/ui/buttons/interactive-hove
 import { Button } from "@/components/ui/primitives/button";
 import { Header } from "@/components/ui/layout/header-with-search";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
-import { stripHtmlTags } from "@/lib/utils";
+import { stripHtmlTags, cn, DEFAULT_AVATAR } from "@/lib/utils";
 import { SignupPromptDialog } from "@/components/ui/dialogs/signup-prompt-dialog";
 import { BookCarousel, BookCarouselBook } from "@/components/ui/home/book-carousel";
 import { DiaryEditorDialog } from "@/components/ui/dialogs/diary-editor-dialog";
@@ -100,6 +100,8 @@ export default function BookDetailPage() {
   const [following, setFollowing] = React.useState<any[]>([]);
   const [isLoadingFollowing, setIsLoadingFollowing] = React.useState(false);
   const [shareSearchQuery, setShareSearchQuery] = React.useState("");
+  const [searchResults, setSearchResults] = React.useState<any[]>([]);
+  const [isSearchingUsers, setIsSearchingUsers] = React.useState(false);
   
   // Carousel data
   const [similarBooks, setSimilarBooks] = React.useState<BookCarouselBook[]>([]);
@@ -269,20 +271,50 @@ export default function BookDetailPage() {
       // Reset when modal closes
       setFollowing([]);
       setShareSearchQuery("");
+      setSearchResults([]);
     }
   }, [isShareOpen, session?.user?.username]);
 
-  // Filter following based on search query
-  const filteredFollowing = React.useMemo(() => {
-    if (!shareSearchQuery.trim()) return following;
-    const query = shareSearchQuery.toLowerCase();
-    return following.filter((user) => {
-      const name = (user.name || "").toLowerCase();
-      const username = (user.username || "").toLowerCase();
-      const email = (user.email || "").toLowerCase();
-      return name.includes(query) || username.includes(query) || email.includes(query);
-    });
-  }, [following, shareSearchQuery]);
+  // Search users as they type
+  React.useEffect(() => {
+    if (!shareSearchQuery.trim()) {
+      setSearchResults([]);
+      setIsSearchingUsers(false);
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      setIsSearchingUsers(true);
+      try {
+        const response = await fetch(
+          `/api/users/search?q=${encodeURIComponent(shareSearchQuery)}&limit=20`
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          setSearchResults(Array.isArray(data.users) ? data.users : []);
+        } else {
+          console.error("Failed to search users:", response.status);
+          setSearchResults([]);
+        }
+      } catch (err) {
+        console.error("Error searching users:", err);
+        setSearchResults([]);
+      } finally {
+        setIsSearchingUsers(false);
+      }
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [shareSearchQuery]);
+
+  // Determine which users to display
+  const usersToDisplay = React.useMemo(() => {
+    if (shareSearchQuery.trim()) {
+      return searchResults;
+    }
+    return following;
+  }, [shareSearchQuery, searchResults, following]);
 
   const handleCopyLink = async () => {
     try {
@@ -493,10 +525,10 @@ export default function BookDetailPage() {
       />
       <div className="relative z-10">
         <Header />
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 mt-16">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 mt-16 pb-24 md:pb-8">
         <div className="flex flex-col gap-8 lg:flex-row lg:gap-12">
           {/* Left: Large Book Cover */}
-          <div className="flex-shrink-0 w-full sm:w-64 lg:w-80">
+          <div className="flex-shrink-0 w-full sm:w-48 lg:w-56">
             <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg border border-border bg-muted shadow-lg">
               {coverImage ? (
                 <Image
@@ -517,69 +549,22 @@ export default function BookDetailPage() {
             </div>
             
             {/* Action Buttons Below Cover */}
-            <div className="flex flex-col gap-2 mt-4">
-              <InteractiveHoverButton
-                onClick={async () => {
-                  if (!isAuthenticated) {
-                    setSignupAction("bookshelf");
-                    setShowSignupPrompt(true);
-                    return;
-                  }
-                  if (isUpdating || !session?.user?.username || !book) return;
-                  setIsUpdating(true);
-                  try {
-                    // Determine the correct ID type based on book.id format
-                    const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
-                    const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
-                    
-                    const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        type: "bookshelf",
-                        bookId: book._id || book.bookId,
-                        isbndbId: isISBN ? book.id : undefined,
-                        openLibraryId: isOpenLibraryId ? book.id : undefined,
-                        finishedOn: new Date().toISOString(),
-                      }),
-                    });
-                    
-                    if (response.ok) {
-                      const data = await response.json();
-                      const wasRemoved = data.removed || false;
-                      setIsInBookshelf(!wasRemoved);
-                      toast.success(wasRemoved ? "Removed from bookshelf!" : "Added to bookshelf!");
-                    } else {
-                      const error = await response.json().catch(() => ({}));
-                      toast.error(error.error || "Failed to update bookshelf");
-                    }
-                  } catch (err) {
-                    toast.error("Failed to update bookshelf");
-                  } finally {
-                    setIsUpdating(false);
-                  }
-                }}
-                text={isAuthenticated && isInBookshelf ? "In Bookshelf" : "Add to Bookshelf!"}
-                showIdleAccent={true}
-                accentColor="bg-amber-700"
-                invert={true}
-                hideIcon={true}
-                className="w-full border-0"
-                disabled={isUpdating}
-              />
-              
+            <div className="flex flex-col gap-3 mt-4">
+              {/* Icon Buttons Row */}
               <div className="flex gap-2">
-              <InteractiveHoverButton
+                {/* Like Icon Button */}
+                <Button
+                  variant="outline"
+                  size="icon"
                 onClick={async () => {
                   if (!isAuthenticated) {
-                    setSignupAction("like");
+                      setSignupAction("like");
                     setShowSignupPrompt(true);
                     return;
                   }
                   if (isUpdating || !session?.user?.username || !book) return;
                   setIsUpdating(true);
                   try {
-                    // Determine the correct ID type based on book.id format
                     const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
                     const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
                     
@@ -587,7 +572,7 @@ export default function BookDetailPage() {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
-                        type: "liked",
+                          type: "liked",
                         bookId: book._id || book.bookId,
                         isbndbId: isISBN ? book.id : undefined,
                         openLibraryId: isOpenLibraryId ? book.id : undefined,
@@ -597,28 +582,75 @@ export default function BookDetailPage() {
                     if (response.ok) {
                       const data = await response.json();
                       const wasRemoved = data.removed || false;
-                      setIsLiked(!wasRemoved);
-                      toast.success(wasRemoved ? "Removed from likes!" : "Added to likes!");
-                    } else {
-                      const error = await response.json().catch(() => ({}));
-                      toast.error(error.error || "Failed to update likes");
+                        setIsLiked(!wasRemoved);
                     }
                   } catch (err) {
-                    toast.error("Failed to update likes");
+                      // Silent fail - no toast
                   } finally {
                     setIsUpdating(false);
                   }
                 }}
-                text={isAuthenticated && isLiked ? "Liked" : "Like"}
-                showIdleAccent={true}
-                invert={true}
-                accentColor="#e31b23"
-                hideIcon={true}
-                className="flex-1 border-0"
                 disabled={isUpdating}
-              />
+                  className={cn(
+                    "flex-1 h-10",
+                    isAuthenticated && isLiked && "bg-red-500 text-white hover:bg-red-600"
+                  )}
+                >
+                  <Heart className={cn("h-5 w-5", isAuthenticated && isLiked && "fill-current")} />
+                </Button>
+                
+                {/* Bookshelf Icon Button */}
+                <Button
+                  variant="outline"
+                  size="icon"
+                onClick={async () => {
+                  if (!isAuthenticated) {
+                      setSignupAction("bookshelf");
+                    setShowSignupPrompt(true);
+                    return;
+                  }
+                  if (isUpdating || !session?.user?.username || !book) return;
+                  setIsUpdating(true);
+                  try {
+                    const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
+                    const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
+                    
+                    const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                          type: "bookshelf",
+                        bookId: book._id || book.bookId,
+                        isbndbId: isISBN ? book.id : undefined,
+                        openLibraryId: isOpenLibraryId ? book.id : undefined,
+                          finishedOn: new Date().toISOString(),
+                      }),
+                    });
+                    
+                    if (response.ok) {
+                      const data = await response.json();
+                      const wasRemoved = data.removed || false;
+                        setIsInBookshelf(!wasRemoved);
+                    }
+                  } catch (err) {
+                      // Silent fail - no toast
+                  } finally {
+                    setIsUpdating(false);
+                  }
+                }}
+                disabled={isUpdating}
+                  className={cn(
+                    "flex-1 h-10",
+                    isAuthenticated && isInBookshelf && "bg-amber-500 text-white hover:bg-amber-600"
+                  )}
+                >
+                  <BookMarked className={cn("h-5 w-5", isAuthenticated && isInBookshelf && "fill-current")} />
+                </Button>
+              </div>
               
-              <InteractiveHoverButton
+              {/* TBR Button */}
+              <Button
+                variant={isAuthenticated && isInTBR ? "default" : "outline"}
                 onClick={async () => {
                   if (!isAuthenticated) {
                     setSignupAction("tbr");
@@ -628,7 +660,6 @@ export default function BookDetailPage() {
                   if (isUpdating || !session?.user?.username || !book) return;
                   setIsUpdating(true);
                   try {
-                    // Determine the correct ID type based on book.id format
                     const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
                     const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
                     
@@ -647,26 +678,21 @@ export default function BookDetailPage() {
                       const data = await response.json();
                       const wasRemoved = data.removed || false;
                       setIsInTBR(!wasRemoved);
-                      toast.success(wasRemoved ? "Removed from TBR!" : "Added to TBR!");
-                    } else {
-                      const error = await response.json().catch(() => ({}));
-                      toast.error(error.error || "Failed to update TBR");
                     }
                   } catch (err) {
-                    toast.error("Failed to update TBR");
+                    // Silent fail - no toast
                   } finally {
                     setIsUpdating(false);
                   }
                 }}
-                text={isAuthenticated && isInTBR ? "In TBR" : "TBR"}
-                showIdleAccent={true}
-                accentColor="bg-green-700"
-                invert={true}
-                hideIcon={true}
-                className="flex-1 border-0"
                 disabled={isUpdating}
-              />
-              </div>
+                className={cn(
+                  "w-full h-10",
+                  isAuthenticated && isInTBR && "bg-green-600 text-white hover:bg-green-700"
+                )}
+              >
+                {isAuthenticated && isInTBR ? "In TBR" : "Add to TBR"}
+              </Button>
             </div>
             
             {/* Sign-up Prompt Dialog */}
@@ -820,11 +846,11 @@ export default function BookDetailPage() {
                   {/* Card content */}
                   <div className="relative bg-background/90 backdrop-blur-sm rounded-lg border border-border/50 p-6 md:p-8 -m-6 md:-m-8">
                     <p 
-                      className="text-lg leading-relaxed text-muted-foreground whitespace-pre-wrap"
+                      className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap"
                       style={{ fontFamily: '"Helvetica", sans-serif' }}
                     >
-                      {stripHtmlTags(volumeInfo.description)}
-                    </p>
+                  {stripHtmlTags(volumeInfo.description)}
+                </p>
                   </div>
                 </div>
               </div>
@@ -884,8 +910,8 @@ export default function BookDetailPage() {
               subtitle="Other books by this author"
               books={authorBooks}
             />
-            )}
-          </div>
+          )}
+        </div>
 
         {/* Share Dialog */}
         <Dialog open={isShareOpen} onOpenChange={setIsShareOpen}>
@@ -959,7 +985,7 @@ export default function BookDetailPage() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
                   <Input
-                    placeholder="Search by name or email"
+                    placeholder="Search by username or name"
                     value={shareSearchQuery}
                     onChange={(e) => setShareSearchQuery(e.target.value)}
                     className="w-full !pl-10 pr-4 focus-visible:border-foreground dark:focus-visible:border-white"
@@ -967,13 +993,13 @@ export default function BookDetailPage() {
                 </div>
               </div>
 
-              {/* Following List */}
+              {/* User List */}
               <div className="flex-1 min-h-0 overflow-y-auto">
-                {isLoadingFollowing ? (
+                {(isLoadingFollowing && !shareSearchQuery.trim()) || (isSearchingUsers && shareSearchQuery.trim()) ? (
                   <div className="flex items-center justify-center py-8">
                     <p className="text-muted-foreground">Loading...</p>
                   </div>
-                ) : filteredFollowing.length === 0 ? (
+                ) : usersToDisplay.length === 0 ? (
                   <div className="flex items-center justify-center py-8">
                     <p className="text-muted-foreground">
                       {shareSearchQuery.trim() ? "No users found" : "No people to share with"}
@@ -981,9 +1007,8 @@ export default function BookDetailPage() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {filteredFollowing.map((user) => {
-                      const defaultAvatar = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%239ca3af'/%3E%3Cpath d='M50 30c-8.284 0-15 6.716-15 15 0 5.989 3.501 11.148 8.535 13.526C37.514 62.951 32 70.16 32 78.5h36c0-8.34-5.514-15.549-13.535-19.974C59.499 56.148 63 50.989 63 45c0-8.284-6.716-15-15-15z' fill='white' opacity='0.8'/%3E%3C/svg%3E`;
-                      const avatar = user.avatar || defaultAvatar;
+                    {usersToDisplay.map((user) => {
+                      const avatar = user.avatar || DEFAULT_AVATAR;
                       const initials = user.name
                         ?.split(" ")
                         .map((n: string) => n[0])

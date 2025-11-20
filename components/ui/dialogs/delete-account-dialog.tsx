@@ -10,7 +10,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/primitives/button";
 import { Checkbox } from "@/components/ui/primitives/checkbox";
 import { Input } from "@/components/ui/primitives/input";
+import { Label } from "@/components/ui/primitives/label";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-media-query";
 
 const deleteReasons = [
   "I'm not using this account anymore",
@@ -35,6 +37,7 @@ export function DeleteAccountDialog({
 }: DeleteAccountDialogProps) {
   const router = useRouter();
   const { data: session } = useSession();
+  const isMobile = useIsMobile();
   const [step, setStep] = React.useState<"reason" | "confirm" | "goodbye">("reason");
   const [selectedReasons, setSelectedReasons] = React.useState<Set<DeleteReason>>(new Set());
   const [otherReason, setOtherReason] = React.useState("");
@@ -120,26 +123,30 @@ export function DeleteAccountDialog({
     }, 300);
   };
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={step === "goodbye" ? undefined : handleClose}
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-      />
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          {/* Backdrop with blur */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={step === "goodbye" ? undefined : handleClose}
+            className="absolute inset-0 bg-black/60 backdrop-blur-md"
+          />
 
-      {/* Dialog */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative z-10 w-full max-w-md rounded-xl border border-border/50 bg-card shadow-xl"
-      >
+        {/* Dialog */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          onClick={(e) => e.stopPropagation()} // Prevent clicks inside dialog from closing it
+          className={cn(
+            "relative z-10 w-full rounded-xl border border-border/50 bg-card shadow-xl",
+            isMobile ? "max-w-[95vw]" : "max-w-md"
+          )}
+        >
         <AnimatePresence mode="wait">
           {step === "reason" && (
             <motion.div
@@ -147,57 +154,77 @@ export function DeleteAccountDialog({
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="p-6"
+              className={cn(isMobile ? "p-4" : "p-6")}
             >
-              <div className="mb-6">
+              <div className={cn(isMobile ? "mb-4" : "mb-6")}>
                 <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-2xl font-bold">Delete Account</h2>
+                  <h2 className={cn("font-bold", isMobile ? "text-2xl" : "text-2xl")}>Delete Account</h2>
                   <button
                     onClick={handleClose}
                     className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   >
-                    <X className="h-4 w-4" />
+                    <X className={cn(isMobile ? "h-5 w-5" : "h-4 w-4")} />
                     <span className="sr-only">Close</span>
                   </button>
                 </div>
-                <p className="text-sm text-muted-foreground">
+                <p className={cn("text-muted-foreground", isMobile ? "text-sm" : "text-sm")}>
                   We're sorry to see you go. Please let us know why you're deleting your account.
                 </p>
               </div>
 
-              <div className="space-y-3 mb-6 max-h-[300px] overflow-y-auto">
+              <div className={cn(
+                "space-y-3 mb-6 overflow-y-auto",
+                isMobile ? "max-h-[250px]" : "max-h-[300px]"
+              )}>
                 {deleteReasons.map((reason) => (
-                  <div key={reason} className={cn(
-                    "flex items-center gap-3",
-                    reason === "Other" && selectedReasons.has("Other") && "items-start"
-                  )}>
+                  <div 
+                    key={reason} 
+                    className={cn(
+                      "flex items-start gap-3",
+                      reason === "Other" && selectedReasons.has("Other") && "items-start"
+                    )}
+                  >
+                    <Checkbox
+                      id={`reason-${reason}`}
+                      checked={selectedReasons.has(reason)}
+                      onCheckedChange={(checked) => handleReasonToggle(reason, checked as boolean)}
+                      className={cn(
+                        "mt-0.5 flex-shrink-0",
+                        reason === "Other" && selectedReasons.has("Other") && "mt-1",
+                        isMobile && "h-5 w-5"
+                      )}
+                    />
                     {reason === "Other" ? (
-                      <>
-                        <Checkbox
-                          checked={selectedReasons.has(reason)}
-                          onCheckedChange={(checked) => handleReasonToggle(reason, checked as boolean)}
-                          className={selectedReasons.has("Other") ? "mt-1" : ""}
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <Label 
+                          htmlFor={`reason-${reason}`}
+                          className={cn(
+                            "cursor-pointer",
+                            isMobile ? "text-sm" : "text-sm"
+                          )}
                         >
-                          <span className="text-sm font-normal whitespace-nowrap">{reason}:</span>
-                        </Checkbox>
+                          {reason}:
+                        </Label>
                         {selectedReasons.has("Other") && (
                           <Input
                             placeholder="Please specify..."
                             value={otherReason}
                             onChange={(e) => setOtherReason(e.target.value)}
-                            className="flex-1"
+                            className={cn("w-full", isMobile ? "text-sm" : "")}
                             autoFocus
                           />
                         )}
-                      </>
+                      </div>
                     ) : (
-                      <Checkbox
-                        checked={selectedReasons.has(reason)}
-                        onCheckedChange={(checked) => handleReasonToggle(reason, checked as boolean)}
-                        className="flex-1"
+                      <Label 
+                        htmlFor={`reason-${reason}`}
+                        className={cn(
+                          "flex-1 cursor-pointer",
+                          isMobile ? "text-sm" : "text-sm"
+                        )}
                       >
-                        <span className="text-sm font-normal">{reason}</span>
-                      </Checkbox>
+                        {reason}
+                      </Label>
                     )}
                   </div>
                 ))}
@@ -207,7 +234,7 @@ export function DeleteAccountDialog({
                 <Button
                   variant="outline"
                   onClick={handleClose}
-                  className="flex-1"
+                  className={cn("flex-1", isMobile ? "text-base h-11" : "")}
                   disabled={isDeleting}
                 >
                   Cancel
@@ -215,7 +242,7 @@ export function DeleteAccountDialog({
                 <Button
                   variant="destructive"
                   onClick={() => setStep("confirm")}
-                  className="flex-1"
+                  className={cn("flex-1", isMobile ? "text-base h-11" : "")}
                   disabled={!isFormValid || isDeleting}
                 >
                   Continue
@@ -230,25 +257,40 @@ export function DeleteAccountDialog({
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="p-6"
+              className={cn(isMobile ? "p-4" : "p-6")}
             >
-              <div className="mb-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
-                    <AlertTriangle className="h-6 w-6 text-destructive" />
+              <div className={cn(isMobile ? "mb-4" : "mb-6")}>
+                <div className={cn(
+                  "flex items-center gap-3 mb-4",
+                  isMobile && "gap-2"
+                )}>
+                  <div className={cn(
+                    "flex items-center justify-center rounded-full bg-destructive/10",
+                    isMobile ? "h-10 w-10" : "h-12 w-12"
+                  )}>
+                    <AlertTriangle className={cn(
+                      "text-destructive",
+                      isMobile ? "h-5 w-5" : "h-6 w-6"
+                    )} />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold">Are you sure?</h2>
-                    <p className="text-sm text-muted-foreground">
+                    <h2 className={cn("font-bold", isMobile ? "text-2xl" : "text-2xl")}>Are you sure?</h2>
+                    <p className={cn("text-muted-foreground", isMobile ? "text-sm" : "text-sm")}>
                       This action cannot be undone
                     </p>
                   </div>
                 </div>
-                <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
-                  <p className="text-sm text-foreground">
+                <div className={cn(
+                  "rounded-lg border border-destructive/20 bg-destructive/5",
+                  isMobile ? "p-3" : "p-4"
+                )}>
+                  <p className={cn("text-foreground", isMobile ? "text-sm" : "text-sm")}>
                     Deleting your account will permanently remove:
                   </p>
-                  <ul className="mt-2 space-y-1 text-sm text-muted-foreground list-disc list-inside">
+                  <ul className={cn(
+                    "mt-2 space-y-1 text-muted-foreground list-disc list-inside",
+                    isMobile ? "text-sm" : "text-sm"
+                  )}>
                     <li>Your profile and all personal information</li>
                     <li>All your books, lists, and reading data</li>
                     <li>Your followers and following relationships</li>
@@ -261,7 +303,7 @@ export function DeleteAccountDialog({
                 <Button
                   variant="outline"
                   onClick={() => setStep("reason")}
-                  className="flex-1"
+                  className={cn("flex-1", isMobile ? "text-base h-11" : "")}
                   disabled={isDeleting}
                 >
                   Go back
@@ -269,17 +311,17 @@ export function DeleteAccountDialog({
                 <Button
                   variant="destructive"
                   onClick={handleDelete}
-                  className="flex-1"
+                  className={cn("flex-1", isMobile ? "text-base h-11" : "")}
                   disabled={isDeleting}
                 >
                   {isDeleting ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className={cn("mr-2 animate-spin", isMobile ? "h-5 w-5" : "h-4 w-4")} />
                       Deleting...
                     </>
                   ) : (
                     <>
-                      <Trash2 className="mr-2 h-4 w-4" />
+                      <Trash2 className={cn("mr-2", isMobile ? "h-5 w-5" : "h-4 w-4")} />
                       Delete my account
                     </>
                   )}
@@ -294,19 +336,25 @@ export function DeleteAccountDialog({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="p-6 text-center"
+              className={cn("text-center", isMobile ? "p-4" : "p-6")}
             >
-              <div className="mb-6">
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                  <Trash2 className="h-8 w-8 text-muted-foreground" />
+              <div className={cn(isMobile ? "mb-4" : "mb-6")}>
+                <div className={cn(
+                  "mx-auto mb-4 flex items-center justify-center rounded-full bg-muted",
+                  isMobile ? "h-12 w-12" : "h-16 w-16"
+                )}>
+                  <Trash2 className={cn(
+                    "text-muted-foreground",
+                    isMobile ? "h-6 w-6" : "h-8 w-8"
+                  )} />
                 </div>
-                <h2 className="text-2xl font-bold mb-2">We're sorry to see you go</h2>
-                <p className="text-sm text-muted-foreground">
+                <h2 className={cn("font-bold mb-2", isMobile ? "text-2xl" : "text-2xl")}>We're sorry to see you go</h2>
+                <p className={cn("text-muted-foreground", isMobile ? "text-sm" : "text-sm")}>
                   Your account has been successfully deleted. Thank you for being part of our community.
                 </p>
               </div>
 
-              <Button onClick={handleGoodbyeOk} className="w-full">
+              <Button onClick={handleGoodbyeOk} className={cn("w-full", isMobile ? "text-base h-11" : "")}>
                 Okay
               </Button>
             </motion.div>
@@ -314,6 +362,8 @@ export function DeleteAccountDialog({
         </AnimatePresence>
       </motion.div>
     </div>
+      )}
+    </AnimatePresence>
   );
 }
 

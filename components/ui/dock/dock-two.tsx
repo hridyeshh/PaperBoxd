@@ -5,6 +5,7 @@ import { motion, type Variants } from "framer-motion";
 
 import { cn } from "@/lib/utils";
 import { InteractiveHoverButton } from "@/components/ui/buttons";
+import { useIsMobile } from "@/hooks/use-media-query";
 
 export interface DockItem {
   label: string;
@@ -30,11 +31,12 @@ const floatingAnimation: Variants = {
   },
 };
 
-const DockButton = React.forwardRef<HTMLButtonElement, DockItem & { isActive?: boolean }>(
-  ({ label, onClick, className, isActive }, ref) => (
+const DockButton = React.forwardRef<HTMLButtonElement, DockItem & { isActive?: boolean; isMobile?: boolean }>(
+  ({ label, onClick, className, isActive, isMobile }, ref) => (
     <div
       className={cn(
-        "flex-1 transition-transform duration-200 ease-out hover:scale-[1.02]",
+        isMobile ? "flex-shrink-0" : "flex-1",
+        "transition-transform duration-200 ease-out hover:scale-[1.02]",
         className,
       )}
     >
@@ -62,6 +64,7 @@ const DockButton = React.forwardRef<HTMLButtonElement, DockItem & { isActive?: b
 DockButton.displayName = "DockButton";
 
 const Dock = React.forwardRef<HTMLDivElement, DockProps>(({ items, className, activeLabel }, ref) => {
+  const isMobile = useIsMobile();
   return (
     <div ref={ref} className={cn("w-full flex items-center justify-center p-1", className)}>
       <motion.div
@@ -69,12 +72,19 @@ const Dock = React.forwardRef<HTMLDivElement, DockProps>(({ items, className, ac
         animate="animate"
         variants={floatingAnimation}
         className={cn(
-          "flex w-full max-w-6xl items-center justify-center gap-3 rounded-full border border-border/60 bg-background px-8 py-2 text-foreground shadow-sm md:px-10",
+          "flex items-center justify-center gap-3 rounded-full border border-border/60 bg-background px-8 py-2 text-foreground shadow-sm md:px-10",
+          isMobile ? "w-auto" : "w-full max-w-6xl",
           "dark:border-border/40",
         )}
       >
         {items.map((item) => (
-          <DockButton key={item.label} {...item} isActive={item.label === activeLabel} className="flex-1 text-center" />
+          <DockButton 
+            key={item.label} 
+            {...item} 
+            isActive={item.label === activeLabel} 
+            isMobile={isMobile}
+            className={isMobile ? "text-center" : "flex-1 text-center"} 
+          />
         ))}
       </motion.div>
     </div>

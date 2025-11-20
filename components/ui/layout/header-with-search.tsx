@@ -7,7 +7,7 @@ import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { useSession } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
 
-import { cn } from "@/lib/utils";
+import { cn, DEFAULT_AVATAR } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/primitives/button";
 import { CommandItem, SearchModal } from "@/components/ui/features/search-modal";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/primitives/sheet";
@@ -17,6 +17,7 @@ import { signOut } from "@/lib/auth-client";
 import { DeleteAccountDialog } from "@/components/ui/dialogs/delete-account-dialog";
 import { GeneralDiaryEditorDialog } from "@/components/ui/dialogs/general-diary-editor-dialog";
 import { toast } from "sonner";
+import { useIsMobile } from "@/hooks/use-media-query";
 
 // Links will be dynamic based on authentication status
 // We'll handle Activity link specially in the component
@@ -53,6 +54,7 @@ interface HeaderProps {
   onProfileButtonClick?: () => void;
   profileAvatarSrc?: string;
   profileMenuOpen?: boolean;
+  minimalMobile?: boolean; // Show only logo and theme toggle on mobile
 }
 
 export function Header({
@@ -60,6 +62,7 @@ export function Header({
   onProfileButtonClick,
   profileAvatarSrc,
   profileMenuOpen,
+  minimalMobile = false,
 }: HeaderProps) {
   const [open, setOpen] = React.useState(false);
   const [internalProfileMenuOpen, setInternalProfileMenuOpen] = React.useState(false);
@@ -75,6 +78,9 @@ export function Header({
   const isAuthenticated = status === "authenticated";
   const router = useRouter();
   const pathname = usePathname();
+  const isMobile = useIsMobile();
+  // Always show minimal header on mobile (only logo and theme toggle)
+  const showMinimal = isMobile;
   
   // Fetch logged-in user's profile avatar from database when authenticated
   // Always fetch the logged-in user's avatar, not the profile being viewed
@@ -225,9 +231,6 @@ export function Header({
     return () => clearInterval(interval);
   }, [isAuthenticated, session?.user?.username, pathname]);
   
-  // Gray placeholder avatar as SVG data URI
-  const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%239ca3af'/%3E%3Cpath d='M50 30c-8.284 0-15 6.716-15 15 0 5.989 3.501 11.148 8.535 13.526C37.514 62.951 32 70.16 32 78.5h36c0-8.34-5.514-15.549-13.535-19.974C59.499 56.148 63 50.989 63 45c0-8.284-6.716-15-15-15z' fill='white' opacity='0.8'/%3E%3C/svg%3E";
-
   // Ensure avatarSrc is never an empty string
   // Priority: fetchedAvatar (logged-in user from database) > default
   // Don't use session?.user?.image as it may contain Google profile images
@@ -237,7 +240,7 @@ export function Header({
     const src = fetchedAvatar;
     // Return fallback if empty string, null, or undefined
     if (!src || (typeof src === "string" && src.trim() === "")) {
-      return defaultAvatar;
+      return DEFAULT_AVATAR;
     }
     return src;
   }, [fetchedAvatar]);
@@ -358,6 +361,7 @@ export function Header({
           )}
         </button>
         <div className="flex items-center gap-2">
+          {!showMinimal && (
           <div className="hidden items-center gap-1 lg:flex">
             <button
               type="button"
@@ -415,6 +419,8 @@ export function Header({
               </>
             ) : null}
           </div>
+          )}
+          {!showMinimal && (
           <SearchModal data={searchItems}>
             <Button
               variant="outline"
@@ -427,9 +433,14 @@ export function Header({
               <SearchIcon className="size-4" />
             </Button>
           </SearchModal>
+          )}
           <ThemeToggle className="transition-transform hover:scale-[1.02]" />
           {isAuthenticated ? (
-            <div className="flex items-center gap-2 pl-8">
+            <div className={cn(
+              "flex items-center gap-2",
+              showMinimal ? "pl-2" : "pl-8"
+            )}>
+              {/* Profile avatar button - hidden on mobile */}
               <button
                 type="button"
                 aria-label="View profile"
@@ -439,6 +450,7 @@ export function Header({
                   "relative flex size-10 items-center justify-center rounded-full border-2 border-foreground/80 p-0.5",
                   "transition-all duration-150 hover:scale-[1.10] active:scale-95 cursor-pointer",
                   (isNavigatingToProfile || isLoadingAvatar) && "opacity-75 cursor-wait",
+                  "hidden md:flex"
                 )}
               >
                 <Image
@@ -467,8 +479,20 @@ export function Header({
                     )}
                   />
                 </Dropdown.Trigger>
-                <Dropdown.Popover>
+                <Dropdown.Popover align="end">
                   <Dropdown.Menu>
+                    {isMobile && (
+                      <>
+                        <Dropdown.Item 
+                          label="View profile" 
+                          onClick={() => {
+                            handleProfileClick();
+                            setInternalProfileMenuOpen(false);
+                          }}
+                        />
+                        <Dropdown.Separator />
+                      </>
+                    )}
                     <Dropdown.Item 
                       label="Share profile link" 
                       icon={LinkIcon}
@@ -502,7 +526,7 @@ export function Header({
                 </Dropdown.Popover>
               </Dropdown.Root>
             </div>
-          ) : (
+          ) : !showMinimal ? (
             <div className="flex items-center gap-2 pl-8">
               <Button
                 variant="outline"
@@ -518,7 +542,8 @@ export function Header({
                 Create account
               </Button>
             </div>
-          )}
+          ) : null}
+          {!showMinimal && (
           <Sheet open={open} onOpenChange={setOpen}>
             <Button
               size="icon"
@@ -603,6 +628,7 @@ export function Header({
               </SheetFooter>
             </SheetContent>
           </Sheet>
+          )}
         </div>
       </nav>
     </header>

@@ -37,7 +37,7 @@ const BookCard = ({ book }: { book: BookCarouselBook }) => {
 
   return (
     <motion.div
-      className="group w-[160px] flex-shrink-0 cursor-pointer"
+      className="group w-[140px] flex-shrink-0 cursor-pointer"
       whileHover={{ y: -5 }}
       transition={{ type: "spring", stiffness: 300 }}
       onClick={() => {
@@ -55,7 +55,7 @@ const BookCard = ({ book }: { book: BookCarouselBook }) => {
             alt={`${book.title} cover`}
             fill
             className="object-cover transition-transform duration-300 group-hover:scale-105"
-            sizes="160px"
+            sizes="140px"
             quality={100}
             unoptimized={
               book.cover?.includes('isbndb.com') ||
@@ -65,9 +65,9 @@ const BookCard = ({ book }: { book: BookCarouselBook }) => {
             }
           />
         </div>
-        <div className="p-4">
-          <h3 className="text-base font-semibold leading-tight line-clamp-2">{book.title}</h3>
-          <p className="mt-1 text-sm text-muted-foreground truncate">{book.author}</p>
+        <div className="p-3">
+          <h3 className="text-sm font-semibold leading-tight line-clamp-2">{book.title}</h3>
+          <p className="mt-1 text-xs text-muted-foreground truncate">{book.author}</p>
         </div>
       </div>
     </motion.div>
@@ -90,19 +90,19 @@ const ViewAllBooksDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col w-[95vw] sm:w-full">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">{title}</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-xl font-bold">{title}</DialogTitle>
+          <DialogDescription className="text-sm">
             Browse all {books.length} books
           </DialogDescription>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto pr-2 scrollbar-hide">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 p-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 p-3 sm:p-4">
             {books.map((book) => (
               <div
                 key={book.id}
-                className="group flex flex-col gap-3 cursor-pointer"
+                className="group flex flex-col gap-2 cursor-pointer"
                 onClick={() => {
                   try {
                   router.push(`/b/${book.id}`);
@@ -129,8 +129,8 @@ const ViewAllBooksDialog = ({
                   />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground line-clamp-2">{book.title}</h3>
-                  <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+                  <h3 className="text-xs font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">{book.author}</p>
                 </div>
               </div>
             ))}
@@ -197,13 +197,13 @@ export const BookCarousel = React.forwardRef<HTMLDivElement, BookCarouselProps>(
       <>
         <div
           ref={ref}
-          className={cn("w-full rounded-2xl border bg-card p-4 shadow-sm md:p-6", className)}
+          className={cn("w-full rounded-2xl border bg-card p-3 shadow-sm md:p-4", className)}
         >
-          <div className="grid grid-cols-1 items-center gap-6 lg:grid-cols-12">
+          <div className="grid grid-cols-1 items-center gap-4 lg:grid-cols-12">
             {/* Left: Title Section */}
             <div className="flex flex-col items-center text-center lg:col-span-3 lg:items-start lg:text-left">
-              <h2 className="mt-4 text-2xl font-bold text-primary">{title}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+              <h2 className="mt-2 text-lg font-bold text-primary">{title}</h2>
+              <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
               <Button 
                 variant="outline" 
                 className="mt-6 w-full max-w-xs lg:w-auto" 
