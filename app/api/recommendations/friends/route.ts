@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import connectDB from '@/lib/db/mongodb';
 import RecommendationCache from '@/lib/db/models/RecommendationCache';
 import { FriendRecommendations } from '@/lib/services/FriendRecommendations';
@@ -13,7 +12,7 @@ import { FriendRecommendations } from '@/lib/services/FriendRecommendations';
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
 
     if (!session?.user?.id) {
       return NextResponse.json(

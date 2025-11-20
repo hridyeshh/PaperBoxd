@@ -6,11 +6,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowLeft,
   Eye,
   EyeOff,
   Loader2,
-  MailCheck,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -34,8 +32,6 @@ import { useIsMobile } from "@/hooks/use-media-query";
 enum AuthView {
   SIGN_IN = "sign-in",
   SIGN_UP = "sign-up",
-  FORGOT_PASSWORD = "forgot-password",
-  RESET_SUCCESS = "reset-success",
 }
 
 interface AuthState {
@@ -64,13 +60,8 @@ const signUpSchema = z.object({
   }),
 });
 
-const forgotPasswordSchema = z.object({
-  email: z.string().email("Invalid email address"),
-});
-
 type SignInFormValues = z.infer<typeof signInSchema>;
 type SignUpFormValues = z.infer<typeof signUpSchema>;
-type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
 
 function Auth({ className, ...props }: React.ComponentProps<"div">) {
   const [state, setState] = React.useState<AuthState>({
@@ -94,26 +85,12 @@ function Auth({ className, ...props }: React.ComponentProps<"div">) {
             {state.view === AuthView.SIGN_IN && (
               <AuthSignIn
                 key="sign-in"
-                onForgotPassword={() => setView(AuthView.FORGOT_PASSWORD)}
                 onSignUp={() => setView(AuthView.SIGN_UP)}
               />
             )}
             {state.view === AuthView.SIGN_UP && (
               <AuthSignUp
                 key="sign-up"
-                onSignIn={() => setView(AuthView.SIGN_IN)}
-              />
-            )}
-            {state.view === AuthView.FORGOT_PASSWORD && (
-              <AuthForgotPassword
-                key="forgot-password"
-                onSignIn={() => setView(AuthView.SIGN_IN)}
-                onSuccess={() => setView(AuthView.RESET_SUCCESS)}
-              />
-            )}
-            {state.view === AuthView.RESET_SUCCESS && (
-              <AuthResetSuccess
-                key="reset-success"
                 onSignIn={() => setView(AuthView.SIGN_IN)}
               />
             )}
@@ -217,11 +194,10 @@ function AuthSeparator({ text = "Or continue with" }: AuthSeparatorProps) {
 }
 
 interface AuthSignInProps {
-  onForgotPassword: () => void;
   onSignUp: () => void;
 }
 
-function AuthSignIn({ onForgotPassword, onSignUp }: AuthSignInProps) {
+function AuthSignIn({ onSignUp }: AuthSignInProps) {
   const router = useRouter();
   const isMobile = useIsMobile();
   const [formState, setFormState] = React.useState<FormState>({
@@ -357,7 +333,7 @@ function AuthSignIn({ onForgotPassword, onSignUp }: AuthSignInProps) {
                 type="button"
                 variant="link"
                 className="h-auto p-0 text-xs"
-                onClick={onForgotPassword}
+                onClick={() => toast.info("Developer is working on this feature")}
                 disabled={formState.isLoading}
               >
                 Forgot password?
@@ -365,7 +341,7 @@ function AuthSignIn({ onForgotPassword, onSignUp }: AuthSignInProps) {
             </div>
             <PasswordInput
               id="password"
-              placeholder="••••••••"
+              placeholder="Enter your password"
               disabled={formState.isLoading}
               inputClassName={cn(
                 "border border-border bg-background/95 pr-12 focus-visible:border-black",
@@ -649,160 +625,11 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
   );
 }
 
-interface AuthForgotPasswordProps {
-  onSignIn: () => void;
-  onSuccess: () => void;
-}
-
-function AuthForgotPassword({
-  onSignIn,
-  onSuccess,
-}: AuthForgotPasswordProps) {
-  const [formState, setFormState] = React.useState<FormState>({
-    isLoading: false,
-    error: null,
-    showPassword: false,
-  });
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<ForgotPasswordFormValues>({
-    resolver: zodResolver(forgotPasswordSchema),
-    defaultValues: { email: "" },
-  });
-
-  const onSubmit = async (data: ForgotPasswordFormValues) => {
-    setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      onSuccess();
-    } catch {
-      setFormState((prev) => ({
-        ...prev,
-        error: "An unexpected error occurred",
-      }));
-    } finally {
-      setFormState((prev) => ({ ...prev, isLoading: false }));
-    }
-  };
-
-  return (
-    <motion.div
-      data-slot="auth-forgot-password"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="relative p-8"
-    >
-      <Button
-        variant="ghost"
-        size="icon"
-        className="absolute left-4 top-4"
-        onClick={onSignIn}
-        disabled={formState.isLoading}
-      >
-        <ArrowLeft className="h-4 w-4" />
-        <span className="sr-only">Back</span>
-      </Button>
-
-      <div className="mb-8 text-center">
-        <h1 className="text-3xl font-semibold text-foreground">
-          Reset password
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Enter your email to receive a reset link
-        </p>
-      </div>
-
-      <AuthError message={formState.error} />
-
-      <AuthForm onSubmit={handleSubmit(onSubmit)}>
-        <div className="space-y-2">
-          <Label htmlFor="reset-email">Email</Label>
-          <Input
-            id="reset-email"
-            type="email"
-            placeholder="name@example.com"
-            disabled={formState.isLoading}
-            className={cn(errors.email && "border-destructive")}
-            {...register("email")}
-          />
-          {errors.email ? (
-            <p className="text-xs text-destructive">{errors.email.message}</p>
-          ) : null}
-        </div>
-        <Button type="submit" className="w-full" disabled={formState.isLoading}>
-          {formState.isLoading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Sending...
-            </>
-          ) : (
-            "Send reset link"
-          )}
-        </Button>
-      </AuthForm>
-
-      <p className="mt-8 text-center text-sm text-muted-foreground">
-        Remember your password?{" "}
-        <Button
-          variant="link"
-          className="h-auto p-0 text-sm"
-          onClick={onSignIn}
-          disabled={formState.isLoading}
-        >
-          Sign in
-        </Button>
-      </p>
-    </motion.div>
-  );
-}
-
-interface AuthResetSuccessProps {
-  onSignIn: () => void;
-}
-
-function AuthResetSuccess({ onSignIn }: AuthResetSuccessProps) {
-  return (
-    <motion.div
-      data-slot="auth-reset-success"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="flex flex-col items-center p-8 text-center"
-    >
-      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-        <MailCheck className="h-8 w-8 text-primary" />
-      </div>
-      <h1 className="text-2xl font-semibold text-foreground">
-        Check your email
-      </h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        We sent a password reset link to your email.
-      </p>
-      <Button variant="outline" className="mt-6 w-full max-w-xs" onClick={onSignIn}>
-        Back to sign in
-      </Button>
-      <p className="mt-6 text-xs text-muted-foreground">
-        No email? Check spam or{" "}
-        <Button variant="link" className="h-auto p-0 text-xs" type="button">
-          try another email
-        </Button>
-      </p>
-    </motion.div>
-  );
-}
 
 export {
   Auth,
   AuthSignIn,
   AuthSignUp,
-  AuthForgotPassword,
-  AuthResetSuccess,
   AuthForm,
   AuthError,
   AuthSocialButtons,

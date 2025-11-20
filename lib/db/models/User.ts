@@ -138,6 +138,10 @@ export interface IUser extends Document {
   createdAt: Date;
   updatedAt: Date;
   lastActive: Date;
+
+  // Password Reset
+  resetPasswordToken?: string;
+  resetPasswordExpires?: Date;
 }
 
 // =====================================================
@@ -317,6 +321,10 @@ const UserSchema = new Schema<IUser>(
 
     // Metadata
     lastActive: { type: Date, default: Date.now },
+
+    // Password Reset
+    resetPasswordToken: { type: String, required: false },
+    resetPasswordExpires: { type: Date, required: false },
   },
   {
     timestamps: true, // Automatically adds createdAt and updatedAt
