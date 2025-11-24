@@ -33,7 +33,6 @@ const NewsletterSchema = new Schema<INewsletter>(
       lowercase: true,
       trim: true,
       match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email'],
-      index: true,
     },
     subscribedAt: {
       type: Date,

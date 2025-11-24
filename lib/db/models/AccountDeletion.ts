@@ -12,7 +12,6 @@ const AccountDeletionSchema = new Schema<IAccountDeletion>(
     email: {
       type: String,
       required: true,
-      index: true, // Index for easy querying
     },
     username: {
       type: String,

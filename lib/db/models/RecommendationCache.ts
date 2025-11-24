@@ -129,7 +129,6 @@ const RecommendationCacheSchema = new Schema<IRecommendationCache>(
       ref: 'User',
       required: true,
       unique: true,
-      index: true,
     },
 
     homeRecommendations: {
@@ -157,7 +156,6 @@ const RecommendationCacheSchema = new Schema<IRecommendationCache>(
     expiresAt: {
       type: Date,
       required: true,
-      index: true,
     },
 
     isStale: {

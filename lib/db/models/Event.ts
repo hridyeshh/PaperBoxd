@@ -186,7 +186,6 @@ const EventSchema = new Schema<IEvent>(
     timestamp: {
       type: Date,
       default: Date.now,
-      index: true,
     },
 
     sessionId: {
