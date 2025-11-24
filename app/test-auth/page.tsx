@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function TestAuthPage() {
   const { data: session, status } = useSession();
@@ -11,6 +11,13 @@ export default function TestAuthPage() {
     [key: string]: unknown;
   };
   const [testResult, setTestResult] = useState<TestResult | null>(null);
+  const [cookies, setCookies] = useState<string>("");
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      setCookies(document.cookie || "No cookies found");
+    }
+  }, []);
 
   const testBackendAuth = async () => {
     const res = await fetch("/api/auth/test");
@@ -40,7 +47,7 @@ export default function TestAuthPage() {
 
       <div style={{ marginTop: "2rem" }}>
         <h2>Cookies</h2>
-        <pre>{document.cookie || "No cookies found"}</pre>
+        <pre>{cookies}</pre>
       </div>
 
       <div style={{ marginTop: "2rem" }}>
