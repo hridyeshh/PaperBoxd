@@ -63,7 +63,7 @@ export async function POST(
     const bookIdString = bookId.toString();
 
     // Convert bookId to ObjectId if it's a valid MongoDB ObjectId string
-    let bookIdObj: mongoose.Types.ObjectId | string = bookIdString;
+    let bookIdObj: mongoose.Types.ObjectId | undefined;
     if (mongoose.Types.ObjectId.isValid(bookIdString)) {
       bookIdObj = new mongoose.Types.ObjectId(bookIdString);
     }
