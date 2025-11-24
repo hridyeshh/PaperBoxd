@@ -63,7 +63,7 @@ export function AuthShell({
           </div>
           <div
             className={cn(
-              "rounded-3xl border border-border/70 bg-background/95 p-6 shadow-lg shadow-primary/5 backdrop-blur w-full max-w-md sm:max-w-lg md:max-w-xl lg:max-w-3xl",
+              "rounded-3xl border border-border/70 bg-background/95 p-6 shadow-lg shadow-primary/5 backdrop-blur w-full max-w-md sm:max-w-lg md:max-w-2xl lg:max-w-3xl",
               "md:p-8",
               className,
             )}
