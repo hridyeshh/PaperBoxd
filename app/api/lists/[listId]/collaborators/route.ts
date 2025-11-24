@@ -6,14 +6,14 @@ import mongoose from "mongoose";
 
 export async function POST(
   request: Request,
-  { params }: { params: { listId: string } }
+  { params }: { params: Promise<{ listId: string }> }
 ) {
   const session = await auth();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { listId } = params;
+  const { listId } = await params;
   const { userId, action } = await request.json();
 
   if (!userId || !action) {
