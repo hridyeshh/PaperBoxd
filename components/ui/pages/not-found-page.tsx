@@ -34,9 +34,9 @@ export function NotFoundPage() {
           <EmptyHeader>
             <EmptyTitle className="text-4xl md:text-5xl">Page Not Found</EmptyTitle>
             <EmptyDescription className="text-lg md:text-xl mt-4">
-              The page you're looking for doesn't exist or has been moved.
+              The page you&apos;re looking for doesn&apos;t exist or has been moved.
               <br />
-              Let's get you back to reading.
+              Let&apos;s get you back to reading.
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>

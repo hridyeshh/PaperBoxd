@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import User from '../db/models/User';
 import Book from '../db/models/Book';
 import UserPreference from '../db/models/UserPreference';
-import { RecommendationConfig, normalizeGenre } from '../config/recommendation.config';
+import { RecommendationConfig } from '../config/recommendation.config';
 import { Recommendation } from './RecommendationService';
 
 /**
@@ -12,8 +12,13 @@ import { Recommendation } from './RecommendationService';
  * Implements friendship strength calculation and friend-based scoring.
  */
 
+// Type for lean book documents (returned by .lean())
+// Mongoose's lean() returns a complex type that's hard to type precisely
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type LeanBook = any;
+
 interface FriendBook {
-  book: any;
+  book: LeanBook | null;
   bookId: mongoose.Types.ObjectId;
   friendsWhoLoved: Array<{
     userId: mongoose.Types.ObjectId;
@@ -85,7 +90,6 @@ export class FriendRecommendations {
 
     // 1. Interaction count (likes, comments on friend's posts)
     // For now, use a simple heuristic: check if they're mutual friends
-    const user = await User.findById(userId).select('following').lean();
     const friend = await User.findById(friendId).select('following').lean();
 
     const isMutual = friend?.following?.some(id => id.toString() === userId.toString());
@@ -197,21 +201,27 @@ export class FriendRecommendations {
       if (!friend) continue;
 
       // Collect high-rated books (4-5 stars) from bookshelf
-      const highRatedBooks: any[] = [];
+      interface BookRefWithSource {
+        bookId: mongoose.Types.ObjectId;
+        rating?: number;
+        finishedOn?: Date;
+        source: string;
+      }
+      const highRatedBooks: BookRefWithSource[] = [];
 
       if (friend.bookshelf) {
-        const rated45 = friend.bookshelf.filter((b: any) => b.rating && b.rating >= 4);
-        highRatedBooks.push(...rated45.map((b: any) => ({ ...b, source: 'bookshelf' })));
+        const rated45 = friend.bookshelf.filter((b) => b.rating && b.rating >= 4);
+        highRatedBooks.push(...rated45.map((b) => ({ ...b, source: 'bookshelf' })));
       }
 
       // Add favorite books
       if (friend.favoriteBooks) {
-        highRatedBooks.push(...friend.favoriteBooks.map((b: any) => ({ ...b, source: 'favorite', rating: 5 })));
+        highRatedBooks.push(...friend.favoriteBooks.map((b) => ({ ...b, source: 'favorite', rating: 5 })));
       }
 
       // Add top books
       if (friend.topBooks) {
-        highRatedBooks.push(...friend.topBooks.map((b: any) => ({ ...b, source: 'top', rating: 5 })));
+        highRatedBooks.push(...friend.topBooks.map((b) => ({ ...b, source: 'top', rating: 5 })));
       }
 
       // Add to book map
@@ -284,7 +294,7 @@ export class FriendRecommendations {
       user.topBooks,
     ].forEach(collection => {
       if (collection) {
-        collection.forEach((b: any) => {
+        collection.forEach((b) => {
           if (b.bookId) {
             userBookIds.add(b.bookId.toString());
           }
@@ -398,7 +408,7 @@ export class FriendRecommendations {
    */
   async getFriendCurrentlyReading(
     friendId: mongoose.Types.ObjectId
-  ): Promise<any[]> {
+  ): Promise<LeanBook[]> {
     const friend = await User.findById(friendId)
       .select('currentlyReading')
       .lean();
@@ -407,7 +417,7 @@ export class FriendRecommendations {
       return [];
     }
 
-    const bookIds = friend.currentlyReading.map((b: any) => b.bookId);
+    const bookIds = friend.currentlyReading.map((b) => b.bookId);
     const books = await Book.find({ _id: { $in: bookIds } }).lean();
 
     return books;
@@ -419,7 +429,7 @@ export class FriendRecommendations {
   async getFriendRecentFavorites(
     friendId: mongoose.Types.ObjectId,
     limit: number = 10
-  ): Promise<any[]> {
+  ): Promise<LeanBook[]> {
     const friend = await User.findById(friendId)
       .select('bookshelf favoriteBooks')
       .lean();
@@ -428,15 +438,15 @@ export class FriendRecommendations {
 
     // Get recent high-rated books from bookshelf
     const recentHighRated = (friend.bookshelf || [])
-      .filter((b: any) => b.rating && b.rating >= 4 && b.finishedOn)
-      .sort((a: any, b: any) => {
+      .filter((b) => b.rating && b.rating >= 4 && b.finishedOn)
+      .sort((a, b) => {
         const dateA = new Date(a.finishedOn).getTime();
         const dateB = new Date(b.finishedOn).getTime();
         return dateB - dateA;
       })
       .slice(0, limit);
 
-    const bookIds = recentHighRated.map((b: any) => b.bookId);
+    const bookIds = recentHighRated.map((b) => b.bookId);
     const books = await Book.find({ _id: { $in: bookIds } }).lean();
 
     return books;

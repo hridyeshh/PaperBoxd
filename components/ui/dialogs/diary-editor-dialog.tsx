@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/primitives/button";
 import {
   Dialog,
@@ -125,10 +126,12 @@ export function DiaryEditorDialog({
           <div className="flex gap-4 p-4 rounded-lg border bg-muted/50">
             {bookCover && (
               <div className="relative w-16 h-24 flex-shrink-0 overflow-hidden rounded-lg">
-                <img
+                <Image
                   src={bookCover}
                   alt={bookTitle}
-                  className="w-full h-full object-cover"
+                  fill
+                  className="object-cover"
+                  unoptimized
                 />
               </div>
             )}

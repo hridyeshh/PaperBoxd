@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/primitives/button';
@@ -136,12 +137,14 @@ const SphereImageGrid: React.FC<SphereImageGridProps> = ({
   momentumDecay = 0.95,
   maxRotationSpeed = 5,
   baseImageScale = 0.12,
-  hoverScale = 1.2,
+  hoverScale: _hoverScale = 1.2,
   perspective = 1000,
   autoRotate = false,
   autoRotateSpeed = 0.3,
   className = ''
 }) => {
+  // Prevent hoverScale from being unused (kept for API compatibility)
+  void _hoverScale;
   // ==========================================
   // STATE & REFS
   // ==========================================
@@ -448,14 +451,7 @@ const SphereImageGrid: React.FC<SphereImageGridProps> = ({
   // RENDER HELPERS
   // ==========================================
   // Memoize world positions to prevent recalculation on every render
-  const worldPositions = React.useMemo(() => calculateWorldPositions(), [
-    imagePositions,
-    rotation.x,
-    rotation.y,
-    rotation.z,
-    actualSphereRadius,
-    baseImageSize
-  ]);
+  const worldPositions = React.useMemo(() => calculateWorldPositions(), [calculateWorldPositions]);
 
   // Memoize image node component to prevent unnecessary re-renders
   const ImageNode = React.memo(({ 
@@ -538,13 +534,14 @@ const SphereImageGrid: React.FC<SphereImageGridProps> = ({
         onTouchEnd={handleTouchEnd}
       >
         <div className="relative w-full h-full rounded-lg overflow-hidden shadow-lg border-2 border-white/20">
-          <img
+          <Image
             src={image.src}
             alt={image.alt}
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
             draggable={false}
-            loading={index < 10 ? 'eager' : 'lazy'}
-            decoding="async"
+            priority={index < 10}
+            unoptimized
           />
         </div>
       </div>
@@ -582,7 +579,7 @@ const SphereImageGrid: React.FC<SphereImageGridProps> = ({
         onClick={() => setSelectedImage(image)}
       />
     );
-  }, [worldPositions, baseImageSize, containerSize, hoveredIndex]);
+  }, [worldPositions, baseImageSize, containerSize, hoveredIndex, ImageNode]);
 
   const renderSpotlightModal = () => {
     if (!selectedImage) return null;
@@ -602,10 +599,12 @@ const SphereImageGrid: React.FC<SphereImageGridProps> = ({
           }}
         >
           <div className="relative aspect-square">
-            <img
+            <Image
               src={selectedImage.src}
               alt={selectedImage.alt}
-              className="w-full h-full object-cover"
+              fill
+              className="object-cover"
+              unoptimized
             />
             <button
               onClick={() => setSelectedImage(null)}

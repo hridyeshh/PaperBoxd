@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -40,11 +39,11 @@ export function UsernameSelection({
   name,
   email,
   initialUsername,
-  onComplete,
+  onComplete: _onComplete,
 }: UsernameSelectionProps) {
-  const router = useRouter();
-  const { data: session, update } = useSession();
-  const [isChecking, setIsChecking] = React.useState(false);
+  // Prevent unused variables (kept for API compatibility)
+  void _onComplete;
+  const { update } = useSession();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [availability, setAvailability] = React.useState<{
     available: boolean | null;
@@ -123,7 +122,7 @@ export function UsernameSelection({
             }
           }
         }
-      } catch (error) {
+      } catch {
         setAvailability({ available: null, checking: false });
       }
     };
@@ -160,7 +159,7 @@ export function UsernameSelection({
         } else {
           setAvailability({ available: false, checking: false });
         }
-      } catch (error) {
+      } catch {
         setAvailability({ available: false, checking: false });
       }
     }, 500); // Debounce 500ms

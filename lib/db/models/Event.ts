@@ -99,6 +99,7 @@ export interface IEventMetadata {
   deviceType?: 'desktop' | 'mobile' | 'tablet';
 
   // Any additional custom data
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 }
 
@@ -263,6 +264,7 @@ EventSchema.statics = {
     limit: number = 100,
     eventTypes?: EventType[]
   ): Promise<IEvent[]> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const query: any = { userId };
 
     if (eventTypes && eventTypes.length > 0) {
@@ -384,6 +386,7 @@ EventSchema.statics = {
       },
       { $sort: { score: -1 as const } },
       { $limit: limit },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ] as any[];
 
     const results = await this.aggregate(pipeline).exec();
@@ -449,6 +452,7 @@ EventSchema.statics = {
   }> {
     const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const query: any = {
       type: { $in: [EventType.RECOMMENDATION_VIEWED, EventType.RECOMMENDATION_CLICKED, EventType.RECOMMENDATION_CONVERTED] },
       timestamp: { $gte: startDate },
