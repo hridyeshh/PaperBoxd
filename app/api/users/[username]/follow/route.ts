@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
 import { auth } from "@/lib/auth";
+import mongoose from "mongoose";
 
 /**
  * Follow/Unfollow a user
@@ -50,7 +51,7 @@ export async function POST(
     }
 
     // Check if user is trying to follow themselves
-    if (currentUser._id.toString() === targetUser._id.toString()) {
+    if (currentUser._id?.toString() === targetUser._id?.toString()) {
       return NextResponse.json(
         { error: "You cannot follow yourself" },
         { status: 400 }
@@ -59,18 +60,18 @@ export async function POST(
 
     // Check if already following
     const isFollowing = currentUser.following.some(
-      (id) => id.toString() === targetUser._id.toString()
+      (id) => id.toString() === targetUser._id?.toString()
     );
 
     if (isFollowing) {
       // Unfollow: Remove target user from current user's following
       currentUser.following = currentUser.following.filter(
-        (id) => id.toString() !== targetUser._id.toString()
+        (id) => id.toString() !== targetUser._id?.toString()
       );
 
       // Remove current user from target user's followers
       targetUser.followers = targetUser.followers.filter(
-        (id) => id.toString() !== currentUser._id.toString()
+        (id) => id.toString() !== currentUser._id?.toString()
       );
 
       await currentUser.save();
@@ -84,10 +85,14 @@ export async function POST(
       });
     } else {
       // Follow: Add target user to current user's following
-      currentUser.following.push(targetUser._id);
+      if (targetUser._id) {
+        currentUser.following.push(targetUser._id as mongoose.Types.ObjectId);
+      }
 
       // Add current user to target user's followers
-      targetUser.followers.push(currentUser._id);
+      if (currentUser._id) {
+        targetUser.followers.push(currentUser._id as mongoose.Types.ObjectId);
+      }
 
       await currentUser.save();
       await targetUser.save();
