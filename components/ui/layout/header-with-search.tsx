@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import React from "react";
-import { ChevronDown, Grid2x2PlusIcon, MenuIcon, SearchIcon, LinkIcon, Trash2 } from "lucide-react";
+import { ChevronDown, Grid2x2PlusIcon, MenuIcon, SearchIcon, LinkIcon, Trash2, Bell } from "lucide-react";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { useSession } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
@@ -433,6 +433,24 @@ export function Header({
               <SearchIcon className="size-4" />
             </Button>
           </SearchModal>
+          )}
+          {/* Mobile: Updates button before theme toggle */}
+          {isMobile && isAuthenticated && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                router.push("/activity");
+              }}
+              className="relative p-2 rounded-lg hover:bg-accent transition-colors"
+              aria-label="Updates"
+            >
+              <Bell className="h-5 w-5 text-foreground/80" />
+              {hasNewActivities && (
+                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 border border-background" />
+              )}
+            </button>
           )}
           <ThemeToggle className="transition-transform hover:scale-[1.02]" />
           {isAuthenticated ? (

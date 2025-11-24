@@ -55,16 +55,23 @@ export async function GET(request: NextRequest) {
     // If text index doesn't exist, this will fail gracefully and fall back to regex search
     let cachedBooks: any[] = [];
     try {
-      cachedBooks = await Book.find(
+      const textSearchResults = await Book.find(
         {
           $text: { $search: query },
         },
         { score: { $meta: "textScore" } }
       )
         .sort({ score: { $meta: "textScore" } })
-        .limit(maxResults)
+        .limit(maxResults * 2) // Get more to filter by minimum score
         .skip(startIndex)
         .exec();
+      
+      // Filter by minimum text score to ensure relevance (at least 1.0 score)
+      // This prevents random books from being returned
+      cachedBooks = textSearchResults.filter((book: any) => {
+        const score = (book as any).score || 0;
+        return score >= 1.0; // Minimum relevance threshold
+      }).slice(0, maxResults);
     } catch (textSearchError) {
       // Text index might not exist - use regex search instead
       console.log("Text search not available, using regex search:", textSearchError instanceof Error ? textSearchError.message : "Unknown error");
@@ -189,9 +196,15 @@ export async function GET(request: NextRequest) {
             });
 
             // Merge and deduplicate results
+            // Only include books with meaningful match score (at least 2 points)
+            // This ensures we don't return random books that barely match
             const existingIds = new Set(cachedBooks.map(b => b._id.toString()));
             const additionalBooks = scoredBooks
-              .filter((b: any) => !existingIds.has(b._id.toString()) && b._matchScore > 0)
+              .filter((b: any) => {
+                const isNotDuplicate = !existingIds.has(b._id.toString());
+                const hasGoodMatch = b._matchScore >= 2; // Minimum match threshold
+                return isNotDuplicate && hasGoodMatch;
+              })
               .slice(0, maxResults - cachedBooks.length)
               .map(({ _matchScore, ...book }: any) => book); // Remove score before returning
 
@@ -211,6 +224,47 @@ export async function GET(request: NextRequest) {
     // If we have enough cached results, return them
     if (cachedBooks.length >= maxResults) {
       console.log(`[Search] ✅ Found ${cachedBooks.length} books in database cache for query: "${query}"`);
+      
+      // Check for stale books (7 days old) and refresh them in the background
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const staleBooks = cachedBooks.filter((book: any) => {
+        return new Date(book.cachedAt) < sevenDaysAgo;
+      });
+
+      // Refresh stale books in the background (don't block the response)
+      if (staleBooks.length > 0) {
+        console.log(`[Search] 🔄 Found ${staleBooks.length} stale books, refreshing in background...`);
+        // Refresh stale books asynchronously - don't await to avoid blocking
+        Promise.all(
+          staleBooks.map(async (book: any) => {
+            try {
+              // Re-fetch from the original API source using the book's title
+              if (book.apiSource === "isbndb" && book.volumeInfo?.title) {
+                const result = await searchISBNdbWithFallback(book.volumeInfo.title, 1, 1);
+                if (result.success && result.data?.books?.length > 0) {
+                  const transformed = transformISBNdbBook(result.data.books[0]);
+                  await Book.findOrCreateFromISBNdb(transformed);
+                  console.log(`[Search] ✅ Refreshed stale ISBNdb book: ${book.volumeInfo.title}`);
+                }
+              } else if (book.apiSource === "open_library" && book.volumeInfo?.title) {
+                const result = await searchOpenLibraryWithFallback(book.volumeInfo.title, 1, 0);
+                if (result.success && result.data?.docs?.length > 0) {
+                  const transformed = transformOpenLibraryBook(result.data.docs[0]);
+                  await Book.findOrCreateFromOpenLibrary(transformed);
+                  console.log(`[Search] ✅ Refreshed stale Open Library book: ${book.volumeInfo.title}`);
+                }
+              }
+            } catch (refreshError) {
+              console.warn(`Failed to refresh stale book ${book._id}:`, refreshError);
+              // Don't fail - just log the error
+            }
+          })
+        ).catch((error) => {
+          console.warn("Background book refresh failed:", error);
+        });
+      }
+
       // Update last accessed for cached books using updateOne (safer than .save())
       await Promise.all(
         cachedBooks.map((book) =>

@@ -255,11 +255,11 @@ BookSchema.methods.recordAccess = function () {
   return this.save();
 };
 
-// Check if cache is stale (older than 30 days)
+// Check if cache is stale (older than 7 days)
 BookSchema.methods.isCacheStale = function (): boolean {
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  return this.cachedAt < thirtyDaysAgo;
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  return this.cachedAt < sevenDaysAgo;
 };
 
 // Update Paperboxd statistics

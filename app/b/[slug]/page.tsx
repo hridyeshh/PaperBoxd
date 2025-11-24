@@ -846,7 +846,7 @@ export default function BookDetailPage() {
                   {/* Card content */}
                   <div className="relative bg-background/90 backdrop-blur-sm rounded-lg border border-border/50 p-6 md:p-8 -m-6 md:-m-8">
                     <p 
-                      className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap"
+                      className="text-base md:text-lg leading-relaxed text-muted-foreground whitespace-pre-wrap"
                       style={{ fontFamily: '"Helvetica", sans-serif' }}
                     >
                   {stripHtmlTags(volumeInfo.description)}

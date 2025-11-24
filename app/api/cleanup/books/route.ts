@@ -6,7 +6,7 @@ import Book from "@/lib/db/models/Book";
  * Cleanup old book data
  * DELETE /api/cleanup/books
  *
- * Removes books that haven't been accessed in the last 15 days
+ * Removes books that haven't been accessed in the last 7 days
  * This helps manage storage limits on free-tier MongoDB (512MB)
  */
 export async function DELETE(request: NextRequest) {
@@ -25,13 +25,13 @@ export async function DELETE(request: NextRequest) {
 
     await connectDB();
 
-    // Calculate the cutoff date (15 days ago)
-    const fifteenDaysAgo = new Date();
-    fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+    // Calculate the cutoff date (7 days ago)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    // Find books that haven't been accessed in 15 days
+    // Find books that haven't been accessed in 7 days
     const booksToDelete = await Book.find({
-      lastAccessed: { $lt: fifteenDaysAgo },
+      lastAccessed: { $lt: sevenDaysAgo },
     }).select("_id isbndbId openLibraryId volumeInfo.title lastAccessed");
 
     const deletedCount = booksToDelete.length;
@@ -40,19 +40,19 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({
         message: "No old books to clean up",
         deletedCount: 0,
-        cutoffDate: fifteenDaysAgo.toISOString(),
+        cutoffDate: sevenDaysAgo.toISOString(),
       });
     }
 
     // Delete the old books
     const result = await Book.deleteMany({
-      lastAccessed: { $lt: fifteenDaysAgo },
+      lastAccessed: { $lt: sevenDaysAgo },
     });
 
     return NextResponse.json({
       message: `Successfully cleaned up ${result.deletedCount} old books`,
       deletedCount: result.deletedCount,
-      cutoffDate: fifteenDaysAgo.toISOString(),
+      cutoffDate: sevenDaysAgo.toISOString(),
       books: booksToDelete.map((book) => ({
         id: book.isbndbId || book.openLibraryId,
         title: book.volumeInfo?.title,
@@ -81,13 +81,13 @@ export async function GET(request: NextRequest) {
   try {
     await connectDB();
 
-    // Calculate the cutoff date (15 days ago)
-    const fifteenDaysAgo = new Date();
-    fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+    // Calculate the cutoff date (7 days ago)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     // Count books that would be deleted
     const oldBooksCount = await Book.countDocuments({
-      lastAccessed: { $lt: fifteenDaysAgo },
+      lastAccessed: { $lt: sevenDaysAgo },
     });
 
     // Get total books count
@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
       totalBooks: totalBooksCount,
       oldBooks: oldBooksCount,
       booksToKeep: totalBooksCount - oldBooksCount,
-      cutoffDate: fifteenDaysAgo.toISOString(),
+      cutoffDate: sevenDaysAgo.toISOString(),
       statistics: stats[0] || null,
       message:
         oldBooksCount > 0
