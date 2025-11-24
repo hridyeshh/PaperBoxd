@@ -194,6 +194,46 @@ interface AuthSignInProps {
   onSignUp: () => void;
 }
 
+// Video player component that ensures autoplay on mobile
+function VideoPlayer({ src }: { src: string }) {
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+
+  React.useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Force play on mount for mobile browsers
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        // Auto-play was prevented, try again on user interaction
+        const handleInteraction = () => {
+          video.play().catch(() => {});
+          document.removeEventListener('touchstart', handleInteraction);
+          document.removeEventListener('click', handleInteraction);
+        };
+        document.addEventListener('touchstart', handleInteraction, { once: true });
+        document.addEventListener('click', handleInteraction, { once: true });
+      });
+    }
+  }, []);
+
+  return (
+    <video
+      ref={videoRef}
+      src={src}
+      autoPlay
+      loop
+      muted
+      playsInline
+      className="w-full h-auto"
+      style={{ maxWidth: '100%', height: 'auto' }}
+    >
+      Your browser does not support the video tag.
+    </video>
+  );
+}
+
 function AuthSignIn({ onSignUp }: AuthSignInProps) {
   const isMobile = useIsMobile();
   const [formState, setFormState] = React.useState<FormState>({
@@ -288,17 +328,7 @@ function AuthSignIn({ onSignUp }: AuthSignInProps) {
         {/* Video - Only show on mobile */}
         {isMobile && (
           <div className="relative w-full overflow-hidden rounded-2xl">
-            <video
-              src="/auth-video.mov"
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="w-full h-auto"
-              style={{ maxWidth: '100%', height: 'auto' }}
-            >
-              Your browser does not support the video tag.
-            </video>
+            <VideoPlayer src="/auth-video.mov" />
           </div>
         )}
 

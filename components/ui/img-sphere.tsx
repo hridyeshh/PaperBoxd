@@ -1,40 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { X } from 'lucide-react';
+import { Button } from '@/components/ui/primitives/button';
+import { stripHtmlTags } from '@/lib/utils';
 
-/**
- * SphereImageGrid - Interactive 3D Image Sphere Component
- *
- * A React TypeScript component that displays images arranged in a 3D sphere layout.
- * Images are distributed using Fibonacci sphere distribution for optimal coverage.
- * Supports drag-to-rotate, momentum physics, auto-rotation, and modal image viewing.
- *
- * Features:
- * - 3D sphere layout with Fibonacci distribution for even image placement
- * - Smooth drag-to-rotate interaction with momentum physics
- * - Auto-rotation capability with configurable speed
- * - Dynamic scaling based on position and visibility
- * - Collision detection to prevent image overlap
- * - Modal view for enlarged image display
- * - Touch support for mobile devices
- * - Customizable appearance and behavior
- * - Performance optimized with proper z-indexing and visibility culling
- *
- * Usage:
- * ```tsx
- * <SphereImageGrid
- *   images={imageArray}
- *   containerSize={600}
- *   sphereRadius={200}
- *   autoRotate={true}
- *   dragSensitivity={0.8}
- * />
- * ```
- */
-
-// ==========================================
-// TYPES & INTERFACES
-// ==========================================
 
 export interface Position3D {
   x: number;
@@ -62,6 +32,8 @@ export interface ImageData {
   alt: string;
   title?: string;
   description?: string;
+  author?: string;
+  bookId?: string;
 }
 
 export interface SphereImageGridProps {
@@ -575,22 +547,27 @@ const SphereImageGrid: React.FC<SphereImageGridProps> = ({
   const renderSpotlightModal = () => {
     if (!selectedImage) return null;
 
+    const cleanDescription = selectedImage.description 
+      ? stripHtmlTags(selectedImage.description)
+      : undefined;
+
     return (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30"
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/30 backdrop-blur-sm"
         onClick={() => setSelectedImage(null)}
         style={{
           animation: 'fadeIn 0.3s ease-out'
         }}
       >
         <div
-          className="bg-white rounded-xl max-w-xs sm:max-w-md w-full overflow-hidden"
+          className="bg-background rounded-xl w-full max-w-[280px] sm:max-w-sm md:max-w-md overflow-hidden border border-border shadow-2xl"
           onClick={(e) => e.stopPropagation()}
           style={{
             animation: 'scaleIn 0.3s ease-out'
           }}
         >
-          <div className="relative aspect-square">
+          {/* Book Cover - Square */}
+          <div className="relative aspect-square w-full bg-muted">
             <Image
               src={selectedImage.src}
               alt={selectedImage.alt}
@@ -600,22 +577,47 @@ const SphereImageGrid: React.FC<SphereImageGridProps> = ({
             />
             <button
               onClick={() => setSelectedImage(null)}
-              className="absolute top-2 right-2 w-8 h-8 bg-black bg-opacity-50 rounded-full text-white flex items-center justify-center hover:bg-opacity-70 transition-all cursor-pointer"
+              className="absolute top-2 right-2 sm:top-3 sm:right-3 w-7 h-7 sm:w-8 sm:h-8 bg-black/60 hover:bg-black/80 rounded-full text-white flex items-center justify-center transition-all cursor-pointer z-10"
             >
-              <X size={16} />
+              <X size={14} className="sm:w-4 sm:h-4" />
             </button>
           </div>
 
-          {(selectedImage.title || selectedImage.description) && (
-            <div className="p-4 sm:p-6">
-              {selectedImage.title && (
-                <h3 className="text-lg sm:text-xl font-bold mb-2">{selectedImage.title}</h3>
-              )}
-              {selectedImage.description && (
-                <p className="text-sm sm:text-base text-gray-600">{selectedImage.description}</p>
-              )}
-            </div>
-          )}
+          {/* Book Details */}
+          <div className="p-3 sm:p-4 md:p-6 space-y-2 sm:space-y-3 md:space-y-4">
+            {selectedImage.title && (
+              <div>
+                <h3 className="text-base sm:text-lg md:text-2xl font-bold text-foreground mb-0.5 sm:mb-1 line-clamp-2">
+                  {selectedImage.title}
+                </h3>
+                {selectedImage.author && (
+                  <p className="text-xs sm:text-sm md:text-lg text-muted-foreground line-clamp-1">
+                    by {selectedImage.author}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {cleanDescription && (
+              <div>
+                <p className="text-[10px] sm:text-xs md:text-sm text-muted-foreground leading-relaxed line-clamp-2 sm:line-clamp-3 md:line-clamp-4">
+                  {cleanDescription}
+                </p>
+              </div>
+            )}
+
+            {selectedImage.bookId && (
+              <Link href={`/b/${selectedImage.bookId}`} className="block w-full">
+                <Button 
+                  className="w-full text-xs sm:text-sm md:text-base h-8 sm:h-10 md:h-11" 
+                  size="sm"
+                  onClick={() => setSelectedImage(null)}
+                >
+                  Visit Book
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     );

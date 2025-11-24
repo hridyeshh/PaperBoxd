@@ -22,6 +22,13 @@ if (!process.env.NEXTAUTH_URL && process.env.NODE_ENV === "development") {
   process.env.NEXTAUTH_URL = "http://localhost:3000";
 }
 
+// Warn if NEXTAUTH_URL is not set in production
+if (!process.env.NEXTAUTH_URL && process.env.NODE_ENV === "production") {
+  console.warn(
+    "⚠️  NEXTAUTH_URL is not set in production. Please set it in your Vercel environment variables to: https://paperboxd.vercel.app"
+  );
+}
+
 // Extend the built-in session types
 declare module "next-auth" {
   interface Session {
@@ -134,7 +141,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  trustHost: true,
+  trustHost: true, // Trust the host header from the proxy (Vercel)
   providers,
   callbacks: {
     async signIn({ user, account }) {
