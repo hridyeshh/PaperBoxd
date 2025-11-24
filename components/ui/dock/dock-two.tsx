@@ -72,20 +72,39 @@ const Dock = React.forwardRef<HTMLDivElement, DockProps>(({ items, className, ac
         animate="animate"
         variants={floatingAnimation}
         className={cn(
-          "flex items-center justify-center gap-3 rounded-full border border-border/60 bg-background px-8 py-2 text-foreground shadow-sm md:px-10",
-          isMobile ? "w-auto" : "w-full max-w-6xl",
-          "dark:border-border/40",
+          "rounded-full border border-border/60 bg-background text-foreground shadow-sm dark:border-border/40",
+          isMobile 
+            ? "w-full max-w-full px-4 py-2" 
+            : "w-full max-w-6xl px-8 py-2 md:px-10 flex items-center justify-center gap-3",
         )}
       >
-        {items.map((item) => (
-          <DockButton 
-            key={item.label} 
-            {...item} 
-            isActive={item.label === activeLabel} 
-            isMobile={isMobile}
-            className={isMobile ? "text-center" : "flex-1 text-center"} 
-          />
-        ))}
+        {isMobile ? (
+          <div className="w-full overflow-x-auto scrollbar-hide">
+            <div className="flex items-center gap-3 min-w-max">
+              {items.map((item) => (
+                <DockButton 
+                  key={item.label} 
+                  {...item} 
+                  isActive={item.label === activeLabel} 
+                  isMobile={isMobile}
+                  className="text-center flex-shrink-0" 
+                />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
+            {items.map((item) => (
+              <DockButton 
+                key={item.label} 
+                {...item} 
+                isActive={item.label === activeLabel} 
+                isMobile={isMobile}
+                className="flex-1 text-center" 
+              />
+            ))}
+          </>
+        )}
       </motion.div>
     </div>
   );

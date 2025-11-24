@@ -6,6 +6,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Tailwind CSS v4 custom variant - valid syntax */
+/* @suppress cssUnknownAtRule */
 @custom-variant dark (&:is(.dark *));
 
 /* Hide scrollbar for Chrome, Safari and Opera */
@@ -19,6 +21,8 @@
   scrollbar-width: none;  /* Firefox */
 }
 
+/* Tailwind CSS v4 theme directive - valid syntax */
+/* @suppress cssUnknownAtRule */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -134,12 +138,24 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Tailwind CSS v4 layer and apply directives - valid syntax */
+/* @suppress cssUnknownAtRule */
 @layer base {
   * {
+    /* @suppress cssUnknownAtRule */
     @apply border-border outline-ring/50;
   }
+  html {
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
+  }
   body {
+    /* @suppress cssUnknownAtRule */
     @apply bg-background text-foreground;
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
   }
   
   /* Tiptap Editor Styles */

@@ -145,36 +145,126 @@ interface DropdownPopoverProps extends Omit<MotionDivProps, "ref"> {
 const DropdownPopover = React.forwardRef<HTMLDivElement, DropdownPopoverProps>(
   ({ className, align = "end", children, ...props }, forwardedRef) => {
     const { open, contentRef, triggerRef } = useDropdownContext("Dropdown.Popover");
-    const [adjustPosition, setAdjustPosition] = React.useState(false);
+    const [positionStyle, setPositionStyle] = React.useState<React.CSSProperties>({});
 
-    // Adjust position on mobile to prevent overflow
+    // Calculate and adjust position on mobile to prevent overflow
     React.useEffect(() => {
       if (!open || typeof window === "undefined") return;
 
-      const checkOverflow = () => {
-        if (!contentRef.current || !triggerRef.current) return;
+      const calculatePosition = () => {
+        if (!triggerRef.current) return;
 
-        const dropdown = contentRef.current;
-        const rect = dropdown.getBoundingClientRect();
+        const trigger = triggerRef.current;
+        const triggerRect = trigger.getBoundingClientRect();
         const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const isMobile = viewportWidth < 768;
+        
+        // Estimate dropdown dimensions (will be refined after render)
+        const estimatedWidth = 200; // min-w-[200px]
+        const estimatedHeight = 100; // approximate height
 
-        // Check if dropdown overflows on the right
-        if (rect.right > viewportWidth - 8) {
-          setAdjustPosition(true);
-        } else {
-          setAdjustPosition(false);
+        const newStyle: React.CSSProperties = {};
+
+        if (isMobile) {
+          // On mobile, always constrain width
+          newStyle.maxWidth = "calc(100vw - 1rem)";
+          
+          // Calculate available space on left and right
+          const spaceOnRight = viewportWidth - triggerRect.right;
+          const spaceOnLeft = triggerRect.left;
+          
+          // Determine best alignment based on available space
+          if (align === "end") {
+            // For "end" alignment, check if there's enough space on the right
+            if (spaceOnRight < estimatedWidth && spaceOnLeft > spaceOnRight) {
+              // Not enough space on right, align to left instead
+              newStyle.left = "0.5rem";
+              newStyle.right = "auto";
+            } else {
+              // Enough space on right, but add padding to prevent edge overflow
+              newStyle.right = Math.max(0.5, viewportWidth - triggerRect.right - estimatedWidth) + "rem";
+              newStyle.left = "auto";
+            }
+          } else {
+            // For "start" alignment, check if there's enough space on the left
+            if (spaceOnLeft < estimatedWidth && spaceOnRight > spaceOnLeft) {
+              // Not enough space on left, align to right instead
+              newStyle.right = "0.5rem";
+              newStyle.left = "auto";
+            } else {
+              // Enough space on left, but add padding to prevent edge overflow
+              newStyle.left = Math.max(0.5, triggerRect.left - estimatedWidth) + "rem";
+              newStyle.right = "auto";
+            }
+          }
+          
+          // Check bottom overflow
+          const spaceBelow = viewportHeight - triggerRect.bottom;
+          if (spaceBelow < estimatedHeight) {
+            // Not enough space below, position above instead
+            newStyle.bottom = `${triggerRect.height + 8}px`;
+            newStyle.top = "auto";
+            newStyle.marginTop = "0";
+            newStyle.marginBottom = "0.5rem";
+          }
         }
+
+        setPositionStyle(newStyle);
       };
 
-      // Check after a short delay to allow positioning
-      const timeoutId = setTimeout(checkOverflow, 10);
-      window.addEventListener("resize", checkOverflow);
+      // Calculate position immediately and after a short delay
+      calculatePosition();
+      const timeoutId = setTimeout(() => {
+        // Recalculate after dropdown is rendered to get actual dimensions
+        if (contentRef.current && triggerRef.current) {
+          const dropdown = contentRef.current;
+          const trigger = triggerRef.current;
+          const dropdownRect = dropdown.getBoundingClientRect();
+          const triggerRect = trigger.getBoundingClientRect();
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
+          const isMobile = viewportWidth < 768;
+
+          setPositionStyle((prevStyle) => {
+            const newStyle: React.CSSProperties = { ...prevStyle };
+
+            if (isMobile) {
+              // Fine-tune position based on actual dimensions
+              const overflowsRight = dropdownRect.right > viewportWidth - 8;
+              const overflowsLeft = dropdownRect.left < 8;
+              const overflowsBottom = dropdownRect.bottom > viewportHeight - 8;
+
+              if (overflowsRight) {
+                newStyle.right = "0.5rem";
+                newStyle.left = "auto";
+              } else if (overflowsLeft) {
+                newStyle.left = "0.5rem";
+                newStyle.right = "auto";
+              }
+
+              if (overflowsBottom) {
+                newStyle.bottom = `${triggerRect.height + 8}px`;
+                newStyle.top = "auto";
+                newStyle.marginTop = "0";
+                newStyle.marginBottom = "0.5rem";
+              }
+
+              newStyle.maxWidth = "calc(100vw - 1rem)";
+            }
+
+            return newStyle;
+          });
+        }
+      }, 10);
+
+      window.addEventListener("resize", calculatePosition);
 
       return () => {
         clearTimeout(timeoutId);
-        window.removeEventListener("resize", checkOverflow);
+        window.removeEventListener("resize", calculatePosition);
       };
-    }, [open, contentRef, triggerRef]);
+    }, [open, contentRef, triggerRef, align]);
 
     return (
       <AnimatePresence>
@@ -206,13 +296,7 @@ const DropdownPopover = React.forwardRef<HTMLDivElement, DropdownPopoverProps>(
               className,
             )}
             style={{
-              // Adjust position if it would overflow on mobile
-              ...(adjustPosition && align === "end" && typeof window !== "undefined" && window.innerWidth < 768
-                ? { 
-                    right: "0.5rem",
-                    maxWidth: "calc(100vw - 1rem)"
-                  }
-                : {}),
+              ...positionStyle,
               ...(props.style || {}),
             }}
             {...props}

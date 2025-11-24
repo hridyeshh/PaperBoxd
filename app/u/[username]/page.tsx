@@ -564,7 +564,7 @@ function FavoriteBookCard({
               }
             }}
             disabled={isRemoving}
-            className="absolute right-1 top-1 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background shadow-lg transition-all opacity-0 group-hover:opacity-100 hover:bg-muted disabled:opacity-50"
+            className="absolute right-1 top-1 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background shadow-lg transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:bg-muted disabled:opacity-50"
           >
             <X className="h-4 w-4" />
           </button>
@@ -2045,6 +2045,10 @@ function ListCard({
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
+  const [editListName, setEditListName] = React.useState(list.title);
+  const [editIsSecret, setEditIsSecret] = React.useState(false);
+  const [isUpdating, setIsUpdating] = React.useState(false);
   
   // Check if this is a saved list (has "from @" in description)
   const isSavedList = list.description?.includes("from @") || false;
@@ -2078,6 +2082,46 @@ function ListCard({
       setIsDeleting(false);
     }
   };
+
+  const handleEditList = async () => {
+    if (!list || !username || !list.id || !editListName.trim() || isUpdating) return;
+
+    try {
+      setIsUpdating(true);
+      const response = await fetch(`/api/users/${encodeURIComponent(username)}/lists/${list.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: editListName.trim(),
+          isPublic: !editIsSecret,
+        }),
+      });
+
+      if (response.ok) {
+        toast.success("List updated successfully!");
+        setIsEditDialogOpen(false);
+        if (onListDeleted) {
+          onListDeleted(); // Refresh the list
+        }
+      } else {
+        const error = await response.json().catch(() => ({}));
+        toast.error(error.error || "Failed to update list");
+      }
+    } catch (err) {
+      console.error("Error updating list:", err);
+      toast.error("Failed to update list");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Update edit form when list changes
+  React.useEffect(() => {
+    setEditListName(list.title);
+    // Check if list is secret based on description or other indicators
+    // For now, default to false (public)
+    setEditIsSecret(false);
+  }, [list.title]);
 
   // Get first 3 books for display
   const displayBooks = list.books?.slice(0, 3) || [];
@@ -2155,6 +2199,7 @@ function ListCard({
           {canEditList && (
             <Dropdown.Root isOpen={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
               <Dropdown.Trigger
+                data-dropdown-trigger
                 className="flex-shrink-0 rounded-lg p-1 transition hover:bg-foreground/5"
                 onClick={(e) => {
                   e.preventDefault();
@@ -2164,14 +2209,16 @@ function ListCard({
               >
                 <MoreVertical className="size-4 text-muted-foreground" />
               </Dropdown.Trigger>
-              <Dropdown.Popover>
+              <Dropdown.Popover align="start">
                 <Dropdown.Menu>
                   <Dropdown.Item
                     label="Edit list name"
                     icon={Edit}
-                    onClick={() => {
-                      // TODO: Implement edit list name
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       setIsDropdownOpen(false);
+                      setIsEditDialogOpen(true);
                     }}
                   />
                   <Dropdown.Separator />
@@ -2241,6 +2288,105 @@ function ListCard({
                   </>
                 )}
               </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit List Dialog */}
+      <Dialog 
+        open={isEditDialogOpen} 
+        onOpenChange={(open) => {
+          setIsEditDialogOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-[90vw] sm:max-w-md p-0 sm:rounded-2xl">
+          <div className="p-4 sm:p-6">
+            <DialogHeader>
+              <DialogTitle className="text-lg sm:text-2xl font-semibold">Edit list</DialogTitle>
+              <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
+                Update your list name and privacy settings
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="mt-3 sm:mt-6 space-y-3 sm:space-y-4">
+              {/* List Name Input */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-list-name" className="text-sm font-medium">
+                  List name
+                </Label>
+                <Input
+                  id="edit-list-name"
+                  placeholder="Name your list"
+                  value={editListName}
+                  onChange={(e) => setEditListName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && editListName.trim()) {
+                      handleEditList();
+                    }
+                  }}
+                  className="w-full focus-visible:border-foreground dark:focus-visible:border-white"
+                  autoFocus
+                />
+              </div>
+
+              {/* Make this list secret */}
+              <div>
+                <div className="flex items-center justify-between rounded-lg border border-border/50 p-2.5 sm:p-4 hover:bg-muted/30 transition-colors cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditIsSecret(!editIsSecret);
+                  }}
+                >
+                  <div className="flex-1 min-w-0 pr-2">
+                    <Label htmlFor="edit-secret-toggle" className="text-xs sm:text-sm font-medium cursor-pointer">
+                      Make this list secret
+                    </Label>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
+                      Only people you share the link with can see this list
+                    </p>
+                  </div>
+                  <Switch
+                    id="edit-secret-toggle"
+                    checked={editIsSecret}
+                    onCheckedChange={setEditIsSecret}
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-2 sm:flex-row sm:gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsEditDialogOpen(false);
+                  }}
+                  className="flex-1 font-medium text-sm sm:text-base"
+                  disabled={isUpdating}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleEditList();
+                  }}
+                  className="flex-1 font-medium shadow-sm text-sm sm:text-base"
+                  disabled={isUpdating || !editListName.trim()}
+                >
+                  {isUpdating ? (
+                    <>
+                      <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      Updating...
+                    </>
+                  ) : (
+                    "Save changes"
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>
@@ -3830,7 +3976,7 @@ export default function UserProfilePage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col overflow-x-hidden w-full">
       {(!isMobile || !isEditOpen) && (
         <div className={cn(
           isEditOpen && !isMobile && "backdrop-blur-md"
@@ -3839,7 +3985,7 @@ export default function UserProfilePage() {
         </div>
       )}
       <main className={cn(
-        "mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8 mt-16 pb-24 md:pb-8",
+        "mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8 mt-16 pb-24 md:pb-8 overflow-x-hidden",
         isEditOpen && !isMobile && "backdrop-blur-md"
       )}>
         <div className="space-y-8">
@@ -3860,7 +4006,7 @@ export default function UserProfilePage() {
               </p>
             </div>
             <div className="flex justify-end w-full items-start">
-              <div className="w-100 max-w-lg flex-shrink-0">
+              <div className="w-full max-w-lg flex-shrink-0">
                 <ProfileSummary
                   profile={profileData}
                   bookshelfCount={bookshelfBooks.length}
@@ -3887,80 +4033,47 @@ export default function UserProfilePage() {
             <>
               <div className={cn(
                 "w-full",
-                isMobile && "overflow-x-auto scrollbar-hide"
+                isMobile && "flex items-center justify-center"
               )}>
-                <div className={cn(
-                  isMobile && "min-w-max inline-block px-4"
-                )}>
-                  <Dock 
-                    items={dockItems} 
-                    activeLabel={activeTab}
-                    className={isMobile ? "w-auto" : ""}
-                  />
-                </div>
+                <Dock 
+                  items={dockItems} 
+                  activeLabel={activeTab}
+                  className={isMobile ? "w-full" : ""}
+                />
               </div>
 
               {activeTab === "Favourites" ? (
                 <div className="space-y-10">
-                  {isMobile ? (
-                    <>
-                      {topBooks.length > 0 && (
-                        <div className="grid grid-cols-2 gap-4">
-                          {topBooks.slice(0, 4).map((book) => (
-                            <div key={book.id} className="flex flex-col gap-2">
-                              <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl bg-muted">
-                                <Image
-                                  src={book.cover}
-                                  alt={book.title}
-                                  fill
-                                  className="object-cover"
-                                  sizes="50vw"
-                                  quality={100}
-                                  unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
-                                />
-                              </div>
-                              <div>
-                                <h3 className="text-xs font-semibold text-foreground line-clamp-2">{book.title}</h3>
-                                <p className="text-xs text-muted-foreground truncate">{book.author}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <div>
-                        <h2 className="text-xl font-semibold text-foreground mb-2">Books that I love</h2>
-                        <p className="text-sm text-muted-foreground mb-4">Comfort stories and obsessions that always earn a re-read.</p>
-                        <div className="grid grid-cols-2 gap-4">
-                          {favoriteBooks.map((book) => (
-                            <div key={book.id} className="flex flex-col gap-2">
-                              <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl bg-muted">
-                                <Image
-                                  src={book.cover}
-                                  alt={book.title}
-                                  fill
-                                  className="object-cover"
-                                  sizes="50vw"
-                                  quality={100}
-                                  unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
-                                />
-                              </div>
-                              <div>
-                                <h3 className="text-xs font-semibold text-foreground line-clamp-2">{book.title}</h3>
-                                <p className="text-xs text-muted-foreground truncate">{book.author}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
                   {topBooks.length > 0 && (
-                  <BookCarousel
-                      title=""
-                      subtitle=""
-                    books={topBooks}
-                  />
+                    isMobile ? (
+                      <div className="grid grid-cols-2 gap-4">
+                        {topBooks.slice(0, 4).map((book) => (
+                          <div key={book.id} className="flex flex-col gap-2">
+                            <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl bg-muted">
+                              <Image
+                                src={book.cover}
+                                alt={book.title}
+                                fill
+                                className="object-cover"
+                                sizes="50vw"
+                                quality={100}
+                                unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
+                              />
+                            </div>
+                            <div>
+                              <h3 className="text-xs font-semibold text-foreground line-clamp-2">{book.title}</h3>
+                              <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <BookCarousel
+                        title=""
+                        subtitle=""
+                        books={topBooks}
+                      />
+                    )
                   )}
                   <EditableFavoriteBooksCarousel
                     title="Books that I love"
@@ -4009,8 +4122,6 @@ export default function UserProfilePage() {
                       }
                     }}
                   />
-                    </>
-                  )}
                 </div>
               ) : activeTab === "Activity" ? (
                 <div className="space-y-10">
