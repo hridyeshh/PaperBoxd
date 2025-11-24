@@ -119,7 +119,26 @@ export default function BooksPage() {
         const bookMap = new Map<string, Book>();
         
         // Add latest books first (they get priority)
-        (latestData.books || []).forEach((book: any) => {
+        type BookFromAPI = {
+          id?: string;
+          _id?: string;
+          title?: string;
+          authors?: string | string[];
+          author?: string;
+          description?: string;
+          publishedDate?: string;
+          cover?: string;
+          isbn?: string;
+          isbn13?: string;
+          openLibraryId?: string;
+          isbndbId?: string;
+          averageRating?: number;
+          ratingsCount?: number;
+          pageCount?: number;
+          categories?: string[];
+          publisher?: string;
+        };
+        (latestData.books || []).forEach((book: BookFromAPI) => {
           const bookId = book.id || book._id;
           if (bookId && !bookMap.has(bookId)) {
             bookMap.set(bookId, {
@@ -157,7 +176,7 @@ export default function BooksPage() {
           const friendsData = friendsResponse.ok ? await friendsResponse.json() : { books: [] };
 
           // Add onboarding-based books first (they get priority as they match user's explicit preferences)
-          (onboardingData.books || []).forEach((book: any) => {
+          (onboardingData.books || []).forEach((book: BookFromAPI) => {
             const bookId = book.id || book._id;
             if (bookId && !bookMap.has(bookId)) {
               bookMap.set(bookId, {
@@ -182,7 +201,7 @@ export default function BooksPage() {
           });
 
           // Add recommended books (only if not already in map)
-          (recommendationsData.books || []).forEach((book: any) => {
+          (recommendationsData.books || []).forEach((book: BookFromAPI) => {
             const bookId = book.id || book._id;
             if (bookId && !bookMap.has(bookId)) {
               bookMap.set(bookId, {
@@ -207,7 +226,7 @@ export default function BooksPage() {
           });
 
           // Add friends' liked books (only if not already in map)
-          (friendsData.books || []).forEach((book: any) => {
+          (friendsData.books || []).forEach((book: BookFromAPI) => {
             const bookId = book.id || book._id;
             if (bookId && !bookMap.has(bookId)) {
               bookMap.set(bookId, {
@@ -263,7 +282,7 @@ export default function BooksPage() {
     };
 
     fetchBooks();
-  }, [isAuthenticated, session?.user?.id, isMobile]);
+  }, [isAuthenticated, session?.user?.id, isMobile, currentPage]);
 
   // Update displayed books when page changes (desktop only)
   React.useEffect(() => {
@@ -429,7 +448,7 @@ export default function BooksPage() {
                 {/* End of feed message */}
                 {!hasMore && books.length > 0 && (
                   <div className="text-center py-8 text-sm text-muted-foreground">
-                    You've reached the end of your feed
+                    You&apos;ve reached the end of your feed
                   </div>
                 )}
               </>

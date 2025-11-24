@@ -81,7 +81,7 @@ export default function OnboardingPage() {
       // Always check onboarding status via API
       checkOnboarding();
     }
-  }, [status, router]);
+  }, [status, router, session?.user?.username]);
 
   if (status === "loading" || checkingOnboarding) {
     return (

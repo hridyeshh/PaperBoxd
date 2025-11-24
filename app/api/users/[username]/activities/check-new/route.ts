@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
+import type { IActivity, IDiaryEntry } from "@/lib/db/models/User";
+import mongoose from "mongoose";
 
 /**
  * Check if there are new activities from followed users
@@ -71,8 +73,26 @@ export async function GET(
       .select("_id username name activities diaryEntries")
       .lean();
 
+    // Type for activity objects (can be Mongoose subdocument or plain object)
+    type ActivityObject = IActivity & {
+      _id?: mongoose.Types.ObjectId | string;
+      createdAt?: Date;
+      toObject?: () => IActivity & { _id?: mongoose.Types.ObjectId | string; createdAt?: Date };
+    };
+
+    type DiaryEntryObject = IDiaryEntry & {
+      _id?: mongoose.Types.ObjectId | string;
+      createdAt?: Date;
+      updatedAt?: Date;
+    };
+
+    // Activity with timestamp as number (for sorting/comparison)
+    type ActivityWithTimestamp = Omit<ActivityObject, 'timestamp'> & {
+      timestamp: number; // Override timestamp to be number instead of Date
+    };
+
     // Collect all activities from followed users
-    const allActivities: any[] = [];
+    const allActivities: ActivityWithTimestamp[] = [];
 
     // First, add shared_list and collaboration_request activities from the current user's activities array
     // (These are lists that were shared TO the current user or collaboration requests sent TO the current user)
@@ -80,37 +100,38 @@ export async function GET(
     console.log(`[check-new] Current user has ${currentUserActivities.length} total activities`);
     
     // Helper to get activity type (handles Mongoose subdocuments)
-    const getActivityType = (activity: any) => {
+    const getActivityType = (activity: ActivityObject): string | null => {
       if (activity.type) return activity.type;
       if (activity.toObject) {
         const obj = activity.toObject();
-        return obj.type;
+        return obj.type || null;
       }
       return null;
     };
     
-    const activityTypes = currentUserActivities.map((a: any) => getActivityType(a)).filter(Boolean);
+    const activityTypes = currentUserActivities.map((a) => getActivityType(a)).filter(Boolean);
     console.log(`[check-new] Activity types: ${activityTypes.join(", ")}`);
     
-    const sharedListActivities = currentUserActivities.filter((activity: any) =>
+    const sharedListActivities = currentUserActivities.filter((activity) =>
       getActivityType(activity) === "shared_list"
     );
-    const collaborationRequestActivities = currentUserActivities.filter((activity: any) =>
+    const collaborationRequestActivities = currentUserActivities.filter((activity) =>
       getActivityType(activity) === "collaboration_request"
     );
-    const sharedBookActivities = currentUserActivities.filter((activity: any) =>
+    const sharedBookActivities = currentUserActivities.filter((activity) =>
       getActivityType(activity) === "shared_book"
     );
-    const grantedAccessActivities = currentUserActivities.filter((activity: any) =>
+    const grantedAccessActivities = currentUserActivities.filter((activity) =>
       getActivityType(activity) === "granted_access"
     );
     
     console.log(`[check-new] Found ${sharedListActivities.length} shared_list, ${collaborationRequestActivities.length} collaboration_request, ${sharedBookActivities.length} shared_book, and ${grantedAccessActivities.length} granted_access activities`);
 
-    sharedListActivities.forEach((activity: any) => {
+    sharedListActivities.forEach((activity) => {
       // Convert Mongoose subdocument to plain object if needed
-      const activityObj = activity.toObject ? activity.toObject() : {
-        _id: activity._id,
+      const activityWithMethods = activity as ActivityObject;
+      const activityObj: ActivityObject = activityWithMethods.toObject ? activityWithMethods.toObject() : {
+        _id: activityWithMethods._id,
         type: activity.type,
         listId: activity.listId,
         sharedBy: activity.sharedBy,
@@ -138,10 +159,11 @@ export async function GET(
       });
     });
 
-    collaborationRequestActivities.forEach((activity: any) => {
+    collaborationRequestActivities.forEach((activity) => {
       // Convert Mongoose subdocument to plain object if needed
-      const activityObj = activity.toObject ? activity.toObject() : {
-        _id: activity._id,
+      const activityWithMethods = activity as ActivityObject;
+      const activityObj: ActivityObject = activityWithMethods.toObject ? activityWithMethods.toObject() : {
+        _id: activityWithMethods._id,
         type: activity.type,
         listId: activity.listId,
         sharedBy: activity.sharedBy,
@@ -170,9 +192,10 @@ export async function GET(
     });
 
     // Add shared_book activities from current user's activities
-    sharedBookActivities.forEach((activity: any) => {
-      const activityObj = activity.toObject ? activity.toObject() : {
-        _id: activity._id,
+    sharedBookActivities.forEach((activity) => {
+      const activityWithMethods = activity as ActivityObject;
+      const activityObj: ActivityObject = activityWithMethods.toObject ? activityWithMethods.toObject() : {
+        _id: activityWithMethods._id,
         type: activity.type,
         bookId: activity.bookId,
         sharedBy: activity.sharedBy,
@@ -200,9 +223,10 @@ export async function GET(
     });
 
     // Add granted_access activities from current user's activities
-    grantedAccessActivities.forEach((activity: any) => {
-      const activityObj = activity.toObject ? activity.toObject() : {
-        _id: activity._id,
+    grantedAccessActivities.forEach((activity) => {
+      const activityWithMethods = activity as ActivityObject;
+      const activityObj: ActivityObject = activityWithMethods.toObject ? activityWithMethods.toObject() : {
+        _id: activityWithMethods._id,
         type: activity.type,
         listId: activity.listId,
         listTitle: activity.listTitle,
@@ -234,23 +258,35 @@ export async function GET(
       });
     });
 
-    followedUsers.forEach((followedUser: any) => {
+    // Type for lean user query result
+    type FollowedUserLean = {
+      _id: mongoose.Types.ObjectId | string;
+      username: string;
+      name: string;
+      activities?: (IActivity & { _id?: mongoose.Types.ObjectId | string })[];
+      diaryEntries?: DiaryEntryObject[];
+    };
+
+    followedUsers.forEach((followedUser) => {
+      // Cast to our expected type
+      const user = followedUser as unknown as FollowedUserLean;
       // Add regular activities
-      const activities = Array.isArray(followedUser.activities) ? followedUser.activities : [];
-      // Filter out search-related activities, shared_list, collaboration_request, shared_book, and granted_access (handled separately above)
-      const filteredActivities = activities.filter((activity: any) =>
-        activity.type !== "search" && 
+      const activities = Array.isArray(user.activities) ? user.activities : [];
+      // Filter out shared_list, collaboration_request, shared_book, and granted_access (handled separately above)
+      // Note: "search" is not a valid activity type, so we don't need to filter it
+      const filteredActivities = activities.filter((activity) =>
         activity.type !== "shared_list" && 
         activity.type !== "collaboration_request" &&
         activity.type !== "shared_book" &&
         activity.type !== "granted_access"
       );
       
-      filteredActivities.forEach((activity: any) => {
-        const activityTimestamp = activity.timestamp 
-          ? new Date(activity.timestamp).getTime() 
-          : activity.createdAt 
-          ? new Date(activity.createdAt).getTime() 
+      filteredActivities.forEach((activity) => {
+        const activityWithTimestamp = activity as ActivityObject;
+        const activityTimestamp = activityWithTimestamp.timestamp 
+          ? new Date(activityWithTimestamp.timestamp).getTime() 
+          : activityWithTimestamp.createdAt 
+          ? new Date(activityWithTimestamp.createdAt).getTime() 
           : 0;
         
         // If lastViewed is provided, only count activities newer than that
@@ -264,12 +300,12 @@ export async function GET(
         allActivities.push({
           ...activity,
           timestamp: activityTimestamp,
-        });
+        } as ActivityWithTimestamp);
       });
 
       // Add diary entries as activities
-      const diaryEntries = Array.isArray(followedUser.diaryEntries) ? followedUser.diaryEntries : [];
-      diaryEntries.forEach((entry: any) => {
+      const diaryEntries = Array.isArray(user.diaryEntries) ? user.diaryEntries : [];
+      diaryEntries.forEach((entry: DiaryEntryObject) => {
         const entryDate = entry.updatedAt ? new Date(entry.updatedAt) : (entry.createdAt ? new Date(entry.createdAt) : new Date());
         const entryTimestamp = entryDate.getTime();
         
@@ -281,11 +317,12 @@ export async function GET(
           }
         }
         
+        // Create a diary entry activity (not a standard IActivity type)
         allActivities.push({
-          type: "diary_entry",
+          type: "diary_entry" as IActivity['type'] | "diary_entry",
           timestamp: entryTimestamp,
           _id: entry._id,
-        });
+        } as ActivityWithTimestamp);
       });
     });
 
@@ -293,23 +330,28 @@ export async function GET(
     const count = allActivities.length;
     const hasNewActivities = count > 0;
     
-    const collaborationRequestCount = allActivities.filter((a: any) => {
-      const type = a.type || (a.toObject ? a.toObject().type : null);
+    const collaborationRequestCount = allActivities.filter((a) => {
+      const type = a.type;
       return type === "collaboration_request";
     }).length;
     
-    const grantedAccessCount = allActivities.filter((a: any) => {
-      const type = a.type || (a.toObject ? a.toObject().type : null);
+    const grantedAccessCount = allActivities.filter((a) => {
+      const type = a.type;
       return type === "granted_access";
     }).length;
     
-    const sharedBookCount = allActivities.filter((a: any) => {
-      const type = a.type || (a.toObject ? a.toObject().type : null);
+    const sharedBookCount = allActivities.filter((a) => {
+      const type = a.type;
       return type === "shared_book";
     }).length;
     
+    // Helper to get activity type string (handles diary_entry which is not in IActivity type)
+    const getActivityTypeString = (a: ActivityWithTimestamp): string => {
+      return a.type as string;
+    };
+    
     console.log(`[check-new] Returning: hasNewActivities=${hasNewActivities}, count=${count}`);
-    console.log(`[check-new] Breakdown: shared_list=${allActivities.filter(a => (a.type || (a.toObject ? a.toObject().type : null)) === "shared_list").length}, collaboration_request=${collaborationRequestCount}, shared_book=${sharedBookCount}, granted_access=${grantedAccessCount}, diary_entry=${allActivities.filter(a => (a.type || (a.toObject ? a.toObject().type : null)) === "diary_entry").length}, other=${allActivities.filter(a => !["shared_list", "collaboration_request", "shared_book", "granted_access", "diary_entry"].includes(a.type || (a.toObject ? a.toObject().type : null))).length}`);
+    console.log(`[check-new] Breakdown: shared_list=${allActivities.filter(a => getActivityTypeString(a) === "shared_list").length}, collaboration_request=${collaborationRequestCount}, shared_book=${sharedBookCount}, granted_access=${grantedAccessCount}, diary_entry=${allActivities.filter(a => getActivityTypeString(a) === "diary_entry").length}, other=${allActivities.filter(a => !["shared_list", "collaboration_request", "shared_book", "granted_access", "diary_entry"].includes(getActivityTypeString(a))).length}`);
 
     return NextResponse.json({
       hasNewActivities,

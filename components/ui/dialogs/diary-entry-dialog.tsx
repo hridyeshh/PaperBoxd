@@ -15,7 +15,7 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-media-query";
-import { cn } from "@/lib/utils";
+import { cn, formatDiaryDate } from "@/lib/utils";
 
 interface DiaryEntryDialogProps {
   open: boolean;
@@ -135,8 +135,6 @@ export function DiaryEntryDialog({
         
         throw new Error(errorMessage);
       }
-
-      const data = await response.json();
 
       // Trigger refresh immediately to sync with server state
       if (onLikeChange) {
@@ -264,7 +262,9 @@ export function DiaryEntryDialog({
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
               <div className="flex items-center gap-3">
                 <div className="text-xs text-muted-foreground">
-                  {entry.updatedAt !== entry.createdAt ? `Updated ${entry.updatedAt}` : entry.createdAt}
+                  {entry.updatedAt !== entry.createdAt 
+                    ? `Updated ${formatDiaryDate(entry.updatedAt)}` 
+                    : formatDiaryDate(entry.createdAt)}
                 </div>
                 {isOwnProfile && (
                   <Button

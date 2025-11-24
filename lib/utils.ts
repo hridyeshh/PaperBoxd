@@ -61,3 +61,36 @@ export function stripHtmlTags(html: string | undefined | null): string {
   
   return text;
 }
+
+/**
+ * Format diary entry date as "today", "yesterday", "day before yesterday", or formatted date
+ * @param dateString - ISO date string or Date object
+ * @returns Formatted date string
+ */
+export function formatDiaryDate(dateString: string | Date): string {
+  const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+  const now = new Date();
+  
+  // Reset time to midnight for accurate day comparison
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const entryDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  
+  // Calculate difference in days
+  const diffTime = today.getTime() - entryDate.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) {
+    return "today";
+  } else if (diffDays === 1) {
+    return "yesterday";
+  } else if (diffDays === 2) {
+    return "day before yesterday";
+  } else {
+    // Format as "Jan 15, 2025"
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const month = months[date.getMonth()];
+    const day = date.getDate();
+    const year = date.getFullYear();
+    return `${month} ${day}, ${year}`;
+  }
+}

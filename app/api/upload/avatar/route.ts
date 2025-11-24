@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { auth } from '@/lib/auth';
 import { uploadToCloudinary, deleteFromCloudinary, getPublicIdFromUrl } from '@/lib/cloudinary';
 import connectDB from '@/lib/db/mongodb';
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('[Avatar Upload] Found user:', {
-      id: user._id.toString(),
+      id: (user._id as mongoose.Types.ObjectId).toString(),
       email: user.email,
       hasAvatar: !!user.avatar,
     });
@@ -130,12 +131,13 @@ export async function POST(request: NextRequest) {
       avatar: result.secureUrl,
       message: 'Avatar uploaded successfully',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Avatar upload error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       {
         error: 'Failed to upload avatar',
-        details: error.message,
+        details: errorMessage,
       },
       { status: 500 }
     );
@@ -147,7 +149,7 @@ export async function POST(request: NextRequest) {
  * Delete user avatar
  * Requires authentication
  */
-export async function DELETE(request: NextRequest) {
+export async function DELETE() {
   try {
     const session = await auth();
 
@@ -190,12 +192,13 @@ export async function DELETE(request: NextRequest) {
       success: true,
       message: 'Avatar deleted successfully',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Avatar delete error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       {
         error: 'Failed to delete avatar',
-        details: error.message,
+        details: errorMessage,
       },
       { status: 500 }
     );

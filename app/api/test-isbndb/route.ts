@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import {
   searchISBNdbWithFallback,
   getBookByISBN,
@@ -16,16 +16,37 @@ import {
  * 3. Book lookup by ISBN
  * 4. Author search functionality
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
+  type TestResult = {
+    name: string;
+    status: "success" | "error";
+    message: string;
+    data?: {
+      total?: number;
+      booksReturned?: number;
+      firstBook?: {
+        title?: string;
+        isbn?: string;
+        isbn13?: string;
+        authors?: string[];
+      };
+      title?: string;
+      isbn?: string;
+      isbn13?: string;
+      authors?: string[];
+      publisher?: string;
+      date_published?: string;
+      pages?: number;
+      hasImage?: boolean;
+      authorsReturned?: number;
+      firstAuthor?: string;
+    };
+  };
+
   const results: {
     apiKeyConfigured: boolean;
     apiKeyValue?: string;
-    tests: Array<{
-      name: string;
-      status: "success" | "error";
-      message: string;
-      data?: any;
-    }>;
+    tests: TestResult[];
   } = {
     apiKeyConfigured: !!process.env.ISBNDB_API_KEY,
     apiKeyValue: process.env.ISBNDB_API_KEY
@@ -53,7 +74,7 @@ export async function GET(request: NextRequest) {
   // Test 2: Book Search
   try {
     const searchResult = await searchISBNdbWithFallback("harry potter", 1, 5);
-    if (searchResult.success && searchResult.data) {
+    if (searchResult.success && searchResult.data && searchResult.data.books && searchResult.data.books.length > 0) {
       results.tests.push({
         name: "Book Search",
         status: "success",
@@ -76,11 +97,12 @@ export async function GET(request: NextRequest) {
         message: searchResult.error || "No results found",
       });
     }
-  } catch (error) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     results.tests.push({
       name: "Book Search",
       status: "error",
-      message: error instanceof Error ? error.message : "Unknown error",
+      message: errorMessage,
     });
   }
 
@@ -104,11 +126,12 @@ export async function GET(request: NextRequest) {
         hasImage: !!book.image,
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     results.tests.push({
       name: "Get Book by ISBN (Harry Potter)",
       status: "error",
-      message: error instanceof Error ? error.message : "Unknown error",
+      message: errorMessage,
     });
   }
 
@@ -131,11 +154,12 @@ export async function GET(request: NextRequest) {
         hasImage: !!book.image,
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     results.tests.push({
       name: "Get Book by ISBN",
       status: "error",
-      message: error instanceof Error ? error.message : "Unknown error",
+      message: errorMessage,
     });
   }
 
@@ -160,11 +184,12 @@ export async function GET(request: NextRequest) {
         message: "No authors found",
       });
     }
-  } catch (error) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     results.tests.push({
       name: "Author Search",
       status: "error",
-      message: error instanceof Error ? error.message : "Unknown error",
+      message: errorMessage,
     });
   }
 

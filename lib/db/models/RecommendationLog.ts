@@ -116,8 +116,28 @@ export interface IRecommendationLogModel extends Model<IRecommendationLog> {
     algorithmB: string,
     days?: number
   ): Promise<{
-    algorithmA: any;
-    algorithmB: any;
+    algorithmA: {
+      total: number;
+      shown: number;
+      clicked: number;
+      converted: number;
+      dismissed: number;
+      ctr: number;
+      conversionRate: number;
+      avgScore: number;
+      avgPosition: number;
+    };
+    algorithmB: {
+      total: number;
+      shown: number;
+      clicked: number;
+      converted: number;
+      dismissed: number;
+      ctr: number;
+      conversionRate: number;
+      avgScore: number;
+      avgPosition: number;
+    };
     winner?: string;
   }>;
 }
@@ -345,7 +365,9 @@ RecommendationLogSchema.statics = {
     status: 'shown' | 'clicked' | 'converted' | 'dismissed',
     convertedAction?: 'rated' | 'added_to_shelf' | 'liked' | 'added_to_tbr' | 'started_reading'
   ): Promise<IRecommendationLog | null> {
-    const update: any = {
+    const update: {
+      [key: string]: boolean | Date | string;
+    } = {
       [status]: true,
       [`${status}At`]: new Date(),
     };
@@ -535,7 +557,7 @@ RecommendationLogSchema.statics = {
       },
       { $sort: { conversionRate: -1 as const, ctr: -1 as const } },
       { $limit: limit },
-    ] as any[];
+    ];
 
     const results = await this.aggregate(pipeline).exec();
 
@@ -558,8 +580,28 @@ RecommendationLogSchema.statics = {
     algorithmB: string,
     days: number = 7
   ): Promise<{
-    algorithmA: any;
-    algorithmB: any;
+    algorithmA: {
+      total: number;
+      shown: number;
+      clicked: number;
+      converted: number;
+      dismissed: number;
+      ctr: number;
+      conversionRate: number;
+      avgScore: number;
+      avgPosition: number;
+    };
+    algorithmB: {
+      total: number;
+      shown: number;
+      clicked: number;
+      converted: number;
+      dismissed: number;
+      ctr: number;
+      conversionRate: number;
+      avgScore: number;
+      avgPosition: number;
+    };
     winner?: string;
   }> {
     const model = this as IRecommendationLogModel;

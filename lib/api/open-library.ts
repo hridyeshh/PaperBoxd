@@ -105,12 +105,28 @@ export async function searchOpenLibrary(
 }
 
 /**
+ * Open Library Work response type
+ */
+export interface OpenLibraryWork {
+  key: string;
+  title: string;
+  authors?: Array<{ key: string; name: string }>;
+  description?: string | { type: string; value: string };
+  first_publish_date?: string;
+  publish_date?: string;
+  isbn?: string[];
+  covers?: number[];
+  subject?: string[];
+  [key: string]: unknown; // Allow additional properties from API
+}
+
+/**
  * Get book details by Open Library Work ID
  *
  * @param workId - Open Library Work ID (e.g., "OL45804W" or "/works/OL45804W")
- * @returns Promise<any>
+ * @returns Promise<OpenLibraryWork>
  */
-export async function getOpenLibraryWork(workId: string): Promise<any> {
+export async function getOpenLibraryWork(workId: string): Promise<OpenLibraryWork> {
   // Normalize work ID
   const normalizedId = workId.startsWith("/works/")
     ? workId

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
+import mongoose from "mongoose";
 
 export async function POST(
   request: Request,
@@ -39,7 +40,7 @@ export async function POST(
     }
 
     const list = listOwner.readingLists.find(
-      (l: any) => l._id?.toString() === listId
+      (l) => l._id?.toString() === listId
     );
 
     if (!list) {
@@ -56,8 +57,8 @@ export async function POST(
       if (!list.collaborators) {
         list.collaborators = [];
       }
-      const userIdObj = user._id as any;
-      if (!list.collaborators.some((id: any) => id.toString() === userIdObj.toString())) {
+      const userIdObj = user._id as mongoose.Types.ObjectId;
+      if (!list.collaborators.some((id) => id.toString() === userIdObj.toString())) {
         list.collaborators.push(userIdObj);
         await listOwner.save();
       }
@@ -65,7 +66,7 @@ export async function POST(
 
     // Remove the collaboration_request activity
     user.activities = user.activities.filter(
-      (activity: any) =>
+      (activity) =>
         !(
           activity.type === "collaboration_request" &&
           activity.listId?.toString() === listId

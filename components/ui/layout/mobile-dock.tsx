@@ -17,8 +17,32 @@ export function MobileDock() {
   const [writeDialogOpen, setWriteDialogOpen] = React.useState(false);
   const [profileAvatar, setProfileAvatar] = React.useState<string | null>(null);
 
-  // Don't show dock on auth pages or if not authenticated
-  const shouldShowDock = isMobile && session?.user && !pathname?.startsWith("/auth") && !pathname?.startsWith("/choose-username") && !pathname?.startsWith("/onboarding");
+  // Check if edit profile form is open (via data attribute)
+  const [isEditOpen, setIsEditOpen] = React.useState(false);
+  
+  React.useEffect(() => {
+    const checkEditOpen = () => {
+      if (typeof document !== 'undefined') {
+        setIsEditOpen(document.body.hasAttribute('data-edit-open'));
+      }
+    };
+    
+    checkEditOpen();
+    
+    // Watch for changes
+    const observer = new MutationObserver(checkEditOpen);
+    if (typeof document !== 'undefined') {
+      observer.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['data-edit-open']
+      });
+    }
+    
+    return () => observer.disconnect();
+  }, []);
+
+  // Don't show dock on auth pages, if not authenticated, or if edit form is open
+  const shouldShowDock = isMobile && session?.user && !pathname?.startsWith("/auth") && !pathname?.startsWith("/choose-username") && !pathname?.startsWith("/onboarding") && !isEditOpen;
 
   // Function to fetch profile avatar
   const fetchProfileAvatar = React.useCallback(() => {

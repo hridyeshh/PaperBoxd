@@ -79,7 +79,7 @@ async function connectDB(): Promise<typeof mongoose> {
                       typeof process.versions === 'object' && 
                       process.versions !== null &&
                       typeof process.versions.node === 'string';
-    } catch (e) {
+    } catch {
       // Edge Runtime - process.versions not available
       isNodeRuntime = false;
     }
@@ -119,7 +119,7 @@ async function connectDB(): Promise<typeof mongoose> {
             });
           }
           }
-        } catch (e) {
+        } catch {
           // Edge Runtime - process APIs not available, skip gracefully
         }
       }

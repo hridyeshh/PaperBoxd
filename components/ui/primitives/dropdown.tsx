@@ -155,7 +155,6 @@ const DropdownPopover = React.forwardRef<HTMLDivElement, DropdownPopoverProps>(
         if (!contentRef.current || !triggerRef.current) return;
 
         const dropdown = contentRef.current;
-        const trigger = triggerRef.current;
         const rect = dropdown.getBoundingClientRect();
         const viewportWidth = window.innerWidth;
 

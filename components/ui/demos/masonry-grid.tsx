@@ -3,7 +3,6 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
-import { cn } from "@/lib/utils";
 import { Calendar, BookOpen, Star } from "lucide-react";
 import { format } from "date-fns";
 import { stripHtmlTags } from "@/lib/utils";
@@ -23,12 +22,6 @@ type Book = {
   pageCount?: number;
   categories?: string[];
   publisher?: string;
-};
-
-type MasonryCard = {
-  id: string;
-  book: Book;
-  height: number; // Height in pixels for masonry layout
 };
 
 interface MasonryGridProps {
@@ -77,7 +70,7 @@ export function MasonryGrid({ books, onCardClick }: MasonryGridProps) {
       } else {
         return format(new Date(dateStr), "MMM d, yyyy");
       }
-    } catch (e) {
+    } catch {
       return dateStr;
     }
   };

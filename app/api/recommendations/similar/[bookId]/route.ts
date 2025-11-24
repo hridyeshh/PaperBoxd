@@ -2,6 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
 import { RecommendationService } from '@/lib/services/RecommendationService';
 
+// Type for book from recommendation
+type BookFromRecommendation = {
+  _id: { toString(): string };
+  volumeInfo?: {
+    title?: string;
+    authors?: string[];
+    imageLinks?: {
+      thumbnail?: string;
+      smallThumbnail?: string;
+      medium?: string;
+      large?: string;
+    };
+  };
+};
+
 /**
  * GET /api/recommendations/similar/[bookId]
  *
@@ -33,15 +48,16 @@ export async function GET(
     const seenBooks = new Set<string>();
     const transformedBooks = similar
       .map((rec) => rec.book)
-      .filter((book: any) => {
+      .filter((book: BookFromRecommendation) => {
         const hasCover =
           book.volumeInfo?.imageLinks?.thumbnail ||
           book.volumeInfo?.imageLinks?.smallThumbnail ||
           book.volumeInfo?.imageLinks?.medium ||
           book.volumeInfo?.imageLinks?.large;
-        return hasCover && book.volumeInfo?.title && book.volumeInfo?.authors?.length > 0;
+        const hasAuthors = (book.volumeInfo?.authors?.length ?? 0) > 0;
+        return hasCover && book.volumeInfo?.title && hasAuthors;
       })
-      .map((book: any) => ({
+      .map((book: BookFromRecommendation) => ({
         id: book._id.toString(),
         title: book.volumeInfo?.title || 'Unknown Title',
         author: book.volumeInfo?.authors?.[0] || 'Unknown Author',
@@ -67,10 +83,11 @@ export async function GET(
       bookId,
       count: transformedBooks.length,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error getting similar books:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to get similar books', details: error.message },
+      { error: 'Failed to get similar books', details: errorMessage },
       { status: 500 }
     );
   }

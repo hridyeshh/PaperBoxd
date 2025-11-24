@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Auth } from "@/components/ui/auth/auth-form-1";
-import SphereImageGrid, { ImageData } from "@/components/ui/demos/img-sphere";
+import SphereImageGrid, { ImageData } from "@/components/ui/img-sphere";
 import { Footerdemo } from "@/components/ui/features/footer-section";
 
 export function PublicHomeMobile() {

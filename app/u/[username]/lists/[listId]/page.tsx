@@ -45,6 +45,12 @@ interface ReadingList {
   updatedAt: string;
 }
 
+interface ErrorResponse {
+  error?: string;
+  details?: string;
+  [key: string]: unknown;
+}
+
 export default function ListDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -57,15 +63,36 @@ export default function ListDetailPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [isPrivateList, setIsPrivateList] = React.useState(false);
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
+  type UserForShare = {
+    id: string;
+    username: string;
+    name?: string;
+    avatar?: string;
+  };
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [searchResults, setSearchResults] = React.useState<any[]>([]);
+  type SearchResultBook = {
+    id?: string;
+    _id?: string;
+    title?: string;
+    volumeInfo?: {
+      title?: string;
+      authors?: string[];
+      industryIdentifiers?: Array<{ type: string; identifier: string }>;
+      imageLinks?: {
+        thumbnail?: string;
+        smallThumbnail?: string;
+      };
+    };
+    openLibraryId?: string;
+  };
+  const [searchResults, setSearchResults] = React.useState<SearchResultBook[]>([]);
   const [isSearching, setIsSearching] = React.useState(false);
   const [isAddingBook, setIsAddingBook] = React.useState(false);
   const [isShareOpen, setIsShareOpen] = React.useState(false);
-  const [following, setFollowing] = React.useState<any[]>([]);
+  const [following, setFollowing] = React.useState<UserForShare[]>([]);
   const [isLoadingFollowing, setIsLoadingFollowing] = React.useState(false);
   const [shareSearchQuery, setShareSearchQuery] = React.useState("");
-  const [allowedUsers, setAllowedUsers] = React.useState<any[]>([]);
+  const [allowedUsers, setAllowedUsers] = React.useState<UserForShare[]>([]);
   const [isLoadingAllowedUsers, setIsLoadingAllowedUsers] = React.useState(false);
   const [isGrantingAccess, setIsGrantingAccess] = React.useState(false);
   const [isSavingList, setIsSavingList] = React.useState(false);
@@ -290,8 +317,13 @@ export default function ListDetailPage() {
             return;
           }
 
+          type ListFromAPI = {
+            id: string;
+            title: string;
+            description?: string;
+          };
           // Find if user has a saved list with matching title and "from @username" in description
-          const savedList = data.lists.find((l: any) => 
+          const savedList = data.lists.find((l: ListFromAPI) => 
             l.title === listTitle && 
             l.description?.includes(`from @${username}`)
           );
@@ -376,7 +408,17 @@ export default function ListDetailPage() {
     };
   }, [searchQuery, isSearchOpen]);
 
-  const handleAddBook = async (book: any) => {
+  type BookToAdd = {
+    _id?: string;
+    id?: string;
+    openLibraryId?: string;
+    volumeInfo?: {
+      title?: string;
+      authors?: string[];
+      industryIdentifiers?: Array<{ type: string; identifier: string }>;
+    };
+  };
+  const handleAddBook = async (book: BookToAdd) => {
     if (!list || !username || !listId || isAddingBook || !canEdit) return;
 
     try {
@@ -393,11 +435,10 @@ export default function ListDetailPage() {
       const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/") || book.openLibraryId;
       
       // Extract ISBN from industryIdentifiers if available (for Google Books format)
-      const volumeInfo = book.volumeInfo || book;
       let isbndbId = isISBN ? book.id : undefined;
-      if (!isbndbId && volumeInfo?.industryIdentifiers) {
-        const isbn13 = volumeInfo.industryIdentifiers.find((id: any) => id.type === "ISBN_13");
-        const isbn10 = volumeInfo.industryIdentifiers.find((id: any) => id.type === "ISBN_10");
+      if (!isbndbId && book.volumeInfo?.industryIdentifiers) {
+        const isbn13 = book.volumeInfo.industryIdentifiers.find((id) => id.type === "ISBN_13");
+        const isbn10 = book.volumeInfo.industryIdentifiers.find((id) => id.type === "ISBN_10");
         isbndbId = isbn13?.identifier || isbn10?.identifier;
       }
 
@@ -409,7 +450,13 @@ export default function ListDetailPage() {
         return;
       }
 
-      const requestBody: any = {
+      type RequestBody = {
+        action: string;
+        bookId?: string;
+        isbndbId?: string;
+        openLibraryId?: string;
+      };
+      const requestBody: RequestBody = {
         action: "add",
       };
 
@@ -617,7 +664,7 @@ export default function ListDetailPage() {
       if (response.ok) {
         toast.success(`List shared with @${targetUsername}!`);
       } else {
-        let error: any = {};
+        let error: ErrorResponse = {};
         try {
           const text = await response.text();
           error = text ? JSON.parse(text) : {};
@@ -649,12 +696,15 @@ export default function ListDetailPage() {
       });
 
       if (response.ok) {
-        const data = await response.json();
         toast.success(`Access granted to @${targetUsername}!`);
         // Refresh allowed users list
         fetchAllowedUsers();
       } else {
-        let error: any = {};
+        type ErrorResponse = {
+          error?: string;
+          details?: string;
+        };
+        let error: ErrorResponse = {};
         try {
           const text = await response.text();
           error = text ? JSON.parse(text) : {};
@@ -690,7 +740,7 @@ export default function ListDetailPage() {
         // Refresh allowed users list
         fetchAllowedUsers();
       } else {
-        let error: any = {};
+        let error: ErrorResponse = {};
         try {
           const text = await response.text();
           error = text ? JSON.parse(text) : {};
@@ -770,8 +820,7 @@ export default function ListDetailPage() {
         const query = shareSearchQuery.toLowerCase();
         return (
           user?.name?.toLowerCase().includes(query) ||
-          user?.username?.toLowerCase().includes(query) ||
-          user?.email?.toLowerCase().includes(query)
+          user?.username?.toLowerCase().includes(query)
         );
       })
     : [];
@@ -921,7 +970,7 @@ export default function ListDetailPage() {
               "text-muted-foreground",
               isMobile ? "text-base" : "text-xl"
             )}>
-              There aren't any books on this list yet
+              There aren&apos;t any books on this list yet
             </p>
           </div>
         ) : (
@@ -1014,11 +1063,12 @@ export default function ListDetailPage() {
                     ) : (
                       <div className="space-y-2 pr-2">
                         {searchResults.map((book) => {
-                          const bookData = book.volumeInfo || book;
                           const cover =
-                            bookData.imageLinks?.thumbnail ||
-                            bookData.imageLinks?.smallThumbnail ||
+                            book.volumeInfo?.imageLinks?.thumbnail ||
+                            book.volumeInfo?.imageLinks?.smallThumbnail ||
                             "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80";
+                          const title = book.volumeInfo?.title || book.title || "Untitled";
+                          const authors = book.volumeInfo?.authors;
 
                           return (
                             <button
@@ -1030,7 +1080,7 @@ export default function ListDetailPage() {
                               <div className="relative h-16 w-12 flex-shrink-0 overflow-hidden rounded">
                                 <Image
                                   src={cover}
-                                  alt={bookData.title}
+                                  alt={title}
                                   fill
                                   className="object-cover"
                                   sizes="48px"
@@ -1040,11 +1090,11 @@ export default function ListDetailPage() {
                               </div>
                               <div className="flex-1 min-w-0 overflow-hidden">
                                 <p className="font-medium text-foreground truncate">
-                                  {bookData.title}
+                                  {title}
                                 </p>
-                                {bookData.authors && (
+                                {authors && (
                                   <p className="text-sm text-muted-foreground truncate">
-                                    {bookData.authors.join(", ")}
+                                    {authors.join(", ")}
                                   </p>
                                 )}
                               </div>
@@ -1149,7 +1199,7 @@ export default function ListDetailPage() {
                       <p className="text-sm text-muted-foreground">No users have access yet</p>
                     ) : (
                       <div className="space-y-2">
-                        {allowedUsers.map((user: any) => (
+                        {allowedUsers.map((user) => (
                           <div
                             key={user.username}
                             className="flex items-center justify-between p-2 rounded-lg bg-muted/50"
@@ -1264,11 +1314,11 @@ export default function ListDetailPage() {
                             variant="outline"
                             onClick={() => handleSendToList(user.username)}
                             className="flex-shrink-0"
-                            disabled={isGrantingAccess || (list?.isPublic === false && allowedUsers.some((u: any) => u.username === user.username))}
+                            disabled={isGrantingAccess || (list?.isPublic === false && allowedUsers.some((u) => u.username === user.username))}
                           >
                             {list?.isPublic === false ? (
                               <>
-                                {allowedUsers.some((u: any) => u.username === user.username) ? (
+                                {allowedUsers.some((u) => u.username === user.username) ? (
                                   "Has Access"
                                 ) : (
                                   <>
@@ -1394,7 +1444,7 @@ export default function ListDetailPage() {
                 "text-muted-foreground",
                 isMobile ? "mt-3 text-sm" : "mt-4"
               )}>
-                This will permanently delete "{list?.title}" from your profile and remove it from anyone who saved it. This action cannot be undone.
+                This will permanently delete &quot;{list?.title}&quot; from your profile and remove it from anyone who saved it. This action cannot be undone.
               </p>
 
               <div className={cn(

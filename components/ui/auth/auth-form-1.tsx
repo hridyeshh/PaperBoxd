@@ -6,11 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Eye,
-  EyeOff,
   Loader2,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/primitives/button";
@@ -198,7 +195,6 @@ interface AuthSignInProps {
 }
 
 function AuthSignIn({ onSignUp }: AuthSignInProps) {
-  const router = useRouter();
   const isMobile = useIsMobile();
   const [formState, setFormState] = React.useState<FormState>({
     isLoading: false,
@@ -260,7 +256,7 @@ function AuthSignIn({ onSignUp }: AuthSignInProps) {
     try {
       setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
       await signInWithGoogle();
-    } catch (error) {
+    } catch {
       const errorMessage = "Failed to sign in with Google";
       toast.error(errorMessage);
       setFormState((prev) => ({
@@ -395,7 +391,6 @@ interface AuthSignUpProps {
 }
 
 function AuthSignUp({ onSignIn }: AuthSignUpProps) {
-  const router = useRouter();
   const [formState, setFormState] = React.useState<FormState>({
     isLoading: false,
     error: null,
@@ -456,7 +451,7 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
     try {
       setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
       await signInWithGoogle();
-    } catch (error) {
+    } catch {
       const errorMessage = "Failed to sign in with Google";
       toast.error(errorMessage);
       setFormState((prev) => ({

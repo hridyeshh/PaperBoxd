@@ -53,11 +53,63 @@ type SearchType = 'Books' | 'User';
 
 type SearchModalProps = {
 	children: React.ReactNode;
-	data: CommandItem[];
+	data?: CommandItem[]; // Optional, currently unused but kept for future use
+};
+
+// Type for custom event detail
+type OpenSearchModalEventDetail = {
+	mode?: string;
+	maxBooks?: number;
+	currentBooks?: string[];
+};
+
+// Extend Window interface for custom events
+declare global {
+	interface WindowEventMap {
+		'open-search-modal': CustomEvent<OpenSearchModalEventDetail>;
+	}
+}
+
+// Types for API responses
+type BookSearchItem = {
+	id: string;
+	volumeInfo?: {
+		title?: string;
+		authors?: string[];
+		description?: string;
+		imageLinks?: {
+			thumbnail?: string;
+			smallThumbnail?: string;
+		};
+	};
+	_id?: { toString(): string };
+	title?: string;
+	authors?: string[];
+	description?: string;
+	imageLinks?: {
+		thumbnail?: string;
+		smallThumbnail?: string;
+	};
+};
+
+type BookSearchResponse = 
+	| { items?: BookSearchItem[]; books?: never; kind?: string; totalItems?: number }
+	| { books?: BookSearchItem[]; items?: never };
+
+type UserSearchResponse = {
+	users?: UserSearchResult[];
+	count?: number;
+};
+
+type SearchResponse = BookSearchResponse | UserSearchResponse;
+
+// Extended BookSearchResult with optional _raw field
+type BookSearchResultWithRaw = BookSearchResult & {
+	_raw?: BookSearchItem;
 };
 
 
-export function SearchModal({ children, data }: SearchModalProps) {
+export function SearchModal({ children }: SearchModalProps) {
 	const router = useRouter();
 	const [open, setOpen] = React.useState(false);
 	const [query, setQuery] = React.useState('');
@@ -81,17 +133,17 @@ export function SearchModal({ children, data }: SearchModalProps) {
 
 	// Listen for open-search-modal event
 	React.useEffect(() => {
-		const handleOpenSearch = (event: CustomEvent) => {
+		const handleOpenSearch = (event: WindowEventMap['open-search-modal']) => {
 			if (event.detail?.mode === 'favorite-books') {
-				setFavoriteMode(event.detail);
+				setFavoriteMode(event.detail as { mode: string; maxBooks: number; currentBooks: string[] });
 				setOpen(true);
 				setSearchType('Books');
 			}
 		};
 
-		window.addEventListener('open-search-modal' as any, handleOpenSearch as EventListener);
+		window.addEventListener('open-search-modal', handleOpenSearch);
 		return () => {
-			window.removeEventListener('open-search-modal' as any, handleOpenSearch as EventListener);
+			window.removeEventListener('open-search-modal', handleOpenSearch);
 		};
 	}, []);
 
@@ -117,13 +169,13 @@ export function SearchModal({ children, data }: SearchModalProps) {
 			
 			try {
 				let response: Response;
-				let result: any;
+				let result: SearchResponse;
 
 				switch (searchType) {
 					case 'Books':
 						try {
 							response = await fetch(`/api/books/search?q=${encodeURIComponent(query)}&maxResults=10&forceFresh=true`);
-						} catch (fetchError) {
+						} catch {
 							// Network error (connection failed, CORS, etc.)
 							throw new Error(`Network error: Unable to connect to search API. Please check your connection.`);
 						}
@@ -141,12 +193,12 @@ export function SearchModal({ children, data }: SearchModalProps) {
 						
 						try {
 							result = await response.json();
-						} catch (parseError) {
+						} catch {
 							throw new Error(`Invalid response from search API. Please try again.`);
 						}
 						// Handle both Google Books format (result.items) and database format (result.books)
-						if (result.items && Array.isArray(result.items)) {
-							const books: BookSearchResult[] = result.items.map((item: any) => ({
+						if ('items' in result && result.items && Array.isArray(result.items)) {
+							const books: BookSearchResultWithRaw[] = result.items.map((item: BookSearchItem) => ({
 								id: item.id,
 								title: item.volumeInfo?.title || 'Unknown Title',
 								authors: item.volumeInfo?.authors || [],
@@ -157,10 +209,10 @@ export function SearchModal({ children, data }: SearchModalProps) {
 							}));
 							setBookResults(books);
 							setUserResults([]);
-						} else if (result.books && Array.isArray(result.books)) {
+						} else if ('books' in result && result.books && Array.isArray(result.books)) {
 							// Database format
-							const books: BookSearchResult[] = result.books.map((item: any) => ({
-								id: item._id?.toString() || item.id,
+							const books: BookSearchResultWithRaw[] = result.books.map((item: BookSearchItem) => ({
+								id: item._id?.toString() || item.id || '',
 								title: item.volumeInfo?.title || item.title || 'Unknown Title',
 								authors: item.volumeInfo?.authors || item.authors || [],
 								description: item.volumeInfo?.description || item.description || '',
@@ -178,7 +230,7 @@ export function SearchModal({ children, data }: SearchModalProps) {
 					case 'User':
 						try {
 							response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}&limit=10`);
-						} catch (fetchError) {
+						} catch {
 							throw new Error(`Network error: Unable to connect to search API. Please check your connection.`);
 						}
 						
@@ -195,10 +247,10 @@ export function SearchModal({ children, data }: SearchModalProps) {
 						
 						try {
 							result = await response.json();
-						} catch (parseError) {
+						} catch {
 							throw new Error(`Invalid response from search API. Please try again.`);
 						}
-						if (result.users && Array.isArray(result.users)) {
+						if ('users' in result && result.users && Array.isArray(result.users)) {
 							setUserResults(result.users);
 							setBookResults([]);
 						} else {
@@ -294,7 +346,7 @@ export function SearchModal({ children, data }: SearchModalProps) {
 									<CommandEmpty className="flex min-h-[280px] flex-col items-center justify-center">
 										<SearchIcon className="text-muted-foreground mb-2 size-6" />
 										<p className="text-muted-foreground mb-1 text-xs">
-											No {searchType.toLowerCase()} found for "{query}"
+											No {searchType.toLowerCase()} found for &quot;{query}&quot;
 										</p>
 										<Button onClick={() => setQuery('')} variant="ghost">
 											Clear search
@@ -309,10 +361,11 @@ export function SearchModal({ children, data }: SearchModalProps) {
 											const handleBookSelect = () => {
 												// If in favorite mode, dispatch event instead of navigating
 												if (favoriteMode) {
-													const rawBook = (book as any)._raw || book;
+													const bookWithRaw = book as BookSearchResultWithRaw;
+													const rawBook = bookWithRaw._raw || book;
 													// Check if already added
 													const isAlreadyAdded = favoriteMode.currentBooks.some(
-														(id: string) => id === book.id || id === rawBook._id?.toString()
+														(id: string) => id === book.id || (typeof rawBook === 'object' && '_id' in rawBook && rawBook._id?.toString() === id)
 													);
 													if (!isAlreadyAdded && favoriteMode.currentBooks.length < favoriteMode.maxBooks) {
 														// Dispatch event with full book data

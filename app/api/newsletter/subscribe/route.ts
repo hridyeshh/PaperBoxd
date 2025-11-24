@@ -77,11 +77,12 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Thank you for subscribing to our newsletter!',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error subscribing to newsletter:', error);
 
     // Handle duplicate key error (race condition)
-    if (error.code === 11000 || error.name === 'MongoServerError') {
+    const isMongoError = error && typeof error === 'object' && ('code' in error || 'name' in error);
+    if (isMongoError && ((error as { code?: number }).code === 11000 || (error as { name?: string }).name === 'MongoServerError')) {
       return NextResponse.json({
         success: true,
         message: 'You are already subscribed to our newsletter!',
@@ -89,10 +90,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       {
         error: 'Failed to subscribe to newsletter',
-        details: error.message,
+        details: errorMessage,
       },
       { status: 500 }
     );

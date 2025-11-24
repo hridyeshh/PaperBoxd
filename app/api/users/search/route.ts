@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
+
+// Type for lean user query result
+type UserLean = {
+  _id: mongoose.Types.ObjectId | string;
+  username?: string;
+  name: string;
+  avatar?: string;
+};
 
 /**
  * Search for users by username or name
@@ -52,23 +61,27 @@ export async function GET(request: NextRequest) {
       .limit(limit)
       .lean();
 
-    const usersList = users.map((user: any) => ({
-      id: user._id?.toString() || "",
-      username: user.username || "",
-      name: user.name || "",
-      avatar: user.avatar || undefined,
-    }));
+    const usersList = users.map((user) => {
+      const userLean = user as unknown as UserLean;
+      return {
+        id: userLean._id?.toString() || "",
+        username: userLean.username || "",
+        name: userLean.name || "",
+        avatar: userLean.avatar || undefined,
+      };
+    });
 
     return NextResponse.json({
       users: usersList,
       count: usersList.length,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("User search error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       {
         error: "Failed to search users",
-        details: error instanceof Error ? error.message : "Unknown error",
+        details: errorMessage,
       },
       { status: 500 }
     );

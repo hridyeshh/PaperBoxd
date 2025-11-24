@@ -2,6 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
 import Book from '@/lib/db/models/Book';
 
+// Type for MongoDB lean documents
+type BookLean = {
+  _id: { toString(): string };
+  isbndbId?: string;
+  openLibraryId?: string;
+  isbn?: string;
+  isbn13?: string;
+  volumeInfo?: {
+    title?: string;
+    authors?: string[];
+    description?: string;
+    imageLinks?: {
+      thumbnail?: string;
+      smallThumbnail?: string;
+      medium?: string;
+      large?: string;
+    };
+    categories?: string[];
+  };
+};
+
 /**
  * GET /api/books/sphere
  * 
@@ -44,7 +65,7 @@ export async function GET(request: NextRequest) {
     ];
 
     const booksPerGenre = Math.ceil(limit / genres.length);
-    const selectedBooks: any[] = [];
+    const selectedBooks: BookLean[] = [];
     const usedBookIds = new Set<string>();
     const usedTitleAuthor = new Set<string>();
 
@@ -58,7 +79,7 @@ export async function GET(request: NextRequest) {
         _id: { $nin: Array.from(usedBookIds) },
       })
         .limit(booksPerGenre * 2) // Fetch more to account for duplicates
-        .lean();
+        .lean() as BookLean[];
 
       for (const book of genreBooks) {
         const title = book.volumeInfo?.title?.toLowerCase().trim();
@@ -82,7 +103,7 @@ export async function GET(request: NextRequest) {
         _id: { $nin: Array.from(usedBookIds) },
       })
         .limit(remainingLimit * 2)
-        .lean();
+        .lean() as BookLean[];
 
       for (const book of additionalBooks) {
         const title = book.volumeInfo?.title?.toLowerCase().trim();
@@ -101,7 +122,7 @@ export async function GET(request: NextRequest) {
     // Transform to sphere format
     const transformedBooks = selectedBooks
       .slice(0, limit)
-      .map((book: any, index: number) => {
+      .map((book: BookLean, index: number) => {
         const bookId = book._id?.toString() || 
                        book.isbn13 || 
                        book.isbn || 
@@ -131,10 +152,11 @@ export async function GET(request: NextRequest) {
       books: transformedBooks,
       count: transformedBooks.length,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching sphere books:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to fetch books', details: error.message },
+      { error: 'Failed to fetch books', details: errorMessage },
       { status: 500 }
     );
   }

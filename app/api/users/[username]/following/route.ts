@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
 import { auth } from "@/lib/auth";
+
+// Type for lean user query result
+type UserLean = {
+  _id: mongoose.Types.ObjectId | string;
+  username?: string;
+  name: string;
+  avatar?: string;
+};
 
 /**
  * Get following list for a user
@@ -58,23 +67,27 @@ export async function GET(
     }).select("_id username name avatar").lean();
 
     // Transform to response format
-    const followingList = following.map((followedUser: any) => ({
-      id: followedUser._id?.toString() || "",
-      username: followedUser.username || "",
-      name: followedUser.name || "",
-      avatar: followedUser.avatar || undefined,
-    }));
+    const followingList = following.map((followedUser) => {
+      const user = followedUser as unknown as UserLean;
+      return {
+        id: user._id?.toString() || "",
+        username: user.username || "",
+        name: user.name || "",
+        avatar: user.avatar || undefined,
+      };
+    });
 
     return NextResponse.json({
       following: followingList,
       count: followingList.length,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Following fetch error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       {
         error: "Failed to fetch following",
-        details: error instanceof Error ? error.message : "Unknown error",
+        details: errorMessage,
       },
       { status: 500 }
     );

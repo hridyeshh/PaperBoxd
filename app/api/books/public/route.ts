@@ -2,6 +2,32 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
 import Book from '@/lib/db/models/Book';
 
+// Types for MongoDB lean documents
+type BookLean = {
+  _id: { toString(): string };
+  volumeInfo?: {
+    title?: string;
+    authors?: string[];
+    categories?: string[];
+    imageLinks?: {
+      thumbnail?: string;
+      smallThumbnail?: string;
+      medium?: string;
+      large?: string;
+    };
+  };
+};
+
+type MongoQuery = {
+  [key: string]: unknown;
+  _id?: { $nin?: unknown[] };
+  $or?: Array<Record<string, unknown>>;
+};
+
+type MongoSort = {
+  [key: string]: 1 | -1;
+};
+
 /**
  * GET /api/books/public
  *
@@ -18,7 +44,7 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type') || 'popular';
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
 
-    let books: any[] = [];
+    let books: BookLean[] = [];
 
     // Common genres to ensure diversity
     const commonGenres = [
@@ -45,8 +71,8 @@ export async function GET(request: NextRequest) {
     ];
 
     // Helper function to get diverse books from different genres
-    const getDiverseBooks = async (baseQuery: any, sortCriteria: any, targetLimit: number) => {
-      const selectedBooks: any[] = [];
+    const getDiverseBooks = async (baseQuery: MongoQuery, sortCriteria: MongoSort, targetLimit: number) => {
+      const selectedBooks: BookLean[] = [];
       const usedBookIds = new Set<string>();
       const usedTitleAuthor = new Set<string>(); // Track by title+author to avoid duplicates
       const genreCounts = new Map<string, number>();
@@ -57,8 +83,8 @@ export async function GET(request: NextRequest) {
         if (selectedBooks.length >= targetLimit) break;
 
         // Build query excluding already selected books
-        const excludeIds = selectedBooks.map((b: any) => b._id);
-        const genreQuery = {
+        const excludeIds = selectedBooks.map((b) => b._id);
+        const genreQuery: MongoQuery = {
           ...baseQuery,
           'volumeInfo.categories': { $regex: genre, $options: 'i' },
           'volumeInfo.imageLinks.thumbnail': { $exists: true, $ne: null },
@@ -70,7 +96,7 @@ export async function GET(request: NextRequest) {
         const genreBooks = await Book.find(genreQuery)
           .sort(sortCriteria)
           .limit(booksPerGenre * 2) // Fetch more to account for duplicates
-          .lean();
+          .lean() as BookLean[];
 
         for (const book of genreBooks) {
           if (selectedBooks.length >= targetLimit) break;
@@ -96,8 +122,8 @@ export async function GET(request: NextRequest) {
 
       // If we don't have enough books, fill with any books that have covers
       if (selectedBooks.length < targetLimit) {
-        const excludeIds = selectedBooks.map((b: any) => b._id);
-        const fillQuery = {
+        const excludeIds = selectedBooks.map((b) => b._id);
+        const fillQuery: MongoQuery = {
           ...baseQuery,
           'volumeInfo.imageLinks.thumbnail': { $exists: true, $ne: null },
         };
@@ -108,7 +134,7 @@ export async function GET(request: NextRequest) {
         const additionalBooks = await Book.find(fillQuery)
           .sort(sortCriteria)
           .limit((targetLimit - selectedBooks.length) * 2) // Fetch more to account for duplicates
-          .lean();
+          .lean() as BookLean[];
 
         for (const book of additionalBooks) {
           if (selectedBooks.length >= targetLimit) break;
@@ -148,8 +174,8 @@ export async function GET(request: NextRequest) {
 
         // If still not enough, get any books with covers
         if (books.length < limit) {
-          const excludeIds = books.map((b: any) => b._id);
-          const fillQuery: any = {
+          const excludeIds = books.map((b) => b._id);
+          const fillQuery: MongoQuery = {
             'volumeInfo.imageLinks.thumbnail': { $exists: true, $ne: null },
           };
           if (excludeIds.length > 0) {
@@ -158,7 +184,7 @@ export async function GET(request: NextRequest) {
           const additionalBooks = await Book.find(fillQuery)
             .sort({ createdAt: -1 })
             .limit(limit - books.length)
-            .lean();
+            .lean() as BookLean[];
           books = [...books, ...additionalBooks];
         }
         break;
@@ -226,16 +252,17 @@ export async function GET(request: NextRequest) {
     // Transform books to carousel format, ensuring we have covers and deduplicating by title+author
     const seenBooks = new Set<string>();
     const transformedBooks = books
-      .filter((book: any) => {
+      .filter((book) => {
         // Only include books with valid covers
         const hasCover =
           book.volumeInfo?.imageLinks?.thumbnail ||
           book.volumeInfo?.imageLinks?.smallThumbnail ||
           book.volumeInfo?.imageLinks?.medium ||
           book.volumeInfo?.imageLinks?.large;
-        return hasCover && book.volumeInfo?.title && book.volumeInfo?.authors?.length > 0;
+          const hasAuthors = (book.volumeInfo?.authors?.length ?? 0) > 0;
+          return hasCover && book.volumeInfo?.title && hasAuthors;
       })
-      .map((book: any) => ({
+      .map((book) => ({
         id: book._id.toString(),
         title: book.volumeInfo?.title || 'Unknown Title',
         author: book.volumeInfo?.authors?.[0] || 'Unknown Author',
@@ -262,10 +289,11 @@ export async function GET(request: NextRequest) {
       type,
       count: transformedBooks.length,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching public books:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to fetch books', details: error.message },
+      { error: 'Failed to fetch books', details: errorMessage },
       { status: 500 }
     );
   }

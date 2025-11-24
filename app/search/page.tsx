@@ -15,7 +15,6 @@ import {
 import { DockToggle } from "@/components/ui/dock";
 import { SearchIcon, Loader2, BookOpen, User } from "lucide-react";
 import { createBookSlug } from "@/lib/utils/book-slug";
-import { useIsMobile } from "@/hooks/use-media-query";
 import { DEFAULT_AVATAR } from "@/lib/utils";
 
 type BookSearchResult = {
@@ -38,9 +37,54 @@ type UserSearchResult = {
 
 type SearchType = "Books" | "User";
 
+// Types for API responses
+type BookSearchItem = {
+  id: string;
+  volumeInfo?: {
+    title?: string;
+    authors?: string[];
+    description?: string;
+    imageLinks?: {
+      thumbnail?: string;
+      smallThumbnail?: string;
+    };
+  };
+};
+
+type DatabaseBookItem = {
+  _id?: { toString(): string };
+  id?: string;
+  volumeInfo?: {
+    title?: string;
+    authors?: string[];
+    description?: string;
+    imageLinks?: {
+      thumbnail?: string;
+      smallThumbnail?: string;
+    };
+  };
+  title?: string;
+  authors?: string[];
+  description?: string;
+  imageLinks?: {
+    thumbnail?: string;
+    smallThumbnail?: string;
+  };
+};
+
+type BookSearchResponse = 
+  | { items?: BookSearchItem[]; books?: never; kind?: string; totalItems?: number }
+  | { books?: DatabaseBookItem[]; items?: never };
+
+type UserSearchResponse = {
+  users?: UserSearchResult[];
+  count?: number;
+};
+
+type SearchResponse = BookSearchResponse | UserSearchResponse;
+
 export default function SearchPage() {
   const router = useRouter();
-  const isMobile = useIsMobile();
   const [mounted, setMounted] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [searchType, setSearchType] = React.useState<SearchType>("Books");
@@ -69,7 +113,7 @@ export default function SearchPage() {
 
       try {
         let response: Response;
-        let result: any;
+        let result: SearchResponse;
 
         switch (searchType) {
           case "Books":
@@ -77,7 +121,7 @@ export default function SearchPage() {
               response = await fetch(
                 `/api/books/search?q=${encodeURIComponent(query)}&maxResults=10&forceFresh=true`
               );
-            } catch (fetchError) {
+            } catch {
               throw new Error(
                 `Network error: Unable to connect to search API. Please check your connection.`
               );
@@ -100,12 +144,12 @@ export default function SearchPage() {
 
             try {
               result = await response.json();
-            } catch (parseError) {
+            } catch {
               throw new Error(`Invalid response from search API. Please try again.`);
             }
             // Handle both Google Books format (result.items) and database format (result.books)
-            if (result.items && Array.isArray(result.items)) {
-              const books: BookSearchResult[] = result.items.map((item: any) => ({
+            if ('items' in result && result.items && Array.isArray(result.items)) {
+              const books: BookSearchResult[] = result.items.map((item: BookSearchItem) => ({
                 id: item.id,
                 title: item.volumeInfo?.title || "Unknown Title",
                 authors: item.volumeInfo?.authors || [],
@@ -114,15 +158,17 @@ export default function SearchPage() {
               }));
               setBookResults(books);
               setUserResults([]);
-            } else if (result.books && Array.isArray(result.books)) {
+            } else if ('books' in result && result.books && Array.isArray(result.books)) {
               // Database format
-              const books: BookSearchResult[] = result.books.map((item: any) => ({
-                id: item._id?.toString() || item.id,
-                title: item.volumeInfo?.title || item.title || "Unknown Title",
-                authors: item.volumeInfo?.authors || item.authors || [],
-                description: item.volumeInfo?.description || item.description || "",
-                imageLinks: item.volumeInfo?.imageLinks || item.imageLinks || {},
-              }));
+              const books: BookSearchResult[] = result.books
+                .map((item: DatabaseBookItem) => ({
+                  id: item._id?.toString() || item.id || "",
+                  title: item.volumeInfo?.title || item.title || "Unknown Title",
+                  authors: item.volumeInfo?.authors || item.authors || [],
+                  description: item.volumeInfo?.description || item.description || "",
+                  imageLinks: item.volumeInfo?.imageLinks || item.imageLinks || {},
+                }))
+                .filter((book) => book.id !== ""); // Filter out items without valid IDs
               setBookResults(books);
               setUserResults([]);
             } else {
@@ -135,7 +181,7 @@ export default function SearchPage() {
               response = await fetch(
                 `/api/users/search?q=${encodeURIComponent(query)}&limit=10`
               );
-            } catch (fetchError) {
+            } catch {
               throw new Error(
                 `Network error: Unable to connect to search API. Please check your connection.`
               );
@@ -154,10 +200,10 @@ export default function SearchPage() {
 
             try {
               result = await response.json();
-            } catch (parseError) {
+            } catch {
               throw new Error(`Invalid response from search API. Please try again.`);
             }
-            if (result.users && Array.isArray(result.users)) {
+            if ('users' in result && result.users && Array.isArray(result.users)) {
               setUserResults(result.users);
               setBookResults([]);
             } else {
@@ -247,7 +293,7 @@ export default function SearchPage() {
                       <CommandEmpty className="flex min-h-[200px] flex-col items-center justify-center py-8">
                         <SearchIcon className="text-muted-foreground mb-2 size-6" />
                         <p className="text-muted-foreground mb-1 text-xs">
-                          No {searchType.toLowerCase()} found for "{query}"
+                          No {searchType.toLowerCase()} found for &quot;{query}&quot;
                         </p>
                       </CommandEmpty>
                     ) : (

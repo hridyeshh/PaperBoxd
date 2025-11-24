@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import connectDB from '@/lib/db/mongodb';
 import RecommendationLog from '@/lib/db/models/RecommendationLog';
+import mongoose from 'mongoose';
 
 /**
  * POST /api/recommendations/feedback
@@ -41,9 +42,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Update recommendation log
+    const userIdObj = new mongoose.Types.ObjectId(session.user.id);
+    const bookIdObj = new mongoose.Types.ObjectId(bookId);
     await RecommendationLog.updateRecommendationStatus(
-      session.user.id,
-      bookId,
+      userIdObj,
+      bookIdObj,
       action,
       convertedAction
     );
@@ -52,10 +55,11 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Feedback recorded successfully',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error recording recommendation feedback:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to record feedback', details: error.message },
+      { error: 'Failed to record feedback', details: errorMessage },
       { status: 500 }
     );
   }
@@ -91,10 +95,11 @@ export async function GET(request: NextRequest) {
       algorithm: algorithm || 'all',
       days,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error getting recommendation metrics:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to get metrics', details: error.message },
+      { error: 'Failed to get metrics', details: errorMessage },
       { status: 500 }
     );
   }

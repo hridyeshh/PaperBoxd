@@ -37,7 +37,7 @@ export async function GET(
     // Check if it's a MongoDB ObjectId (24 hex characters)
     const isMongoObjectId = /^[0-9a-fA-F]{24}$/.test(id);
     
-    let book = await Book.findOne(
+    const book = await Book.findOne(
       isMongoObjectId
         ? { _id: id } // Search by MongoDB ObjectId
         : {
@@ -78,19 +78,35 @@ export async function GET(
           try {
             console.log(`[Book by ID] 🔄 Updating stale cache from Open Library (ID: ${book.openLibraryId})`);
             const workData = await getOpenLibraryWork(book.openLibraryId);
+            type OpenLibraryAuthor = { name?: string } | string;
+            // Extract year from first_publish_date if first_publish_year is not available
+            const firstPublishYear = workData.first_publish_year 
+              ? (typeof workData.first_publish_year === 'number' ? workData.first_publish_year : undefined)
+              : (workData.first_publish_date ? parseInt(workData.first_publish_date.split('-')[0], 10) : undefined);
             const transformedData = transformOpenLibraryBook({
               key: workData.key || book.openLibraryId,
               title: workData.title || "",
-              author_name: workData.authors?.map((a: any) => a.name) || [],
+              author_name: workData.authors?.map((a: OpenLibraryAuthor) => typeof a === 'object' ? (a.name || '') : a).filter((name: string) => name) || [],
               cover_i: undefined,
-              first_publish_year: workData.first_publish_year,
+              first_publish_year: firstPublishYear,
               isbn: workData.isbn || [],
-              publisher: workData.publishers || [],
-              subject: workData.subjects || [],
-              ratings_average: workData.ratings_average,
-              ratings_count: workData.ratings_count,
+              publisher: (workData.publishers as string[] | undefined) || [],
+              subject: workData.subject || [],
+              ratings_average: (workData.ratings_average as number | undefined),
+              ratings_count: (workData.ratings_count as number | undefined),
             });
-            book.volumeInfo = transformedData.volumeInfo;
+            // Convert null imageLinks values to undefined to match IVolumeInfo type
+            book.volumeInfo = {
+              ...transformedData.volumeInfo,
+              imageLinks: transformedData.volumeInfo.imageLinks ? {
+                smallThumbnail: transformedData.volumeInfo.imageLinks.smallThumbnail ?? undefined,
+                thumbnail: transformedData.volumeInfo.imageLinks.thumbnail ?? undefined,
+                small: transformedData.volumeInfo.imageLinks.small ?? undefined,
+                medium: transformedData.volumeInfo.imageLinks.medium ?? undefined,
+                large: transformedData.volumeInfo.imageLinks.large ?? undefined,
+                extraLarge: transformedData.volumeInfo.imageLinks.extraLarge ?? undefined,
+              } : undefined,
+            };
             book.lastUpdated = new Date();
             console.log(`[Book by ID] ✅ Successfully updated from Open Library`);
           } catch (error) {
@@ -105,9 +121,9 @@ export async function GET(
       });
 
       return NextResponse.json({
-        id: book.isbndbId || book.openLibraryId || book.isbn13 || book.isbn || book._id.toString(),
-        _id: book._id.toString(),
-        bookId: book._id.toString(),
+        id: book.isbndbId || book.openLibraryId || book.isbn13 || book.isbn || (book._id as { toString(): string }).toString(),
+        _id: (book._id as { toString(): string }).toString(),
+        bookId: (book._id as { toString(): string }).toString(),
         volumeInfo: book.volumeInfo,
         saleInfo: book.saleInfo,
         paperboxdStats: {
@@ -141,8 +157,8 @@ export async function GET(
 
         return NextResponse.json({
           id: createdBook.isbndbId || id,
-          _id: createdBook._id.toString(),
-          bookId: createdBook._id.toString(),
+          _id: (createdBook._id as { toString(): string }).toString(),
+          bookId: (createdBook._id as { toString(): string }).toString(),
           volumeInfo: createdBook.volumeInfo,
           paperboxdStats: {
             rating: createdBook.paperboxdRating,
@@ -165,26 +181,46 @@ export async function GET(
       console.log(`[Book by ID] 🔍 Attempting Open Library API for ID: "${id}"`);
       try {
         const workData = await getOpenLibraryWork(id);
+        type OpenLibraryAuthor = { name?: string } | string;
+        // Extract year from first_publish_date if first_publish_year is not available
+        const firstPublishYear = workData.first_publish_year 
+          ? (typeof workData.first_publish_year === 'number' ? workData.first_publish_year : undefined)
+          : (workData.first_publish_date ? parseInt(workData.first_publish_date.split('-')[0], 10) : undefined);
         const transformedData = transformOpenLibraryBook({
           key: workData.key || id,
           title: workData.title || "",
-          author_name: workData.authors?.map((a: any) => a.name) || [],
+          author_name: workData.authors?.map((a: OpenLibraryAuthor) => typeof a === 'object' ? (a.name || '') : a).filter((name: string) => name) || [],
           cover_i: undefined,
-          first_publish_year: workData.first_publish_year,
+          first_publish_year: firstPublishYear,
           isbn: workData.isbn || [],
-          publisher: workData.publishers || [],
-          subject: workData.subjects || [],
-          ratings_average: workData.ratings_average,
-          ratings_count: workData.ratings_count,
+          publisher: (workData.publishers as string[] | undefined) || [],
+          subject: workData.subject || [],
+          ratings_average: (workData.ratings_average as number | undefined),
+          ratings_count: (workData.ratings_count as number | undefined),
         });
-        const createdBook = await Book.findOrCreateFromOpenLibrary(transformedData);
+        // Convert null imageLinks values to undefined to match IVolumeInfo type
+        const transformedDataWithFixedImageLinks = {
+          ...transformedData,
+          volumeInfo: {
+            ...transformedData.volumeInfo,
+            imageLinks: transformedData.volumeInfo.imageLinks ? {
+              smallThumbnail: transformedData.volumeInfo.imageLinks.smallThumbnail ?? undefined,
+              thumbnail: transformedData.volumeInfo.imageLinks.thumbnail ?? undefined,
+              small: transformedData.volumeInfo.imageLinks.small ?? undefined,
+              medium: transformedData.volumeInfo.imageLinks.medium ?? undefined,
+              large: transformedData.volumeInfo.imageLinks.large ?? undefined,
+              extraLarge: transformedData.volumeInfo.imageLinks.extraLarge ?? undefined,
+            } : undefined,
+          },
+        };
+        const createdBook = await Book.findOrCreateFromOpenLibrary(transformedDataWithFixedImageLinks as Parameters<typeof Book.findOrCreateFromOpenLibrary>[0]);
         
         console.log(`[Book by ID] ✅ SUCCESS: Book found via Open Library API (ID: ${id}, Title: ${createdBook.volumeInfo?.title || 'N/A'})`);
 
         return NextResponse.json({
           id: createdBook.openLibraryId || id,
-          _id: createdBook._id.toString(),
-          bookId: createdBook._id.toString(),
+          _id: (createdBook._id as { toString(): string }).toString(),
+          bookId: (createdBook._id as { toString(): string }).toString(),
           volumeInfo: createdBook.volumeInfo,
           paperboxdStats: {
             rating: createdBook.paperboxdRating,

@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import cloudinary from '@/lib/cloudinary';
 
 /**
  * GET /api/test/cloudinary
  * Test Cloudinary configuration and connection
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Check environment variables
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
@@ -43,20 +43,22 @@ export async function GET(request: NextRequest) {
           apiKeyPrefix: apiKey.substring(0, 4) + '***',
         },
       });
-    } catch (cloudinaryError: any) {
+    } catch (cloudinaryError: unknown) {
+      const errorMessage = cloudinaryError instanceof Error ? cloudinaryError.message : 'Unknown error';
       return NextResponse.json({
         success: false,
         message: 'Cloudinary configuration error',
         envCheck,
-        error: cloudinaryError.message || 'Unknown error',
+        error: errorMessage,
         details: 'Check your Cloudinary credentials in .env.local',
       }, { status: 500 });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({
       success: false,
       message: 'Failed to test Cloudinary',
-      error: error.message || 'Unknown error',
+      error: errorMessage,
     }, { status: 500 });
   }
 }

@@ -5,7 +5,7 @@ import { useScroll, useTransform, motion } from "framer-motion";
 import { Hero } from "@/components/ui/home/hero";
 import { Timeline } from "@/components/ui/features/timeline";
 import { Footerdemo } from "@/components/ui/features/footer-section";
-import SphereImageGrid, { ImageData } from "@/components/ui/demos/img-sphere";
+import SphereImageGrid, { ImageData } from "@/components/ui/img-sphere";
 const timelineData = [
   {
     title: "Personalized Recommendations",
@@ -18,11 +18,11 @@ const timelineData = [
         </p>
         <p className="text-foreground text-base md:text-lg lg:text-xl font-normal mb-4">
           Our algorithm considers your favorite genres, authors, and reading patterns to 
-          provide recommendations that match your unique interests. Whether you're into 
-          sci-fi, romance, or non-fiction, we'll help you find books you'll love.
+          provide recommendations that match your unique interests. Whether you&apos;re into 
+          sci-fi, romance, or non-fiction, we&apos;ll help you find books you&apos;ll love.
         </p>
         <p className="text-foreground text-sm md:text-base font-normal">
-          Get recommendations based on books similar to ones you've enjoyed, authors you 
+          Get recommendations based on books similar to ones you&apos;ve enjoyed, authors you 
           follow, and what your friends are reading. The more you use PaperBoxd, the 
           smarter your recommendations become.
         </p>
@@ -35,13 +35,13 @@ const timelineData = [
       <div>
         <p className="text-foreground text-base md:text-lg lg:text-xl font-normal mb-4">
           Build a comprehensive digital bookshelf that reflects your reading journey. 
-          Save books you've read, rate them, and add personal notes about your thoughts 
+          Save books you&apos;ve read, rate them, and add personal notes about your thoughts 
           and feelings. Keep track of when you finished each book and how you experienced it.
         </p>
         <p className="text-foreground text-base md:text-lg lg:text-xl font-normal mb-4">
           Organize your collection with custom reading lists. Create lists for different 
-          moods, genres, or goals. Whether it's "Books to Read This Summer" or "Favorite 
-          Sci-Fi Novels," you can curate collections that tell your story as a reader.
+          moods, genres, or goals. Whether it&apos;s &quot;Books to Read This Summer&quot; or &quot;Favorite 
+          Sci-Fi Novels,&quot; you can curate collections that tell your story as a reader.
         </p>
         <p className="text-foreground text-sm md:text-base font-normal">
           Set reading goals and track your progress throughout the year. See your reading 
@@ -81,17 +81,17 @@ const timelineData = [
       <div>
         <p className="text-foreground text-base md:text-lg lg:text-xl font-normal mb-4">
           Organize your reading life with powerful list management. Create custom reading 
-          lists for any purpose - from "Want to Read" to "Books That Changed My Life." 
+          lists for any purpose - from &quot;Want to Read&quot; to &quot;Books That Changed My Life.&quot; 
           Add books to multiple lists and keep everything organized exactly how you want.
         </p>
         <p className="text-foreground text-base md:text-lg lg:text-xl font-normal mb-4">
-          Use our built-in collections like "Currently Reading," "Want to Read," and 
-          "Favorites" to quickly organize your books. Mark books with moods, formats, 
+          Use our built-in collections like &quot;Currently Reading,&quot; &quot;Want to Read,&quot; and 
+          &quot;Favorites&quot; to quickly organize your books. Mark books with moods, formats, 
           and personal tags to make them easy to find later.
         </p>
         <p className="text-foreground text-sm md:text-base font-normal">
-          Share your lists with friends or keep them private. Follow other users' lists 
-          to get curated book recommendations. Whether you're planning your next reading 
+          Share your lists with friends or keep them private. Follow other users&apos; lists 
+          to get curated book recommendations. Whether you&apos;re planning your next reading 
           challenge or organizing your all-time favorites, PaperBoxd makes it easy.
         </p>
       </div>

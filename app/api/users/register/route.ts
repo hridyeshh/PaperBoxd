@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     console.log("📝 [Register] Starting registration process...");
 
     const body = await request.json();
-    let { email, password, name, username } = body;
+    const { email, password, name, username } = body;
 
     console.log("📝 [Register] Received data:", { email, name, username });
 
@@ -85,14 +85,14 @@ export async function POST(request: NextRequest) {
     });
 
     console.log("✅ [Register] User created successfully:", {
-      id: newUser._id.toString(),
+      id: newUser._id?.toString(),
       email: newUser.email,
       username: newUser.username,
     });
 
     // Remove password from response
     const userResponse = {
-      id: newUser._id,
+      id: newUser._id?.toString() || newUser._id,
       email: newUser.email,
       username: newUser.username,
       name: newUser.name,

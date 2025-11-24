@@ -99,6 +99,8 @@ const GenreWeightSchema = new Schema({
   lastUpdated: { type: Date, default: Date.now },
 }, { _id: false });
 
+// AuthorWeightSchema is defined but not used - keeping for potential future use
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const AuthorWeightSchema = new Schema({
   author: { type: String, required: true },
   weight: { type: Number, required: true, default: 0 },
@@ -174,7 +176,8 @@ const UserPreferenceSchema = new Schema<IUserPreference>(
         readingVelocity: 0,
         lastComputed: new Date(),
       }),
-    } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any, // Mongoose TypeScript types have limitations with nested schemas
 
     interactions: {
       type: InteractionsSchema,
@@ -198,7 +201,7 @@ UserPreferenceSchema.post('init', function(doc: IUserPreference) {
     // Convert genreWeights from plain object to Map if needed
     if (doc.implicitPreferences.genreWeights && !(doc.implicitPreferences.genreWeights instanceof Map)) {
       const genreMap = new Map<string, number>();
-      Object.entries(doc.implicitPreferences.genreWeights as any).forEach(([key, value]) => {
+      Object.entries(doc.implicitPreferences.genreWeights as Record<string, number>).forEach(([key, value]) => {
         genreMap.set(key, value as number);
       });
       doc.implicitPreferences.genreWeights = genreMap;
@@ -208,7 +211,7 @@ UserPreferenceSchema.post('init', function(doc: IUserPreference) {
     // Convert authorWeights from plain object to Map if needed
     if (doc.implicitPreferences.authorWeights && !(doc.implicitPreferences.authorWeights instanceof Map)) {
       const authorMap = new Map<string, number>();
-      Object.entries(doc.implicitPreferences.authorWeights as any).forEach(([key, value]) => {
+      Object.entries(doc.implicitPreferences.authorWeights as Record<string, number>).forEach(([key, value]) => {
         authorMap.set(key, value as number);
       });
       doc.implicitPreferences.authorWeights = authorMap;

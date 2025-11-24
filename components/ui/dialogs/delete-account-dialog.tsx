@@ -3,8 +3,7 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trash2, X, Loader2, AlertTriangle } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
+import { signOut } from "next-auth/react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/primitives/button";
@@ -35,8 +34,6 @@ export function DeleteAccountDialog({
   open,
   onOpenChange,
 }: DeleteAccountDialogProps) {
-  const router = useRouter();
-  const { data: session } = useSession();
   const isMobile = useIsMobile();
   const [step, setStep] = React.useState<"reason" | "confirm" | "goodbye">("reason");
   const [selectedReasons, setSelectedReasons] = React.useState<Set<DeleteReason>>(new Set());
@@ -168,7 +165,7 @@ export function DeleteAccountDialog({
                   </button>
                 </div>
                 <p className={cn("text-muted-foreground", isMobile ? "text-sm" : "text-sm")}>
-                  We're sorry to see you go. Please let us know why you're deleting your account.
+                  We&apos;re sorry to see you go. Please let us know why you&apos;re deleting your account.
                 </p>
               </div>
 
@@ -348,7 +345,7 @@ export function DeleteAccountDialog({
                     isMobile ? "h-6 w-6" : "h-8 w-8"
                   )} />
                 </div>
-                <h2 className={cn("font-bold mb-2", isMobile ? "text-2xl" : "text-2xl")}>We're sorry to see you go</h2>
+                <h2 className={cn("font-bold mb-2", isMobile ? "text-2xl" : "text-2xl")}>We&apos;re sorry to see you go</h2>
                 <p className={cn("text-muted-foreground", isMobile ? "text-sm" : "text-sm")}>
                   Your account has been successfully deleted. Thank you for being part of our community.
                 </p>

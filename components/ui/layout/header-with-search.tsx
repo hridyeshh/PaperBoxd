@@ -52,17 +52,17 @@ const searchItems: CommandItem[] = [
 interface HeaderProps {
   profileButtonLabel?: string;
   onProfileButtonClick?: () => void;
-  profileAvatarSrc?: string;
   profileMenuOpen?: boolean;
   minimalMobile?: boolean; // Show only logo and theme toggle on mobile
+  className?: string;
 }
 
 export function Header({
   profileButtonLabel,
   onProfileButtonClick,
-  profileAvatarSrc,
   profileMenuOpen,
-  minimalMobile = false,
+  minimalMobile: _minimalMobile = false,
+  className,
 }: HeaderProps) {
   const [open, setOpen] = React.useState(false);
   const [internalProfileMenuOpen, setInternalProfileMenuOpen] = React.useState(false);
@@ -81,6 +81,8 @@ export function Header({
   const isMobile = useIsMobile();
   // Always show minimal header on mobile (only logo and theme toggle)
   const showMinimal = isMobile;
+  // minimalMobile prop is available but not used - keeping for API compatibility
+  void _minimalMobile; // Suppress unused variable warning
   
   // Fetch logged-in user's profile avatar from database when authenticated
   // Always fetch the logged-in user's avatar, not the profile being viewed
@@ -133,7 +135,7 @@ export function Header({
         
         try {
           storedTheme = window.localStorage.getItem("paperboxd-theme");
-        } catch (e) {
+        } catch {
           // localStorage might not be available (private browsing, etc.)
         }
         
@@ -154,7 +156,7 @@ export function Header({
           if (!storedTheme) {
             setIsDark(event.matches);
           }
-        } catch (e) {
+        } catch {
           // Ignore localStorage errors
         }
       };
@@ -283,7 +285,7 @@ export function Header({
                     },
                     timestamp: Date.now(),
                   }));
-                } catch (e) {
+                } catch {
                   // Storage quota exceeded
                 }
               }
@@ -337,6 +339,7 @@ export function Header({
           "fixed top-0 left-0 right-0 z-[100] w-full border-b",
           "border-gray-200/50 dark:border-border/60",
           "bg-white dark:bg-black",
+          className
         )}
       >
       <nav className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-4 sm:px-6">

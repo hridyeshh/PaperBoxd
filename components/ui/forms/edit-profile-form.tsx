@@ -12,7 +12,6 @@ import { Dropdown } from "@/components/ui/primitives/dropdown";
 import { GridList, GridListItem } from "@/components/ui/forms/grid-list";
 import { Input } from "@/components/ui/primitives/input";
 import { Label } from "@/components/ui/primitives/label";
-import { Switch } from "@/components/ui/primitives/switch";
 import { Textarea } from "@/components/ui/primitives/textarea";
 import { AvatarEditor } from "@/components/ui/features/avatar-editor";
 import { cn, DEFAULT_AVATAR } from "@/lib/utils";
@@ -130,7 +129,7 @@ export function EditProfileForm({
         } else {
           setUsernameAvailability({ available: false, checking: false });
         }
-      } catch (error) {
+      } catch {
         setUsernameAvailability({ available: false, checking: false });
       }
     }, 500);
@@ -333,7 +332,7 @@ export function EditProfileForm({
 
   return (
     <form className="flex flex-col gap-8" onSubmit={handleSubmit}>
-      <section className="flex flex-col gap-6 rounded-3xl border border-border/60 bg-muted/20 p-6 shadow-sm">
+      <section className="flex flex-col gap-6 rounded-3xl border border-border/60 bg-muted/20 p-6 shadow-sm mx-4">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Profile photo</h2>
           <p className="text-sm text-muted-foreground">I bet this nerd looks cool :p.</p>
@@ -348,7 +347,7 @@ export function EditProfileForm({
             )}
           </div>
           <div className="flex flex-col gap-3 text-sm text-muted-foreground">
-            <p>Upload a square image (at least 400px). PNG or JPG works best.</p>
+            <p>Upload the photo you love :P. PNG or JPG works best.</p>
             <div className="flex flex-wrap gap-3">
               <Button
                 type="button"
@@ -391,7 +390,7 @@ export function EditProfileForm({
         </div>
       </section>
 
-      <section className="grid gap-6 rounded-3xl border border-border/60 bg-background/90 p-6 shadow-sm lg:grid-cols-2">
+      <section className="grid gap-6 rounded-3xl border border-border/60 bg-background/90 p-6 shadow-sm lg:grid-cols-2 mx-4">
         <div className="space-y-4">
           <div className={fieldGroupClass}>
             <Label className={fieldLabelClass} htmlFor="username">
@@ -586,13 +585,14 @@ export function EditProfileForm({
         </div>
       </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-border/60 bg-background/90 p-4 shadow-sm">
-        <div className="text-sm text-muted-foreground">
-          {submitError ? (
-            <p className="text-xs font-semibold text-destructive">{submitError}</p>
-          ) : null}
-        </div>
+      <div className="flex flex-col gap-4 px-4 py-4">
+        {submitError ? (
+          <p className="text-xs font-semibold text-destructive">{submitError}</p>
+        ) : null}
         <div className="flex gap-3">
+        <Button type="submit" className="rounded-full px-6" disabled={isSubmitting}>
+            {isSubmitting ? "Saving..." : "Save changes"}
+          </Button>
           <Button 
             variant="ghost" 
             type="button" 
@@ -601,9 +601,6 @@ export function EditProfileForm({
             onClick={onCancel}
           >
             Cancel
-          </Button>
-          <Button type="submit" className="rounded-full px-6" disabled={isSubmitting}>
-            {isSubmitting ? "Saving..." : "Save changes"}
           </Button>
         </div>
       </div>

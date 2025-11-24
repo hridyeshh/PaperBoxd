@@ -32,9 +32,14 @@ export async function GET(request: NextRequest) {
       
       // Transform the results to a consistent format
       // ISBNdb returns authors in format: { author: "Author Name" }
-      const authors = (result.authors || []).map((author: any) => {
+      type AuthorInput = { author?: string; name?: string } | string;
+      type AuthorOutput = { id: string; name: string } | null;
+      
+      const authors = (result.authors || []).map((author: AuthorInput): AuthorOutput => {
         // Handle different possible response structures
-        const authorName = author.author || author.name || (typeof author === 'string' ? author : '');
+        const authorName = typeof author === 'object' 
+          ? (author.author || author.name || '')
+          : (typeof author === 'string' ? author : '');
         
         if (!authorName || authorName.trim() === '') {
           return null; // Skip invalid entries
@@ -44,7 +49,7 @@ export async function GET(request: NextRequest) {
           id: authorName,
           name: authorName.trim(),
         };
-      }).filter((author: any) => author !== null); // Filter out null entries
+      }).filter((author: AuthorOutput): author is { id: string; name: string } => author !== null); // Filter out null entries
 
       return NextResponse.json({
         authors: authors,

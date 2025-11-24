@@ -1,8 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
+import type { IReadingList } from "@/lib/db/models/User";
 import { auth } from "@/lib/auth";
 import mongoose from "mongoose";
+
+// Type for reading list with allowedUsers (can be Mongoose subdocument)
+type ReadingListWithAccess = IReadingList & {
+  allowedUsers?: string[];
+  markModified?: (path: string) => void;
+};
+
+// Type for lean user query result
+type UserLean = {
+  _id: mongoose.Types.ObjectId | string;
+  username?: string;
+  name: string;
+  avatar?: string;
+};
 
 /**
  * Grant or revoke access to a private list
@@ -92,27 +107,30 @@ export async function POST(
     }
 
     // Prevent owner from granting access to themselves
-    if (targetUser._id.toString() === listOwner._id.toString()) {
+    if (targetUser._id?.toString() === listOwner._id?.toString()) {
       return NextResponse.json(
         { error: "You cannot grant access to yourself" },
         { status: 400 }
       );
     }
 
+    // Cast list to type with allowedUsers
+    const listWithAccess = list as ReadingListWithAccess;
+    
     // Initialize allowedUsers array if it doesn't exist
-    if (!Array.isArray((list as any).allowedUsers)) {
-      (list as any).allowedUsers = [];
+    if (!Array.isArray(listWithAccess.allowedUsers)) {
+      listWithAccess.allowedUsers = [];
     }
 
     if (action === "grant") {
       // Grant access if not already granted
-      const allowedUsersArray = Array.isArray((list as any).allowedUsers) ? (list as any).allowedUsers : [];
+      const allowedUsersArray = Array.isArray(listWithAccess.allowedUsers) ? listWithAccess.allowedUsers : [];
       if (!allowedUsersArray.includes(targetUsername)) {
         // Ensure listId is a string
         const listIdString = listId.toString();
 
         // Update the list - use direct assignment to ensure Mongoose tracks the change
-        (list as any).allowedUsers = [...allowedUsersArray, targetUsername];
+        listWithAccess.allowedUsers = [...allowedUsersArray, targetUsername];
         list.updatedAt = new Date();
         
         // Mark the readingLists array as modified to ensure Mongoose saves the nested array changes
@@ -135,7 +153,7 @@ export async function POST(
         }
 
         // Double-check we're not accidentally using the owner
-        if (freshTargetUser._id.toString() === listOwner._id.toString()) {
+        if (freshTargetUser._id?.toString() === listOwner._id?.toString()) {
           console.error(`ERROR: Attempted to add activity to owner instead of target user!`);
           console.error(`Owner: ${username} (${listOwner.email}), Target: ${targetUsername} (${freshTargetUser.email})`);
           return NextResponse.json(
@@ -190,15 +208,15 @@ export async function POST(
       }
       return NextResponse.json({
         message: `Access granted to @${targetUsername}`,
-        allowedUsers: (list as any).allowedUsers || [],
+        allowedUsers: listWithAccess.allowedUsers || [],
       });
     } else {
       // Revoke access
-      const allowedUsersArray = Array.isArray((list as any).allowedUsers) ? (list as any).allowedUsers : [];
+      const allowedUsersArray = Array.isArray(listWithAccess.allowedUsers) ? listWithAccess.allowedUsers : [];
       const index = allowedUsersArray.indexOf(targetUsername);
       if (index > -1) {
         // Update the list - use direct assignment to ensure Mongoose tracks the change
-        (list as any).allowedUsers = allowedUsersArray.filter((u: string) => u !== targetUsername);
+        listWithAccess.allowedUsers = allowedUsersArray.filter((u: string) => u !== targetUsername);
         list.updatedAt = new Date();
         
         // Mark the readingLists array as modified to ensure Mongoose saves the nested array changes
@@ -213,10 +231,10 @@ export async function POST(
       }
       return NextResponse.json({
         message: `Access revoked from @${targetUsername}`,
-        allowedUsers: (list as any).allowedUsers || [],
+        allowedUsers: listWithAccess.allowedUsers || [],
       });
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Manage access error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     const errorStack = error instanceof Error ? error.stack : undefined;
@@ -298,13 +316,16 @@ export async function GET(
       .lean();
 
     return NextResponse.json({
-      allowedUsers: usersWithAccess.map((user: any) => ({
-        username: user.username,
-        name: user.name,
-        avatar: user.avatar,
-      })),
+      allowedUsers: usersWithAccess.map((user) => {
+        const userLean = user as unknown as UserLean;
+        return {
+          username: userLean.username,
+          name: userLean.name,
+          avatar: userLean.avatar,
+        };
+      }),
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Get access list error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(

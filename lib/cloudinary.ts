@@ -25,17 +25,30 @@ export async function uploadToCloudinary(
   secureUrl: string;
 }> {
   try {
-    const uploadOptions: any = {
+    const uploadOptions: {
+      folder: string;
+      resource_type: 'auto';
+      transformation: Array<{
+        width: number;
+        height: number;
+        crop: 'fill';
+        gravity: 'face';
+        quality: 'auto:good';
+        fetch_format: 'auto';
+      }>;
+      public_id?: string;
+      overwrite?: boolean;
+    } = {
       folder,
-      resource_type: 'auto',
+      resource_type: 'auto' as const,
       transformation: [
         {
           width: 500,
           height: 500,
-          crop: 'fill',
-          gravity: 'face',
-          quality: 'auto:good',
-          fetch_format: 'auto',
+          crop: 'fill' as const,
+          gravity: 'face' as const,
+          quality: 'auto:good' as const,
+          fetch_format: 'auto' as const,
         },
       ],
     };
@@ -52,9 +65,10 @@ export async function uploadToCloudinary(
       publicId: result.public_id,
       secureUrl: result.secure_url,
     };
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Cloudinary upload error:', error);
-    throw new Error(`Failed to upload image: ${error.message}`);
+    throw new Error(`Failed to upload image: ${errorMessage}`);
   }
 }
 
@@ -65,9 +79,10 @@ export async function uploadToCloudinary(
 export async function deleteFromCloudinary(publicId: string): Promise<void> {
   try {
     await cloudinary.uploader.destroy(publicId);
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Cloudinary delete error:', error);
-    throw new Error(`Failed to delete image: ${error.message}`);
+    throw new Error(`Failed to delete image: ${errorMessage}`);
   }
 }
 
@@ -81,7 +96,7 @@ export function getPublicIdFromUrl(url: string): string | null {
     // Format: https://res.cloudinary.com/{cloud_name}/image/upload/{version}/{public_id}.{format}
     const match = url.match(/\/upload\/(?:v\d+\/)?(.+)\.\w+$/);
     return match ? match[1] : null;
-  } catch (error) {
+  } catch {
     return null;
   }
 }

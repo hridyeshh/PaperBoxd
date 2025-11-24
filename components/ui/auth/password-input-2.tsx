@@ -173,7 +173,7 @@ export const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputPro
         ) : null}
         {showChecklist ? (
           <ul className="space-y-1.5" aria-label="Password requirements">
-            {strength.requirements.map((requirement, index) => (
+            {strength.requirements.map((requirement) => (
               <li key={requirement.text} className="flex items-center space-x-2 text-xs">
                 {requirement.met ? (
                   <Check className="h-3.5 w-3.5 text-emerald-500" />

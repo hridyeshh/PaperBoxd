@@ -32,10 +32,10 @@ export function TermsOfServiceDialog({
           <section>
             <h2 className="text-lg font-semibold mb-3">1. Acceptance of Terms</h2>
             <p className="text-muted-foreground mb-4">
-              By accessing and using PaperBoxd ("the Service"), you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.
+              By accessing and using PaperBoxd (&quot;the Service&quot;), you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.
             </p>
             <p className="text-muted-foreground">
-              These Terms of Service ("Terms") govern your access to and use of PaperBoxd, a book tracking and social platform. By creating an account, accessing, or using our Service, you agree to be bound by these Terms.
+              These Terms of Service (&quot;Terms&quot;) govern your access to and use of PaperBoxd, a book tracking and social platform. By creating an account, accessing, or using our Service, you agree to be bound by these Terms.
             </p>
           </section>
 
@@ -125,7 +125,7 @@ export function TermsOfServiceDialog({
             <p className="text-muted-foreground mb-4">You agree not to:</p>
             <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
               <li>Use the Service for any illegal purpose or in violation of any laws</li>
-              <li>Attempt to gain unauthorized access to the Service or other users' accounts</li>
+              <li>Attempt to gain unauthorized access to the Service or other users&apos; accounts</li>
               <li>Interfere with or disrupt the Service or servers connected to the Service</li>
               <li>Use automated systems (bots, scrapers) to access the Service without permission</li>
               <li>Impersonate any person or entity or falsely state your affiliation with any person or entity</li>
@@ -151,7 +151,7 @@ export function TermsOfServiceDialog({
             
             <h3 className="text-base font-medium mb-2 mt-4">8.1 Service Availability</h3>
             <p className="text-muted-foreground mb-4">
-              The Service is provided "as is" and "as available" without warranties of any kind, either express or implied. We do not guarantee that the Service will be uninterrupted, secure, or error-free.
+              The Service is provided &quot;as is&quot; and &quot;as available&quot; without warranties of any kind, either express or implied. We do not guarantee that the Service will be uninterrupted, secure, or error-free.
             </p>
 
             <h3 className="text-base font-medium mb-2 mt-4">8.2 Content Accuracy</h3>
@@ -168,14 +168,14 @@ export function TermsOfServiceDialog({
           <section>
             <h2 className="text-lg font-semibold mb-3">9. Indemnification</h2>
             <p className="text-muted-foreground">
-              You agree to indemnify, defend, and hold harmless PaperBoxd, its officers, directors, employees, and agents from and against any claims, liabilities, damages, losses, and expenses, including reasonable attorneys' fees, arising out of or in any way connected with your access to or use of the Service, your violation of these Terms, or your violation of any rights of another.
+              You agree to indemnify, defend, and hold harmless PaperBoxd, its officers, directors, employees, and agents from and against any claims, liabilities, damages, losses, and expenses, including reasonable attorneys&apos; fees, arising out of or in any way connected with your access to or use of the Service, your violation of these Terms, or your violation of any rights of another.
             </p>
           </section>
 
           <section>
             <h2 className="text-lg font-semibold mb-3">10. Changes to Terms</h2>
             <p className="text-muted-foreground">
-              We reserve the right to modify or replace these Terms at any time. If a revision is material, we will provide at least 30 days' notice prior to any new terms taking effect. What constitutes a material change will be determined at our sole discretion. Your continued use of the Service after any changes constitutes acceptance of the new Terms.
+              We reserve the right to modify or replace these Terms at any time. If a revision is material, we will provide at least 30 days&apos; notice prior to any new terms taking effect. What constitutes a material change will be determined at our sole discretion. Your continued use of the Service after any changes constitutes acceptance of the new Terms.
             </p>
           </section>
 

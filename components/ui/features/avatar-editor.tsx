@@ -172,7 +172,7 @@ export function AvatarEditor({ image, open, onOpenChange, onSave }: AvatarEditor
         <DialogHeader>
           <DialogTitle>Edit Profile Picture</DialogTitle>
           <DialogDescription>
-            Crop, zoom, and rotate your image. Click save when you're done.
+            Crop, zoom, and rotate your image. Click save when you&apos;re done.
           </DialogDescription>
         </DialogHeader>
 

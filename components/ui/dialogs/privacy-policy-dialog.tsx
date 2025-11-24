@@ -32,7 +32,7 @@ export function PrivacyPolicyDialog({
           <section>
             <h2 className="text-lg font-semibold mb-3">1. Introduction</h2>
             <p className="text-muted-foreground mb-4">
-              Welcome to PaperBoxd ("we," "our," or "us"). We are committed to protecting your privacy and ensuring you have a positive experience on our platform. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our book tracking and social platform.
+              Welcome to PaperBoxd (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;). We are committed to protecting your privacy and ensuring you have a positive experience on our platform. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our book tracking and social platform.
             </p>
             <p className="text-muted-foreground">
               By using PaperBoxd, you agree to the collection and use of information in accordance with this policy. If you do not agree with our policies and practices, please do not use our service.
@@ -67,7 +67,7 @@ export function PrivacyPolicyDialog({
               <li>To personalize your experience and provide book recommendations based on your reading preferences</li>
               <li>To enable social features such as following other users, viewing activity feeds, and sharing your reading progress</li>
               <li>To communicate with you about your account, updates to our services, and promotional materials (with your consent)</li>
-              <li>To analyze usage patterns and improve our platform's functionality</li>
+              <li>To analyze usage patterns and improve our platform&apos;s functionality</li>
               <li>To detect, prevent, and address technical issues and security threats</li>
               <li>To comply with legal obligations and enforce our terms of service</li>
             </ul>
@@ -79,7 +79,7 @@ export function PrivacyPolicyDialog({
             
             <h3 className="text-base font-medium mb-2 mt-4">4.1 Public Information</h3>
             <p className="text-muted-foreground mb-4">
-              Your username, profile information, and public reading activity (books you've read, ratings, reviews) are visible to other users on the platform. You can control the visibility of certain information through your privacy settings.
+              Your username, profile information, and public reading activity (books you&apos;ve read, ratings, reviews) are visible to other users on the platform. You can control the visibility of certain information through your privacy settings.
             </p>
 
             <h3 className="text-base font-medium mb-2 mt-4">4.2 Service Providers</h3>
@@ -134,7 +134,7 @@ export function PrivacyPolicyDialog({
           <section>
             <h2 className="text-lg font-semibold mb-3">8. Changes to This Privacy Policy</h2>
             <p className="text-muted-foreground">
-              We may update this Privacy Policy from time to time. We will notify you of any material changes by posting the new Privacy Policy on this page and updating the "Last updated" date. We encourage you to review this Privacy Policy periodically.
+              We may update this Privacy Policy from time to time. We will notify you of any material changes by posting the new Privacy Policy on this page and updating the &quot;Last updated&quot; date. We encourage you to review this Privacy Policy periodically.
             </p>
           </section>
 

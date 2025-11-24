@@ -2,8 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import connectDB from '@/lib/db/mongodb';
 import User from '@/lib/db/models/User';
+import type { IDiaryEntry } from '@/lib/db/models/User';
 import Book from '@/lib/db/models/Book';
 import mongoose from 'mongoose';
+
+// Type for diary entry with _id (can be Mongoose subdocument or plain object)
+type DiaryEntryWithId = IDiaryEntry & {
+  _id?: mongoose.Types.ObjectId | string;
+  toObject?: () => IDiaryEntry & { _id?: mongoose.Types.ObjectId | string };
+};
+
+// Type for like ID (can be ObjectId or string)
+type LikeId = mongoose.Types.ObjectId | string;
 
 // Force Node.js runtime (required for Mongoose)
 export const runtime = 'nodejs';
@@ -34,35 +44,41 @@ export async function GET(
 
     // Sort by updatedAt descending (newest first) and add like info
     const currentUserId = session?.user?.id;
-    const entries = (userPlain.diaryEntries || []).map((entry: any) => {
+    type EntryResponse = DiaryEntryWithId & {
+      id?: string;
+      isLiked: boolean;
+      likesCount: number;
+    };
+    const entries = (userPlain.diaryEntries || []).map((entry: DiaryEntryWithId): EntryResponse => {
       const likesArray = entry.likes || [];
-      const isLiked = currentUserId ? likesArray.some((id: any) => id.toString() === currentUserId) : false;
+      const isLiked = currentUserId ? likesArray.some((id: LikeId) => id.toString() === currentUserId) : false;
 
       return {
-        _id: entry._id?.toString() || entry._id, // Ensure _id is included as string
         ...entry,
-        id: entry._id?.toString() || entry.id,
+        _id: entry._id?.toString() || entry._id, // Ensure _id is included as string
+        id: entry._id?.toString() || undefined,
         subject: entry.subject || null, // Explicitly include subject
         isLiked,
         likesCount: likesArray.length,
       };
-    }).sort((a: any, b: any) => {
+    }).sort((a, b) => {
       const dateA = new Date(a.updatedAt || a.createdAt || 0).getTime();
       const dateB = new Date(b.updatedAt || b.createdAt || 0).getTime();
       return dateB - dateA;
     });
 
     console.log('[Diary API] GET - Found', entries.length, 'diary entries for user:', username);
-    console.log('[Diary API] GET - Entry subjects:', entries.map((e: any) => ({ id: e.id, subject: e.subject, bookTitle: e.bookTitle })));
+    console.log('[Diary API] GET - Entry subjects:', entries.map((e) => ({ id: e.id, subject: e.subject, bookTitle: e.bookTitle })));
 
     return NextResponse.json({
       entries,
       count: entries.length,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching diary entries:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to fetch diary entries', details: error.message },
+      { error: 'Failed to fetch diary entries', details: errorMessage },
       { status: 500 }
     );
   }
@@ -139,7 +155,7 @@ export async function POST(
       const isMongoObjectId = typeof bookId === 'string' && /^[0-9a-fA-F]{24}$/.test(bookId);
       console.log('[Diary API] Searching for book:', { bookId: typeof bookId === 'string' ? bookId.substring(0, 50) : bookId, isMongoObjectId });
 
-      let book = await Book.findOne(
+      const book = await Book.findOne(
         isMongoObjectId
           ? { _id: bookId } // Search by MongoDB ObjectId
           : {
@@ -209,7 +225,12 @@ export async function POST(
     if (isGeneralEntry) {
       // For general entries, always create a new entry (no bookId to match against)
       // Use direct MongoDB update to bypass Mongoose validation on existing entries
-      const newEntry: any = {
+      const newEntry: Partial<IDiaryEntry> & {
+        content: string;
+        likes: mongoose.Types.ObjectId[];
+        createdAt: Date;
+        updatedAt: Date;
+      } = {
         content,
         likes: [],
         createdAt: new Date(),
@@ -245,7 +266,11 @@ export async function POST(
         throw new Error('Failed to fetch updated user');
       }
       
-      const diaryEntries = (updatedUser as any).diaryEntries || [];
+      type UserLean = {
+        _id: mongoose.Types.ObjectId | string | { toString(): string };
+        diaryEntries?: DiaryEntryWithId[];
+      };
+      const diaryEntries = (updatedUser as unknown as UserLean).diaryEntries || [];
       const lastEntry = diaryEntries[diaryEntries.length - 1];
       console.log('[Diary API] Retrieved entry from DB:', {
         _id: lastEntry?._id,
@@ -258,7 +283,7 @@ export async function POST(
       const entryResponse = {
         ...lastEntry,
         _id: lastEntry?._id?.toString() || lastEntry?._id,
-        id: lastEntry?._id?.toString() || lastEntry?._id || lastEntry?.id,
+        id: lastEntry?._id?.toString() || undefined,
         subject: lastEntry?.subject || null, // Explicitly include subject
       };
       
@@ -274,7 +299,7 @@ export async function POST(
     } else {
       // For book entries, check if entry already exists for this book
       const existingIndex = user.diaryEntries.findIndex(
-        (entry: any) => entry.bookId && entry.bookId.toString() === bookMongoId
+        (entry) => entry.bookId && entry.bookId.toString() === bookMongoId
       );
 
       if (existingIndex !== -1) {
@@ -283,9 +308,13 @@ export async function POST(
         existingEntry.content = content;
         existingEntry.updatedAt = new Date();
         // Mark the subdocument as modified (if it's a Mongoose document)
-        if (existingEntry && typeof (existingEntry as any).markModified === 'function') {
-          (existingEntry as any).markModified('content');
-          (existingEntry as any).markModified('updatedAt');
+        type MongooseSubdocument = {
+          markModified?: (path: string) => void;
+        };
+        const entryWithMethods = existingEntry as DiaryEntryWithId & MongooseSubdocument;
+        if (entryWithMethods && typeof entryWithMethods.markModified === 'function') {
+          entryWithMethods.markModified('content');
+          entryWithMethods.markModified('updatedAt');
         }
         wasUpdated = true;
       } else {
@@ -318,24 +347,30 @@ export async function POST(
       const saveResult = await user.save({ validateBeforeSave: true });
       console.log('[Diary API] Save operation completed');
       console.log('[Diary API] Save result acknowledged:', !!saveResult);
-    } catch (saveError: any) {
+    } catch (saveError: unknown) {
       console.error('[Diary API] Save error:', saveError);
+      const errorName = saveError instanceof Error ? saveError.name : 'UnknownError';
+      const errorMessage = saveError instanceof Error ? saveError.message : 'Unknown error';
+      type MongooseError = Error & {
+        errors?: Record<string, { message: string }>;
+      };
+      const mongooseError = saveError as MongooseError;
       console.error('[Diary API] Save error details:', {
-        name: saveError.name,
-        message: saveError.message,
-        errors: saveError.errors,
+        name: errorName,
+        message: errorMessage,
+        errors: mongooseError.errors,
       });
       
       // Handle Mongoose validation errors
-      if (saveError.name === 'ValidationError' && saveError.errors) {
+      if (errorName === 'ValidationError' && mongooseError.errors) {
         const validationErrors: Record<string, string> = {};
-        Object.keys(saveError.errors).forEach((key) => {
-          validationErrors[key] = saveError.errors[key].message;
+        Object.keys(mongooseError.errors).forEach((key) => {
+          validationErrors[key] = mongooseError.errors![key].message;
         });
         return NextResponse.json(
           { 
             error: 'Validation error', 
-            details: saveError.message,
+            details: errorMessage,
             validationErrors 
           },
           { status: 400 }
@@ -346,8 +381,8 @@ export async function POST(
       return NextResponse.json(
         { 
           error: 'Failed to save diary entry', 
-          details: saveError.message || 'Unknown error',
-          errorName: saveError.name 
+          details: errorMessage,
+          errorName: errorName
         },
         { status: 500 }
       );
@@ -371,13 +406,20 @@ export async function POST(
       message,
       entry: lastEntry,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Diary API] Error saving diary entry:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorName = error instanceof Error ? error.name : 'UnknownError';
+    const errorStack = error instanceof Error ? error.stack?.substring(0, 500) : undefined;
+    type MongooseError = Error & {
+      errors?: Record<string, { message: string }>;
+    };
+    const mongooseError = error as MongooseError;
     console.error('[Diary API] Error details:', {
-      message: error.message,
-      name: error.name,
-      stack: error.stack?.substring(0, 500),
-      errors: error.errors,
+      message: errorMessage,
+      name: errorName,
+      stack: errorStack,
+      errors: mongooseError.errors,
     });
     
     // If this is already a NextResponse (from saveError handler), return it
@@ -386,15 +428,15 @@ export async function POST(
     }
     
     // Handle Mongoose validation errors
-    if (error.name === 'ValidationError' && error.errors) {
+    if (errorName === 'ValidationError' && mongooseError.errors) {
       const validationErrors: Record<string, string> = {};
-      Object.keys(error.errors).forEach((key) => {
-        validationErrors[key] = error.errors[key].message;
+      Object.keys(mongooseError.errors).forEach((key) => {
+        validationErrors[key] = mongooseError.errors![key].message;
       });
       return NextResponse.json(
         { 
           error: 'Validation error', 
-          details: error.message || 'Unknown validation error',
+          details: errorMessage,
           validationErrors 
         },
         { status: 400 }
@@ -402,12 +444,11 @@ export async function POST(
     }
     
     // Handle other errors
-    const errorMessage = error?.message || error?.toString() || 'Unknown error';
     return NextResponse.json(
       { 
         error: 'Failed to save diary entry', 
         details: errorMessage,
-        errorName: error?.name || 'UnknownError'
+        errorName: errorName
       },
       { status: 500 }
     );
@@ -466,16 +507,17 @@ export async function DELETE(
     if (bookId) {
       // Delete by bookId for book entries
       user.diaryEntries = user.diaryEntries.filter(
-        (entry: any) => !entry.bookId || entry.bookId.toString() !== bookId
+        (entry) => !entry.bookId || entry.bookId.toString() !== bookId
       );
       entryRemoved = user.diaryEntries.length < initialLength;
       console.log('[Diary API] DELETE by bookId:', { bookId, initialLength, finalLength: user.diaryEntries.length, entryRemoved });
     } else if (entryId) {
       // Delete by entryId for general entries (or any entry by _id)
       user.diaryEntries = user.diaryEntries.filter(
-        (entry: any) => {
-          if (!entry._id) return true; // Keep entries without _id (shouldn't happen)
-          const entryIdStr = entry._id.toString();
+        (entry) => {
+          const entryWithId = entry as DiaryEntryWithId;
+          if (!entryWithId._id) return true; // Keep entries without _id (shouldn't happen)
+          const entryIdStr = entryWithId._id.toString();
           return entryIdStr !== entryId;
         }
       );
@@ -505,10 +547,11 @@ export async function DELETE(
     return NextResponse.json({
       message: 'Diary entry deleted',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting diary entry:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to delete diary entry', details: error.message },
+      { error: 'Failed to delete diary entry', details: errorMessage },
       { status: 500 }
     );
   }

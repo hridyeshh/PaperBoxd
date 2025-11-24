@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/primitives/button"
 import { Input } from "@/components/ui/primitives/input"
 import {
@@ -116,9 +117,9 @@ function Footerdemo() {
           <div>
             <h3 className="mb-4 text-lg font-semibold">Quick Links</h3>
             <nav className="space-y-2 text-sm">
-              <a href="/" className="block transition-colors hover:text-primary">
+              <Link href="/" className="block transition-colors hover:text-primary">
                 Home
-              </a>
+              </Link>
               <button
                 onClick={() => setIsAboutDialogOpen(true)}
                 className="block transition-colors hover:text-primary cursor-pointer text-left w-full"

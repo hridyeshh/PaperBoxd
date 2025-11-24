@@ -1,3 +1,5 @@
+import type { IIndustryIdentifier } from "@/lib/db/models/Book";
+
 /**
  * ISBNdb API Integration
  *
@@ -257,16 +259,22 @@ export function transformISBNdbBook(book: ISBNdbBook) {
       publisher: book.publisher,
       publishedDate: book.date_published,
       description: book.synopsis || book.synopsys || book.overview || book.excerpt,
-      industryIdentifiers: [
-        book.isbn13 && {
-          type: "ISBN_13",
-          identifier: book.isbn13,
-        },
-        book.isbn && {
-          type: "ISBN_10",
-          identifier: book.isbn,
-        },
-      ].filter(Boolean),
+      industryIdentifiers: (() => {
+        const identifiers: IIndustryIdentifier[] = [];
+        if (book.isbn13) {
+          identifiers.push({
+            type: "ISBN_13",
+            identifier: book.isbn13,
+          });
+        }
+        if (book.isbn) {
+          identifiers.push({
+            type: "ISBN_10",
+            identifier: book.isbn,
+          });
+        }
+        return identifiers;
+      })(),
       pageCount: book.pages,
       categories: book.subjects || [],
       averageRating: undefined, // ISBNdb doesn't provide ratings

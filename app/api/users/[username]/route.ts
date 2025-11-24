@@ -1,8 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
+import type { IActivity } from "@/lib/db/models/User";
 import Book from "@/lib/db/models/Book"; // Import Book model to register it with Mongoose
 import { auth } from "@/lib/auth";
+import mongoose from "mongoose";
+
+// Type for activity from MongoDB (includes _id and createdAt)
+type ActivityFromDB = IActivity & {
+  _id?: mongoose.Types.ObjectId | string;
+  createdAt?: Date;
+};
+
+// Type for activity with _id and book info
+type ActivityWithBook = IActivity & {
+  _id?: mongoose.Types.ObjectId | string;
+  createdAt?: Date;
+  bookTitle?: string;
+  bookCover?: string;
+};
+
+// Type for reading list with allowedUsers
+type ReadingListWithAccess = {
+  _id?: mongoose.Types.ObjectId | string;
+  title: string;
+  description?: string;
+  books: mongoose.Types.ObjectId[];
+  isPublic: boolean;
+  allowedUsers?: string[];
+  collaborators?: mongoose.Types.ObjectId[];
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 /**
  * Get user profile by username
@@ -84,22 +113,17 @@ export async function GET(
 
     // Use userPlain (plain object) instead of user (Mongoose document)
     // Safely extract arrays and handle undefined values
-    const activities = Array.isArray(userPlain.activities) ? userPlain.activities : [];
+    const activities = (Array.isArray(userPlain.activities) ? userPlain.activities : []) as ActivityFromDB[];
     const followers = Array.isArray(userPlain.followers) ? userPlain.followers : [];
     const following = Array.isArray(userPlain.following) ? userPlain.following : [];
     
     console.log(`[User API] After extraction - followers: ${followers.length}, following: ${following.length}, bookshelf: ${Array.isArray(userPlain.bookshelf) ? userPlain.bookshelf.length : 0}`);
 
-    // Filter out any search-related activities if they exist
-    const filteredActivities = activities.filter((activity: any) => 
-      activity.type !== "search"
-    );
-
     // Populate activities with book information
     const activitiesWithBooks = await Promise.all(
-      filteredActivities.slice(-20).reverse().map(async (activity: any) => {
+      activities.slice(-20).reverse().map(async (activity): Promise<ActivityWithBook> => {
         // Ensure timestamp is preserved (don't default to new Date() as it creates "Just now")
-        const activityData: any = {
+        const activityData: ActivityWithBook = {
           _id: activity._id,
           type: activity.type,
           bookId: activity.bookId,
@@ -154,11 +178,12 @@ export async function GET(
               ? userPlain.readingLists 
               : (() => {
                   const currentUsername = currentUser?.username;
-                  return userPlain.readingLists.filter((list: any) => {
+                  return userPlain.readingLists.filter((list) => {
+                    const listWithAccess = list as unknown as ReadingListWithAccess;
                     // Include public lists
-                    if (list.isPublic !== false) return true;
+                    if (listWithAccess.isPublic !== false) return true;
                     // Include private lists if user has been granted access
-                    if (currentUsername && Array.isArray(list.allowedUsers) && list.allowedUsers.includes(currentUsername)) {
+                    if (currentUsername && Array.isArray(listWithAccess.allowedUsers) && listWithAccess.allowedUsers.includes(currentUsername)) {
                       return true;
                     }
                     return false;
@@ -303,11 +328,30 @@ export async function PATCH(
       "links",
     ];
 
+    // Type-safe field updates
+    type UserUpdateFields = {
+      name?: string;
+      bio?: string;
+      birthday?: Date;
+      gender?: string;
+      pronouns?: string[];
+      links?: string[];
+    };
+    
+    const updateFields: UserUpdateFields = {};
     otherAllowedFields.forEach((field) => {
       if (body[field] !== undefined) {
-        (user as any)[field] = body[field];
+        updateFields[field as keyof UserUpdateFields] = body[field];
       }
     });
+    
+    // Apply updates
+    if (updateFields.name !== undefined) user.name = updateFields.name;
+    if (updateFields.bio !== undefined) user.bio = updateFields.bio;
+    if (updateFields.birthday !== undefined) user.birthday = updateFields.birthday;
+    if (updateFields.gender !== undefined) user.gender = updateFields.gender;
+    if (updateFields.pronouns !== undefined) user.pronouns = updateFields.pronouns;
+    if (updateFields.links !== undefined) user.links = updateFields.links;
 
     // Always set isPublic to true (all profiles are public)
     user.isPublic = true;

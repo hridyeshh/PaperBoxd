@@ -5,7 +5,54 @@ import Book from '@/lib/db/models/Book';
 import User from '@/lib/db/models/User';
 import UserPreference from '@/lib/db/models/UserPreference';
 import { RecommendationService } from '@/lib/services/RecommendationService';
-import { normalizeGenre, RecommendationConfig } from '@/lib/config/recommendation.config';
+import { RecommendationConfig } from '@/lib/config/recommendation.config';
+
+// Types for MongoDB lean documents
+type BookLean = {
+  _id: { toString(): string };
+  isbn?: string;
+  isbn13?: string;
+  openLibraryId?: string;
+  isbndbId?: string;
+  volumeInfo?: {
+    title?: string;
+    authors?: string[];
+    description?: string;
+    publishedDate?: string;
+    averageRating?: number;
+    ratingsCount?: number;
+    pageCount?: number;
+    categories?: string[];
+    publisher?: string;
+    imageLinks?: {
+      thumbnail?: string;
+      smallThumbnail?: string;
+      medium?: string;
+      large?: string;
+    };
+  };
+};
+
+type BookReference = {
+  bookId?: string | { toString(): string };
+  rating?: number;
+};
+
+type UserLean = {
+  _id: { toString(): string };
+  favoriteBooks?: BookReference[];
+  topBooks?: BookReference[];
+  bookshelf?: BookReference[];
+  likedBooks?: BookReference[];
+  currentlyReading?: BookReference[];
+  authorsRead?: Array<{ authorName?: string }>;
+  following?: Array<{ toString(): string }>;
+};
+
+type MongoQuery = {
+  [key: string]: unknown;
+  $or?: Array<Record<string, unknown>>;
+};
 
 /**
  * GET /api/books/personalized
@@ -33,7 +80,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
 
     const userId = session.user.id;
-    let books: any[] = [];
+    let books: BookLean[] = [];
 
     switch (type) {
       case 'onboarding': {
@@ -55,7 +102,7 @@ export async function GET(request: NextRequest) {
         });
 
         // Build query for books matching onboarding preferences
-        const query: any = {
+        const query: MongoQuery = {
           'volumeInfo.imageLinks.thumbnail': { $exists: true, $ne: null },
         };
 
@@ -151,14 +198,14 @@ export async function GET(request: NextRequest) {
               'volumeInfo.publishedDate': -1 
             })
             .limit(fetchLimit)
-            .lean();
+            .lean() as BookLean[];
           
           console.log(`[Personalized API] Found ${books.length} books for onboarding user ${userId}`);
           
           // If we found very few books, try a more lenient query
           if (books.length < limit && genreNames.length > 0) {
             console.log(`[Personalized API] Found only ${books.length} books, trying more lenient query`);
-            const lenientQuery: any = {
+            const lenientQuery: MongoQuery = {
               'volumeInfo.imageLinks.thumbnail': { $exists: true, $ne: null },
               $or: genreNames.map(genre => ({
                 'volumeInfo.categories': { $regex: genre.split(' ')[0], $options: 'i' },
@@ -171,11 +218,11 @@ export async function GET(request: NextRequest) {
                 'volumeInfo.ratingsCount': -1,
               })
               .limit(limit * 3)
-              .lean();
+              .lean() as BookLean[];
             
             // Merge and deduplicate
-            const existingIds = new Set(books.map((b: any) => b._id.toString()));
-            const newBooks = additionalBooks.filter((b: any) => !existingIds.has(b._id.toString()));
+            const existingIds = new Set(books.map((b) => b._id.toString()));
+            const newBooks = additionalBooks.filter((b) => !existingIds.has(b._id.toString()));
             books = [...books, ...newBooks];
             console.log(`[Personalized API] After lenient query: ${books.length} total books`);
           }
@@ -183,7 +230,7 @@ export async function GET(request: NextRequest) {
           // Shuffle books using user-specific seed to ensure different users get different books
           if (books.length > limit) {
             // Simple seeded shuffle algorithm
-            const shuffled: any[] = [];
+            const shuffled: BookLean[] = [];
             const remaining = [...books];
             
             // Use seed to determine starting position
@@ -202,7 +249,7 @@ export async function GET(request: NextRequest) {
             const shuffledBooks = shuffled.slice(0, Math.ceil(limit / 2));
             
             // Merge top books with shuffled books, prioritizing top books
-            const merged: any[] = [];
+            const merged: BookLean[] = [];
             const usedIds = new Set<string>();
             
             // Add top books first
@@ -246,7 +293,7 @@ export async function GET(request: NextRequest) {
           console.log(`[Personalized API] Generated ${recommendations.length} recommendations`);
           
           // Extract books from recommendations
-          books = recommendations.map(rec => rec.book);
+          books = recommendations.map(rec => rec.book) as BookLean[];
           
           if (books.length === 0) {
             console.warn(`[Personalized API] No books returned from recommendations (user may have no reading history)`);
@@ -271,21 +318,21 @@ export async function GET(request: NextRequest) {
 
         // Get genres and authors from favorite books
         const favoriteBookIds = [
-          ...(user.favoriteBooks || []).map((b: any) => b.bookId),
-          ...(user.topBooks || []).map((b: any) => b.bookId),
-        ].filter(Boolean);
+          ...(user.favoriteBooks || []).map((b: BookReference) => typeof b.bookId === 'string' ? b.bookId : b.bookId?.toString()),
+          ...(user.topBooks || []).map((b: BookReference) => typeof b.bookId === 'string' ? b.bookId : b.bookId?.toString()),
+        ].filter(Boolean) as string[];
 
         if (favoriteBookIds.length === 0) {
           // Fallback to bookshelf if no favorites
-          const bookshelfIds = (user.bookshelf || []).map((b: any) => b.bookId).filter(Boolean);
+          const bookshelfIds = (user.bookshelf || []).map((b: BookReference) => typeof b.bookId === 'string' ? b.bookId : b.bookId?.toString()).filter(Boolean) as string[];
           if (bookshelfIds.length > 0) {
             const favoriteBooks = await Book.find({
               _id: { $in: bookshelfIds.slice(0, 5) },
-            }).lean();
+            }).lean() as BookLean[];
 
             const genres = new Set<string>();
             const authors = new Set<string>();
-            favoriteBooks.forEach((book: any) => {
+            favoriteBooks.forEach((book) => {
               (book.volumeInfo?.categories || []).forEach((cat: string) => genres.add(cat));
               (book.volumeInfo?.authors || []).forEach((author: string) => authors.add(author));
             });
@@ -315,7 +362,7 @@ export async function GET(request: NextRequest) {
 
         const genres = new Set<string>();
         const authors = new Set<string>();
-        favoriteBooks.forEach((book: any) => {
+        favoriteBooks.forEach((book) => {
           (book.volumeInfo?.categories || []).forEach((cat: string) => genres.add(cat));
           (book.volumeInfo?.authors || []).forEach((author: string) => authors.add(author));
         });
@@ -332,7 +379,7 @@ export async function GET(request: NextRequest) {
           })
             .sort({ 'volumeInfo.averageRating': -1, 'volumeInfo.ratingsCount': -1 })
             .limit(limit * 2) // Fetch more to account for duplicates
-            .lean();
+            .lean() as BookLean[];
         }
         break;
       }
@@ -350,7 +397,7 @@ export async function GET(request: NextRequest) {
         const authorNames = new Set<string>();
         
         // Get authors from authorsRead
-        (user.authorsRead || []).forEach((author: any) => {
+        (user.authorsRead || []).forEach((author) => {
           if (author.authorName) {
             authorNames.add(author.authorName);
           }
@@ -358,12 +405,12 @@ export async function GET(request: NextRequest) {
 
         // Also get authors from bookshelf if authorsRead is empty
         if (authorNames.size === 0 && user.bookshelf && user.bookshelf.length > 0) {
-          const bookshelfIds = user.bookshelf.map((b: any) => b.bookId).filter(Boolean);
+          const bookshelfIds = user.bookshelf.map((b: BookReference) => typeof b.bookId === 'string' ? b.bookId : b.bookId?.toString()).filter(Boolean) as string[];
           const bookshelfBooks = await Book.find({
             _id: { $in: bookshelfIds.slice(0, 20) },
-          }).lean();
+          }).lean() as BookLean[];
 
-          bookshelfBooks.forEach((book: any) => {
+          bookshelfBooks.forEach((book) => {
             (book.volumeInfo?.authors || []).forEach((author: string) => {
               authorNames.add(author);
             });
@@ -378,7 +425,7 @@ export async function GET(request: NextRequest) {
           })
             .sort({ 'volumeInfo.averageRating': -1, 'volumeInfo.ratingsCount': -1 })
             .limit(limit * 2) // Fetch more to account for duplicates
-            .lean();
+            .lean() as BookLean[];
         }
         break;
       }
@@ -422,7 +469,7 @@ export async function GET(request: NextRequest) {
           })
             .sort({ usageCount: -1, lastAccessed: -1, 'volumeInfo.averageRating': -1 })
             .limit(limit * 2) // Fetch more to account for duplicates
-            .lean();
+            .lean() as BookLean[];
         }
         break;
       }
@@ -438,8 +485,8 @@ export async function GET(request: NextRequest) {
         }
 
         const currentlyReadingIds = user.currentlyReading
-          .map((b: any) => b.bookId)
-          .filter(Boolean);
+          .map((b: BookReference) => typeof b.bookId === 'string' ? b.bookId : b.bookId?.toString())
+          .filter(Boolean) as string[];
 
         if (currentlyReadingIds.length > 0) {
           books = await Book.find({
@@ -447,7 +494,7 @@ export async function GET(request: NextRequest) {
             'volumeInfo.imageLinks.thumbnail': { $exists: true, $ne: null },
           })
             .limit(limit * 2) // Fetch more to account for duplicates
-            .lean();
+            .lean() as BookLean[];
         }
         break;
       }
@@ -476,42 +523,42 @@ export async function GET(request: NextRequest) {
 
         // Track user's own books to exclude them
         if (user.bookshelf) {
-          user.bookshelf.forEach((b: any) => {
-            if (b.bookId) userBookIds.add(b.bookId.toString());
+          user.bookshelf.forEach((b: BookReference) => {
+            if (b.bookId) userBookIds.add(typeof b.bookId === 'string' ? b.bookId : b.bookId.toString());
           });
         }
         if (user.likedBooks) {
-          user.likedBooks.forEach((b: any) => {
-            if (b.bookId) userBookIds.add(b.bookId.toString());
+          user.likedBooks.forEach((b: BookReference) => {
+            if (b.bookId) userBookIds.add(typeof b.bookId === 'string' ? b.bookId : b.bookId.toString());
           });
         }
 
         // Collect books from friends
-        friends.forEach((friend: any) => {
+        friends.forEach((friend: UserLean) => {
           // From liked books
           if (friend.likedBooks) {
-            friend.likedBooks.forEach((b: any) => {
-              if (b.bookId) friendBookIds.add(b.bookId.toString());
+            friend.likedBooks.forEach((b: BookReference) => {
+              if (b.bookId) friendBookIds.add(typeof b.bookId === 'string' ? b.bookId : b.bookId.toString());
             });
           }
           // From favorite books
           if (friend.favoriteBooks) {
-            friend.favoriteBooks.forEach((b: any) => {
-              if (b.bookId) friendBookIds.add(b.bookId.toString());
+            friend.favoriteBooks.forEach((b: BookReference) => {
+              if (b.bookId) friendBookIds.add(typeof b.bookId === 'string' ? b.bookId : b.bookId.toString());
             });
           }
           // From top books
           if (friend.topBooks) {
-            friend.topBooks.forEach((b: any) => {
-              if (b.bookId) friendBookIds.add(b.bookId.toString());
+            friend.topBooks.forEach((b: BookReference) => {
+              if (b.bookId) friendBookIds.add(typeof b.bookId === 'string' ? b.bookId : b.bookId.toString());
             });
           }
           // From high-rated bookshelf (4-5 stars)
           if (friend.bookshelf) {
             friend.bookshelf
-              .filter((b: any) => b.rating && b.rating >= 4)
-              .forEach((b: any) => {
-                if (b.bookId) friendBookIds.add(b.bookId.toString());
+              .filter((b: BookReference) => b.rating && b.rating >= 4)
+              .forEach((b: BookReference) => {
+                if (b.bookId) friendBookIds.add(typeof b.bookId === 'string' ? b.bookId : b.bookId.toString());
               });
           }
         });
@@ -527,7 +574,7 @@ export async function GET(request: NextRequest) {
             'volumeInfo.imageLinks.thumbnail': { $exists: true, $ne: null },
           })
             .limit(limit * 2) // Fetch more to account for duplicates
-            .lean();
+            .lean() as BookLean[];
         }
         break;
       }
@@ -540,21 +587,23 @@ export async function GET(request: NextRequest) {
           limit,
           { page: 'home' }
         );
-        books = recommendations.map(rec => rec.book);
+        books = recommendations.map(rec => rec.book) as BookLean[];
     }
 
     // Transform books to carousel format, deduplicating by title+author
     const seenBooks = new Set<string>();
     const transformedBooks = books
-      .filter((book: any) => {
+      .filter((book) => {
         const hasCover =
           book.volumeInfo?.imageLinks?.thumbnail ||
           book.volumeInfo?.imageLinks?.smallThumbnail ||
           book.volumeInfo?.imageLinks?.medium ||
           book.volumeInfo?.imageLinks?.large;
-        return hasCover && book.volumeInfo?.title && book.volumeInfo?.authors?.length > 0;
+
+        const hasAuthors = (book.volumeInfo?.authors?.length ?? 0) > 0;
+        return hasCover && book.volumeInfo?.title && hasAuthors;
       })
-      .map((book: any) => ({
+      .map((book) => ({
         id: book._id.toString(),
         _id: book._id.toString(),
         title: book.volumeInfo?.title || 'Unknown Title',
@@ -594,10 +643,11 @@ export async function GET(request: NextRequest) {
       type,
       count: transformedBooks.length,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching personalized books:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to fetch personalized books', details: error.message },
+      { error: 'Failed to fetch personalized books', details: errorMessage },
       { status: 500 }
     );
   }

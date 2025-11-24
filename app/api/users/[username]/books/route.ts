@@ -3,6 +3,12 @@ import mongoose from "mongoose";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
 import Book from "@/lib/db/models/Book";
+import type {
+  IBookReference,
+  IBookshelfBook,
+  ILikedBook,
+  ITbrBook,
+} from "@/lib/db/models/User";
 import {
   getBookByISBN,
   transformISBNdbBook,
@@ -11,6 +17,19 @@ import {
   getOpenLibraryWork,
   transformOpenLibraryBook,
 } from "@/lib/api/open-library";
+
+// Type for Open Library work response
+type OpenLibraryWorkData = {
+  key?: string;
+  title?: string;
+  authors?: Array<{ name?: string } | string>;
+  first_publish_year?: number;
+  isbn?: string[];
+  publishers?: string[];
+  subjects?: string[];
+  ratings_average?: number;
+  ratings_count?: number;
+};
 
 /**
  * Add a book to user's collection (bookshelf, TBR, liked, etc.)
@@ -98,11 +117,22 @@ export async function POST(
     if (!book && openLibraryId) {
       console.log(`[User Books] Trying Open Library for ID: "${openLibraryId}"`);
       try {
-        const workData = await getOpenLibraryWork(openLibraryId);
-        const transformedData = transformOpenLibraryBook({
+        const workData = await getOpenLibraryWork(openLibraryId) as OpenLibraryWorkData;
+        // Extract author names from various formats
+        const authorNames: string[] = [];
+        if (workData.authors) {
+          for (const author of workData.authors) {
+            if (typeof author === 'string') {
+              authorNames.push(author);
+            } else if (author && typeof author === 'object' && 'name' in author && typeof author.name === 'string') {
+              authorNames.push(author.name);
+            }
+          }
+        }
+        const transformedDataRaw = transformOpenLibraryBook({
           key: workData.key || `/works/${openLibraryId}`,
           title: workData.title || "",
-          author_name: workData.authors?.map((a: any) => a.name) || [],
+          author_name: authorNames,
           cover_i: undefined, // Will be handled in transformation
           first_publish_year: workData.first_publish_year,
           isbn: workData.isbn || [],
@@ -111,6 +141,23 @@ export async function POST(
           ratings_average: workData.ratings_average,
           ratings_count: workData.ratings_count,
         });
+        
+        // Convert null to undefined for imageLinks properties to match IOpenLibraryBookData interface
+        const transformedData = {
+          ...transformedDataRaw,
+          volumeInfo: {
+            ...transformedDataRaw.volumeInfo,
+            imageLinks: transformedDataRaw.volumeInfo.imageLinks ? {
+              thumbnail: transformedDataRaw.volumeInfo.imageLinks.thumbnail === null ? undefined : transformedDataRaw.volumeInfo.imageLinks.thumbnail,
+              smallThumbnail: transformedDataRaw.volumeInfo.imageLinks.smallThumbnail === null ? undefined : transformedDataRaw.volumeInfo.imageLinks.smallThumbnail,
+              small: transformedDataRaw.volumeInfo.imageLinks.small === null ? undefined : transformedDataRaw.volumeInfo.imageLinks.small,
+              medium: transformedDataRaw.volumeInfo.imageLinks.medium === null ? undefined : transformedDataRaw.volumeInfo.imageLinks.medium,
+              large: transformedDataRaw.volumeInfo.imageLinks.large === null ? undefined : transformedDataRaw.volumeInfo.imageLinks.large,
+              extraLarge: transformedDataRaw.volumeInfo.imageLinks.extraLarge === null ? undefined : transformedDataRaw.volumeInfo.imageLinks.extraLarge,
+            } : undefined,
+          },
+        };
+        
         await Book.findOrCreateFromOpenLibrary(transformedData);
         book = await Book.findOne({ openLibraryId });
       } catch (error) {
@@ -165,8 +212,9 @@ export async function POST(
     };
 
     // Helper function to check if book exists in collection
-    const findBookInCollection = (collection: any[]) => {
-      return collection.findIndex((item: any) => {
+    type BookCollectionItem = IBookReference | IBookshelfBook | ILikedBook | ITbrBook;
+    const findBookInCollection = (collection: BookCollectionItem[]): number => {
+      return collection.findIndex((item) => {
         const itemBookId = item.bookId?.toString() || item.bookId;
         const currentBookId = bookIdObj.toString();
         return (
@@ -333,12 +381,13 @@ export async function POST(
       book: bookReference,
       removed: isRemoving,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Add book error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       {
         error: "Failed to add book",
-        details: error instanceof Error ? error.message : "Unknown error",
+        details: errorMessage,
       },
       { status: 500 }
     );
@@ -373,7 +422,8 @@ export async function GET(
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    let books: any[] = [];
+    type BookCollection = IBookReference[] | IBookshelfBook[] | ILikedBook[] | ITbrBook[];
+    let books: BookCollection = [];
     let total = 0;
 
     switch (type) {
@@ -414,12 +464,13 @@ export async function GET(
       offset,
       books: paginatedBooks,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Get books error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       {
         error: "Failed to get books",
-        details: error instanceof Error ? error.message : "Unknown error",
+        details: errorMessage,
       },
       { status: 500 }
     );
@@ -467,7 +518,7 @@ export async function PUT(
     }
 
     // Validate that all bookIds exist in user's favoriteBooks
-    const existingBookIds = user.favoriteBooks.map((b: any) => b.bookId?.toString());
+    const existingBookIds = user.favoriteBooks.map((b) => b.bookId?.toString());
     const validBookIds = bookIds.filter((id: string) => existingBookIds.includes(id));
 
     if (validBookIds.length !== bookIds.length || validBookIds.length !== user.favoriteBooks.length) {
@@ -478,9 +529,11 @@ export async function PUT(
     }
 
     // Reorder favoriteBooks based on bookIds array
-    const reorderedBooks = bookIds.map((id: string) => {
-      return user.favoriteBooks.find((b: any) => b.bookId?.toString() === id);
-    }).filter(Boolean);
+    const reorderedBooks = bookIds
+      .map((id: string) => {
+        return user.favoriteBooks.find((b) => b.bookId?.toString() === id);
+      })
+      .filter((b): b is IBookReference => b !== undefined);
 
     user.favoriteBooks = reorderedBooks;
     await user.save();
@@ -489,12 +542,13 @@ export async function PUT(
       message: "Favorite books reordered successfully",
       books: reorderedBooks,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Reorder books error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       {
         error: "Failed to reorder books",
-        details: error instanceof Error ? error.message : "Unknown error",
+        details: errorMessage,
       },
       { status: 500 }
     );

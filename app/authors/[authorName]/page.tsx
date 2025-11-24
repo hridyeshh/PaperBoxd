@@ -17,6 +17,35 @@ type AuthorBook = {
   openLibraryId?: string;
 };
 
+// Type for book items in user's bookshelf/TBR from API
+type UserBookItem = {
+  _id?: { toString(): string } | string;
+  bookId?: { toString(): string } | string;
+  isbndbId?: string;
+  openLibraryId?: string;
+  title?: string;
+  author?: string;
+  authors?: string | string[];
+  cover?: string;
+  volumeInfo?: {
+    title?: string;
+    authors?: string[];
+    imageLinks?: {
+      thumbnail?: string;
+      smallThumbnail?: string;
+    };
+  };
+};
+
+// Type for API response
+type UserResponse = {
+  user?: {
+    bookshelf?: UserBookItem[];
+    toBeRead?: UserBookItem[];
+    tbrBooks?: UserBookItem[];
+  };
+};
+
 export default function AuthorDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -47,61 +76,59 @@ export default function AuthorDetailPage() {
           throw new Error("Failed to fetch author books");
         }
 
-        const data = await response.json();
+        const data = await response.json() as UserResponse;
         
         // Get books from bookshelf and TBR that match this author
         const allBooks: AuthorBook[] = [];
         const seenIds = new Set<string>();
 
+        // Helper function to process a book item
+        const processBook = (book: UserBookItem) => {
+          const authors = Array.isArray(book.authors) 
+            ? book.authors 
+            : (typeof book.authors === 'string' ? [book.authors] : book.volumeInfo?.authors || []);
+          const authorMatch = Array.isArray(authors) 
+            ? authors.some((a) => a.toLowerCase() === authorName.toLowerCase())
+            : false;
+          
+          if (!authorMatch) return;
+          
+          const bookId = typeof book._id === 'string' 
+            ? book._id 
+            : (book._id?.toString() || book.bookId?.toString() || '');
+          
+          if (!bookId || seenIds.has(bookId)) return;
+          
+          seenIds.add(bookId);
+          allBooks.push({
+            id: bookId,
+            title: book.title || book.volumeInfo?.title || "Unknown Title",
+            author: Array.isArray(authors) ? authors[0] : (typeof book.authors === 'string' ? book.authors : authorName),
+            cover: book.cover || book.volumeInfo?.imageLinks?.thumbnail || book.volumeInfo?.imageLinks?.smallThumbnail || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+            isbndbId: book.isbndbId,
+            openLibraryId: book.openLibraryId,
+          });
+        };
+
         // Add bookshelf books
         if (Array.isArray(data.user?.bookshelf)) {
-          data.user.bookshelf.forEach((book: any) => {
-            const authors = book.authors || book.volumeInfo?.authors || [];
-            const authorMatch = Array.isArray(authors) 
-              ? authors.some((a: string) => a.toLowerCase() === authorName.toLowerCase())
-              : (authors || "").toLowerCase() === authorName.toLowerCase();
-            
-            if (authorMatch && book._id && !seenIds.has(book._id.toString())) {
-              seenIds.add(book._id.toString());
-              allBooks.push({
-                id: book._id.toString(),
-                title: book.title || book.volumeInfo?.title || "Unknown Title",
-                author: Array.isArray(authors) ? authors[0] : (authors || authorName),
-                cover: book.cover || book.volumeInfo?.imageLinks?.thumbnail || book.volumeInfo?.imageLinks?.smallThumbnail || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
-                isbndbId: book.isbndbId,
-                openLibraryId: book.openLibraryId,
-              });
-            }
-          });
+          data.user.bookshelf.forEach(processBook);
         }
 
-        // Add TBR books
+        // Add TBR books (check both toBeRead and tbrBooks for compatibility)
         if (Array.isArray(data.user?.toBeRead)) {
-          data.user.toBeRead.forEach((book: any) => {
-            const authors = book.authors || book.volumeInfo?.authors || [];
-            const authorMatch = Array.isArray(authors) 
-              ? authors.some((a: string) => a.toLowerCase() === authorName.toLowerCase())
-              : (authors || "").toLowerCase() === authorName.toLowerCase();
-            
-            if (authorMatch && book._id && !seenIds.has(book._id.toString())) {
-              seenIds.add(book._id.toString());
-              allBooks.push({
-                id: book._id.toString(),
-                title: book.title || book.volumeInfo?.title || "Unknown Title",
-                author: Array.isArray(authors) ? authors[0] : (authors || authorName),
-                cover: book.cover || book.volumeInfo?.imageLinks?.thumbnail || book.volumeInfo?.imageLinks?.smallThumbnail || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
-                isbndbId: book.isbndbId,
-                openLibraryId: book.openLibraryId,
-              });
-            }
-          });
+          data.user.toBeRead.forEach(processBook);
+        }
+        if (Array.isArray(data.user?.tbrBooks)) {
+          data.user.tbrBooks.forEach(processBook);
         }
 
         // Take top 4 books
         setBooks(allBooks.slice(0, 4));
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Error fetching author books:", err);
-        setError(err.message || "Failed to load author books");
+        const errorMessage = err instanceof Error ? err.message : "Failed to load author books";
+        setError(errorMessage);
       } finally {
         setLoading(false);
       }
@@ -170,7 +197,7 @@ export default function AuthorDetailPage() {
 
           {/* Books Grid - 2x2 */}
           <div className="grid grid-cols-2 gap-6 max-w-2xl">
-            {books.map((book, index) => (
+            {books.map((book) => (
               <div
                 key={book.id}
                 onClick={() => handleBookClick(book)}
@@ -193,8 +220,8 @@ export default function AuthorDetailPage() {
               </div>
             ))}
             {/* Gray placeholders for remaining slots */}
-            {Array.from({ length: Math.max(0, 4 - books.length) }).map((_, index) => (
-              <div key={`placeholder-${index}`} className="group">
+            {Array.from({ length: Math.max(0, 4 - books.length) }).map((_, idx) => (
+              <div key={`placeholder-${idx}`} className="group">
                 <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-muted/50 border border-border/50 flex items-center justify-center">
                   <p className="text-xs text-muted-foreground/50">No book</p>
                 </div>

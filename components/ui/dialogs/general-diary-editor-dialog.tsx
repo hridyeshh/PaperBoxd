@@ -62,7 +62,10 @@ export function GeneralDiaryEditorDialog({
 
     setIsSaving(true);
     try {
-      const requestBody: any = {
+      const requestBody: {
+        content: string;
+        subject?: string;
+      } = {
         content: content.trim(),
         // No bookId - this is a general diary entry
       };
@@ -91,7 +94,7 @@ export function GeneralDiaryEditorDialog({
 
       if (!response.ok) {
         let errorMessage = `Failed to save diary entry (${response.status})`;
-        let errorDetails: any = null;
+        let errorDetails: { error?: string; details?: string; message?: string; validationErrors?: Record<string, string> } | null = null;
         
         try {
           const error = await responseClone.json();
@@ -112,7 +115,7 @@ export function GeneralDiaryEditorDialog({
           if (error.message && !errorMessage.includes(error.message)) {
             errorMessage += ` - ${error.message}`;
           }
-        } catch (parseError) {
+        } catch {
           // If JSON parsing fails, try to get text response
           try {
             const text = await responseClone.text();
@@ -162,7 +165,7 @@ export function GeneralDiaryEditorDialog({
         <DialogHeader>
           <DialogTitle>Write</DialogTitle>
           <DialogDescription>
-            Share your thoughts, reflections, or anything you'd like to write about
+            Share your thoughts, reflections, or anything you&apos;d like to write about
           </DialogDescription>
         </DialogHeader>
 

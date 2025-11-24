@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import connectDB from '@/lib/db/mongodb';
 import UserPreference from '@/lib/db/models/UserPreference';
@@ -11,7 +11,7 @@ import User from '@/lib/db/models/User';
  * Also returns username status for the onboarding page.
  * Requires authentication.
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await auth();
 
@@ -54,10 +54,11 @@ export async function GET(request: NextRequest) {
       isNewUser, // Whether this is a new user (no activity, recently created)
       hasActivity, // Whether user has any books/activity
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error checking onboarding status:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to check onboarding status', details: error.message },
+      { error: 'Failed to check onboarding status', details: errorMessage },
       { status: 500 }
     );
   }

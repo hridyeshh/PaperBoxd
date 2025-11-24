@@ -36,11 +36,36 @@ export async function GET(request: NextRequest) {
     const total = await Book.countDocuments({});
 
     // Transform books to match expected format
-    const transformedBooks = books.map((book: any) => {
+    type BookLean = {
+      _id?: { toString(): string };
+      isbn?: string;
+      isbn13?: string;
+      openLibraryId?: string;
+      isbndbId?: string;
+      volumeInfo?: {
+        title?: string;
+        authors?: string[];
+        description?: string;
+        publishedDate?: string;
+        averageRating?: number;
+        ratingsCount?: number;
+        pageCount?: number;
+        categories?: string[];
+        publisher?: string;
+        imageLinks?: {
+          large?: string;
+          medium?: string;
+          thumbnail?: string;
+          smallThumbnail?: string;
+          extraLarge?: string;
+        };
+      };
+    };
+    const transformedBooks = books.map((book: BookLean) => {
       // Determine the best cover image to use
       // Prioritize ISBNdb images for high resolution
       const imageLinks = book.volumeInfo?.imageLinks || {};
-      let cover = imageLinks.large || 
+      const cover = imageLinks.large || 
                   imageLinks.medium || 
                   imageLinks.thumbnail || 
                   imageLinks.smallThumbnail || 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/db/mongodb";
 import Book from "@/lib/db/models/Book";
-import { slugToTitle, normalizeTitle, parseBookSlug } from "@/lib/utils/book-slug";
+import { normalizeTitle, parseBookSlug } from "@/lib/utils/book-slug";
 import {
   searchISBNdbWithFallback,
   getBookByISBN,
@@ -10,6 +10,7 @@ import {
 import {
   searchOpenLibraryWithFallback,
   transformOpenLibraryBook,
+  getOpenLibraryWork,
 } from "@/lib/api/open-library";
 
 /**
@@ -61,16 +62,21 @@ export async function GET(
     if (!book && uniqueId) {
       // Search in database for books where ISBN or ID ends with the unique hex
       // Note: This is a fallback, not perfect but helps with some edge cases
+      type BookWithIds = {
+        _id: { toString(): string };
+        isbndbId?: string | { toString(): string };
+        openLibraryId?: string | { toString(): string };
+      };
       const allBooks = await Book.find({
         $or: [
           { "volumeInfo.title": { $regex: new RegExp(normalizedTitle.split(' ').filter(w => w.length > 2).join('|'), "i") } },
         ]
       })
         .limit(50) // Limit to prevent too many results
-        .lean();
+        .lean() as BookWithIds[];
       
       // Filter books where the ID ends with our unique hex
-      const matchingBook = allBooks.find((b: any) => {
+      const matchingBook = allBooks.find((b) => {
         const bookId = (b.isbndbId || b.openLibraryId || '').toString();
         if (!bookId) return false;
         // Check if the last part of the ID matches our unique hex
@@ -98,7 +104,8 @@ export async function GET(
           try {
             const isbndbBook = await getBookByISBN(book.isbndbId);
             const transformedData = transformISBNdbBook(isbndbBook);
-            book.volumeInfo = transformedData.volumeInfo;
+            // Type assertion needed due to filter(Boolean) in transform function
+            book.volumeInfo = transformedData.volumeInfo as typeof book.volumeInfo;
             book.lastUpdated = new Date();
           } catch (error) {
             console.error("Failed to update stale cache from ISBNdb:", error);
@@ -106,11 +113,23 @@ export async function GET(
         } else if (book.openLibraryId) {
           // Fallback to Open Library if no ISBNdb ID
           try {
-            const workData = await getOpenLibraryWork(book.openLibraryId);
+            type OpenLibraryWorkData = {
+              key?: string;
+              title?: string;
+              authors?: Array<{ name?: string } | string>;
+              first_publish_year?: number;
+              isbn?: string[];
+              publishers?: string[];
+              subjects?: string[];
+              ratings_average?: number;
+              ratings_count?: number;
+            };
+            const workData = await getOpenLibraryWork(book.openLibraryId) as OpenLibraryWorkData;
+            type OpenLibraryAuthor = { name?: string } | string;
             const transformedData = transformOpenLibraryBook({
               key: workData.key || book.openLibraryId,
               title: workData.title || "",
-              author_name: workData.authors?.map((a: any) => a.name) || [],
+              author_name: workData.authors?.map((a: OpenLibraryAuthor) => typeof a === 'object' ? (a.name || '') : a).filter((name: string) => name) || [],
               cover_i: undefined,
               first_publish_year: workData.first_publish_year,
               isbn: workData.isbn || [],
@@ -119,7 +138,8 @@ export async function GET(
               ratings_average: workData.ratings_average,
               ratings_count: workData.ratings_count,
             });
-            book.volumeInfo = transformedData.volumeInfo;
+            // Type assertion needed due to null vs undefined in imageLinks
+            book.volumeInfo = transformedData.volumeInfo as typeof book.volumeInfo;
             book.lastUpdated = new Date();
           } catch (error) {
             console.error("Failed to update stale cache from Open Library:", error);
@@ -134,8 +154,8 @@ export async function GET(
 
       return NextResponse.json({
         id: book.isbndbId || book.openLibraryId,
-        _id: book._id.toString(),
-        bookId: book._id.toString(),
+        _id: (book._id as { toString(): string }).toString(),
+        bookId: (book._id as { toString(): string }).toString(),
         volumeInfo: book.volumeInfo,
         saleInfo: book.saleInfo,
         paperboxdStats: {
@@ -158,14 +178,15 @@ export async function GET(
       const transformedData = transformISBNdbBook(isbndbBook);
       
       // Cache the book in our database
-      const createdBook = await Book.findOrCreateFromISBNdb(transformedData);
+      // Type assertion needed due to filter(Boolean) in transform function
+      const createdBook = await Book.findOrCreateFromISBNdb(transformedData as Parameters<typeof Book.findOrCreateFromISBNdb>[0]);
       
       console.log(`[Book by Slug] ✅ SUCCESS: Book found via ISBNdb API (Slug: "${slug}", Title: "${createdBook.volumeInfo?.title || 'N/A'}")`);
 
       return NextResponse.json({
         id: createdBook.isbndbId,
-        _id: createdBook._id.toString(),
-        bookId: createdBook._id.toString(),
+        _id: (createdBook._id as { toString(): string }).toString(),
+        bookId: (createdBook._id as { toString(): string }).toString(),
         volumeInfo: createdBook.volumeInfo,
         paperboxdStats: {
           rating: createdBook.paperboxdRating,
@@ -185,14 +206,15 @@ export async function GET(
 
     if (openLibraryResult.success && openLibraryResult.data && openLibraryResult.data.docs.length > 0) {
       const transformedData = transformOpenLibraryBook(openLibraryResult.data.docs[0]);
-      const createdBook = await Book.findOrCreateFromOpenLibrary(transformedData);
+      // Type assertion needed due to null vs undefined in imageLinks
+      const createdBook = await Book.findOrCreateFromOpenLibrary(transformedData as Parameters<typeof Book.findOrCreateFromOpenLibrary>[0]);
       
       console.log(`[Book by Slug] ✅ SUCCESS: Book found via Open Library API (Slug: "${slug}", Title: "${createdBook.volumeInfo?.title || 'N/A'}")`);
 
       return NextResponse.json({
         id: createdBook.openLibraryId,
-        _id: createdBook._id.toString(),
-        bookId: createdBook._id.toString(),
+        _id: (createdBook._id as { toString(): string }).toString(),
+        bookId: (createdBook._id as { toString(): string }).toString(),
         volumeInfo: createdBook.volumeInfo,
         paperboxdStats: {
           rating: createdBook.paperboxdRating,

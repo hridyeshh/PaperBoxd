@@ -12,8 +12,7 @@ import { auth } from "@/lib/auth";
  *   title: string,
  *   description?: string,
  *   books?: string[], // Array of book IDs (ISBNdb IDs or Open Library IDs)
- *   isPublic?: boolean,
- *   collaborators?: string[] // Array of user IDs
+ *   isPublic?: boolean
  * }
  */
 export async function POST(
@@ -23,7 +22,7 @@ export async function POST(
   try {
     const { username } = await context.params;
     const body = await request.json();
-    const { title, description, books = [], isPublic = true, collaborators = [] } = body;
+    const { title, description, books = [], isPublic = true } = body;
 
     console.log("[Create List] Request Body:", body);
 
@@ -48,25 +47,22 @@ export async function POST(
     }
     console.log(`[Create List] Found user: ${user.username}`);
 
-    // Convert collaborator IDs to ObjectIds
-    const collaboratorIds = Array.isArray(collaborators) 
-      ? collaborators.map((id: string) => {
-          try {
-            return new mongoose.Types.ObjectId(id);
-          } catch {
-            return null;
-          }
-        }).filter(Boolean)
-      : [];
-    console.log("[Create List] Collaborator IDs:", collaboratorIds);
-
-    // Create new reading list (without collaborators initially - they'll be added after acceptance)
+    // Create new reading list
+    // Books will be stored as strings initially, converted to ObjectIds when needed
     const newList = {
       title,
       description,
-      books: books.map((id: string) => id as any), // Convert to ObjectId in practice
+      books: books.map((id: string) => {
+        // Try to convert to ObjectId if it's a valid MongoDB ObjectId string
+        try {
+          return new mongoose.Types.ObjectId(id);
+        } catch {
+          // If not a valid ObjectId, keep as string (could be ISBNdb ID, Open Library ID, etc.)
+          return id;
+        }
+      }),
       isPublic,
-      collaborators: [], // Start with empty - collaborators added after they accept
+      collaborators: [], // Empty for now - collaborator feature not implemented
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -87,45 +83,6 @@ export async function POST(
       );
     }
     console.log(`[Create List] Created list with ID: ${listId}`);
-
-    // Send collaboration requests to each collaborator
-    if (collaboratorIds.length > 0) {
-      console.log(`[Create List] Sending ${collaboratorIds.length} collaboration requests...`);
-      for (const collaboratorId of collaboratorIds) {
-        try {
-          const collaboratorUser = await User.findById(collaboratorId);
-          if (!collaboratorUser) {
-            console.error(`[Create List] Collaborator user not found: ${collaboratorId}`);
-            continue;
-          }
-          console.log(`[Create List] Found collaborator user: ${collaboratorUser.username}`);
-
-          // Initialize activities if needed
-          if (!collaboratorUser.activities) {
-            collaboratorUser.activities = [];
-          }
-
-          // Add collaboration request activity
-          const newActivity = {
-            type: "collaboration_request" as const,
-            listId: listId,
-            listName: title,
-            sharedBy: user._id,
-            sharedByUsername: user.username,
-            timestamp: new Date(),
-          };
-
-          collaboratorUser.activities.push(newActivity);
-          console.log(`[Create List] Pushed new activity to collaborator: ${collaboratorUser.username}`, newActivity);
-          
-          await collaboratorUser.save();
-          console.log(`[Create List] Saved collaborator user: ${collaboratorUser.username}`);
-
-        } catch (error) {
-          console.error(`[Create List] Failed to send collaboration request to user ${collaboratorId}:`, error);
-        }
-      }
-    }
 
     return NextResponse.json(
       {

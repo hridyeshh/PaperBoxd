@@ -3,7 +3,7 @@ import Book from '../db/models/Book';
 import User from '../db/models/User';
 import UserPreference, { IUserPreference } from '../db/models/UserPreference';
 import RecommendationLog from '../db/models/RecommendationLog';
-import { RecommendationConfig, normalizeGenre, getConfigForUser } from '../config/recommendation.config';
+import { RecommendationConfig, getConfigForUser, normalizeGenre } from '../config/recommendation.config';
 import { UserProfileBuilder } from './UserProfileBuilder';
 
 /**
@@ -13,8 +13,12 @@ import { UserProfileBuilder } from './UserProfileBuilder';
  * using a sophisticated rule-based scoring algorithm.
  */
 
+// Type for lean book documents (returned by .lean())
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type LeanBook = any; // Mongoose's lean() returns a complex type that's hard to type precisely
+
 export interface Recommendation {
-  book: any;
+  book: LeanBook;
   bookId: mongoose.Types.ObjectId;
   score: number;
   scoreBreakdown: {
@@ -79,7 +83,7 @@ export class RecommendationService {
 
     // 3. Score each candidate
     const scored = await Promise.all(
-      candidates.map(book => this.scoreBook(book, profile, userIdObj))
+      candidates.map(book => this.scoreBook(book, profile))
     );
 
     // 4. Apply context-aware adjustments
@@ -112,7 +116,7 @@ export class RecommendationService {
   private async generateCandidates(
     userId: mongoose.Types.ObjectId,
     profile: IUserPreference
-  ): Promise<any[]> {
+  ): Promise<LeanBook[]> {
     const candidateSets = await Promise.all([
       this.getGenreBasedCandidates(profile, this.config.candidates.genreBased),
       this.getAuthorBasedCandidates(profile, this.config.candidates.authorBased),
@@ -122,7 +126,7 @@ export class RecommendationService {
     // Flatten and deduplicate
     const allCandidates = candidateSets.flat();
     const seen = new Set<string>();
-    const unique: any[] = [];
+    const unique: LeanBook[] = [];
 
     for (const candidate of allCandidates) {
       const id = candidate._id.toString();
@@ -142,7 +146,7 @@ export class RecommendationService {
   private async getGenreBasedCandidates(
     profile: IUserPreference,
     limit: number
-  ): Promise<any[]> {
+  ): Promise<LeanBook[]> {
     const topGenres = profile.getTopGenres(5);
 
     if (topGenres.length === 0) return [];
@@ -171,7 +175,7 @@ export class RecommendationService {
   private async getAuthorBasedCandidates(
     profile: IUserPreference,
     limit: number
-  ): Promise<any[]> {
+  ): Promise<LeanBook[]> {
     const topAuthors = profile.getTopAuthors(5);
 
     if (topAuthors.length === 0) return [];
@@ -195,7 +199,7 @@ export class RecommendationService {
   private async getSimilarToLikedCandidates(
     userId: mongoose.Types.ObjectId,
     limit: number
-  ): Promise<any[]> {
+  ): Promise<LeanBook[]> {
     const user = await User.findById(userId)
       .select('bookshelf likedBooks favoriteBooks')
       .lean();
@@ -203,10 +207,10 @@ export class RecommendationService {
     if (!user) return [];
 
     // Get books rated 4-5 stars or in favorites
-    const highlyRatedBooks: any[] = [];
+    const highlyRatedBooks: Array<{ bookId: mongoose.Types.ObjectId }> = [];
 
     if (user.bookshelf) {
-      const rated45 = user.bookshelf.filter((b: any) => b.rating && b.rating >= 4);
+      const rated45 = user.bookshelf.filter((b) => b.rating && b.rating >= 4);
       highlyRatedBooks.push(...rated45);
     }
 
@@ -217,7 +221,7 @@ export class RecommendationService {
     if (highlyRatedBooks.length === 0) return [];
 
     // Get genres and authors from highly-rated books
-    const bookIds = highlyRatedBooks.map((b: any) => b.bookId).slice(0, 10);
+    const bookIds = highlyRatedBooks.map((b) => b.bookId).slice(0, 10);
     const books = await Book.find({ _id: { $in: bookIds } })
       .select('volumeInfo.categories volumeInfo.authors')
       .lean();
@@ -252,9 +256,9 @@ export class RecommendationService {
    * Filter out books user already has
    */
   private async filterUserBooks(
-    candidates: any[],
+    candidates: LeanBook[],
     userId: mongoose.Types.ObjectId
-  ): Promise<any[]> {
+  ): Promise<LeanBook[]> {
     const user = await User.findById(userId)
       .select('bookshelf likedBooks tbrBooks currentlyReading favoriteBooks topBooks')
       .lean();
@@ -273,7 +277,7 @@ export class RecommendationService {
       user.topBooks,
     ].forEach(collection => {
       if (collection) {
-        collection.forEach((b: any) => {
+        collection.forEach((b) => {
           if (b.bookId) {
             userBookIds.add(b.bookId.toString());
           }
@@ -289,9 +293,8 @@ export class RecommendationService {
    * Score a book based on multiple factors
    */
   private async scoreBook(
-    book: any,
-    profile: IUserPreference,
-    userId: mongoose.Types.ObjectId
+    book: LeanBook,
+    profile: IUserPreference
   ): Promise<Recommendation> {
     const genreScore = this.calculateGenreMatch(book, profile);
     const authorScore = this.calculateAuthorMatch(book, profile);
@@ -334,7 +337,7 @@ export class RecommendationService {
   /**
    * Calculate genre match score (0-1)
    */
-  private calculateGenreMatch(book: any, profile: IUserPreference): number {
+  private calculateGenreMatch(book: LeanBook, profile: IUserPreference): number {
     if (!book.volumeInfo.categories || book.volumeInfo.categories.length === 0) {
       return 0;
     }
@@ -363,7 +366,7 @@ export class RecommendationService {
   /**
    * Calculate author match score (0-1)
    */
-  private calculateAuthorMatch(book: any, profile: IUserPreference): number {
+  private calculateAuthorMatch(book: LeanBook, profile: IUserPreference): number {
     if (!book.volumeInfo.authors || book.volumeInfo.authors.length === 0) {
       return 0;
     }
@@ -383,7 +386,7 @@ export class RecommendationService {
   /**
    * Calculate quality score (0-1)
    */
-  private calculateQualityScore(book: any): number {
+  private calculateQualityScore(book: LeanBook): number {
     const rating = book.paperboxdRating || book.volumeInfo.averageRating || 0;
     const ratingCount = book.paperboxdRatingsCount || book.volumeInfo.ratingsCount || 0;
 
@@ -402,7 +405,7 @@ export class RecommendationService {
   /**
    * Calculate trending score (0-1)
    */
-  private calculateTrendingScore(book: any): number {
+  private calculateTrendingScore(book: LeanBook): number {
     if (!this.config.features.enableTrendingBoost) return 0;
 
     const reads = book.totalReads || 0;
@@ -418,7 +421,7 @@ export class RecommendationService {
   /**
    * Calculate recency score (0-1)
    */
-  private calculateRecencyScore(book: any): number {
+  private calculateRecencyScore(book: LeanBook): number {
     if (!this.config.features.enableRecencyBoost) return 0;
 
     if (!book.volumeInfo.publishedDate) return 0;
@@ -433,7 +436,7 @@ export class RecommendationService {
 
       // Linear decay: 1.0 for new books, 0 for 2-year-old books
       return Math.max(0, 1 - (monthsSincePublish / 24));
-    } catch (e) {
+    } catch {
       return 0;
     }
   }
@@ -441,14 +444,13 @@ export class RecommendationService {
   /**
    * Calculate diversity bonus (0-1)
    */
-  private calculateDiversityBonus(book: any, profile: IUserPreference): number {
+  private calculateDiversityBonus(book: LeanBook, profile: IUserPreference): number {
     if (!this.config.features.enableDiversityInjection) return 0;
 
     if (!book.volumeInfo.categories || book.volumeInfo.categories.length === 0) {
       return 0;
     }
 
-    const userGenreWeights = profile.implicitPreferences.genreWeights;
     const bookGenres = book.volumeInfo.categories.map((g: string) => normalizeGenre(g));
 
     // Check if book is outside user's top genres
@@ -574,7 +576,7 @@ export class RecommendationService {
   /**
    * Calculate genre overlap between two books (0-1)
    */
-  private calculateGenreOverlap(book1: any, book2: any): number {
+  private calculateGenreOverlap(book1: LeanBook, book2: LeanBook): number {
     const genres1 = book1.volumeInfo.categories || [];
     const genres2 = book2.volumeInfo.categories || [];
 
@@ -700,7 +702,7 @@ export class RecommendationService {
 
     // Deduplicate by title+author
     const seenBooks = new Set<string>();
-    const uniqueBooks: any[] = [];
+    const uniqueBooks: LeanBook[] = [];
     
     for (const b of similar) {
       const title = (b.volumeInfo?.title || '').toLowerCase().trim();

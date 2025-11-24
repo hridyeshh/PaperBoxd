@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import mongoose from 'mongoose';
-import User from '../db/models/User';
+import User, { IBookshelfBook } from '../db/models/User';
 import Book from '../db/models/Book';
-import UserPreference, { IUserPreference, IUserPreferenceModel } from '../db/models/UserPreference';
+import UserPreference, { IUserPreference } from '../db/models/UserPreference';
 import { RecommendationConfig, normalizeGenre } from '../config/recommendation.config';
 
 /**
@@ -10,6 +11,14 @@ import { RecommendationConfig, normalizeGenre } from '../config/recommendation.c
  * Builds comprehensive user profiles from their reading history, ratings, likes, and interactions.
  * The profile is used by the recommendation engine to personalize book suggestions.
  */
+
+// Type for lean user documents (returned by .lean())
+// Mongoose's lean() returns a complex type that's hard to type precisely
+type LeanUser = any;
+
+// Type for lean book documents (returned by .lean())
+// Mongoose's lean() returns a complex type that's hard to type precisely
+type LeanBook = any;
 
 export class UserProfileBuilder {
   /**
@@ -70,7 +79,7 @@ export class UserProfileBuilder {
   /**
    * Compute genre weights from all user interactions
    */
-  private async computeGenreWeights(user: any): Promise<Map<string, number>> {
+  private async computeGenreWeights(user: LeanUser): Promise<Map<string, number>> {
     const genreWeights = new Map<string, number>();
 
     // Process bookshelf (finished books)
@@ -152,7 +161,7 @@ export class UserProfileBuilder {
   /**
    * Compute author weights from user interactions
    */
-  private async computeAuthorWeights(user: any): Promise<Map<string, number>> {
+  private async computeAuthorWeights(user: LeanUser): Promise<Map<string, number>> {
     const authorWeights = new Map<string, number>();
 
     // Process bookshelf (finished books)
@@ -212,7 +221,7 @@ export class UserProfileBuilder {
   /**
    * Calculate average page length preference
    */
-  private async calculateAvgPageLength(user: any): Promise<number> {
+  private async calculateAvgPageLength(user: LeanUser): Promise<number> {
     const pageCounts: number[] = [];
 
     // Collect page counts from bookshelf
@@ -273,16 +282,16 @@ export class UserProfileBuilder {
   /**
    * Calculate reading velocity (books per month)
    */
-  private calculateReadingVelocity(user: any): number {
+  private calculateReadingVelocity(user: LeanUser): number {
     if (!user.bookshelf || user.bookshelf.length === 0) return 0;
 
     // Get books with finish dates
     const booksWithDates = user.bookshelf
-      .filter((b: any) => b.finishedOn)
-      .map((b: any) => ({
+      .filter((b: IBookshelfBook) => b.finishedOn)
+      .map((b: IBookshelfBook) => ({
         finishedOn: new Date(b.finishedOn),
       }))
-      .sort((a: any, b: any) => a.finishedOn.getTime() - b.finishedOn.getTime());
+      .sort((a: { finishedOn: Date }, b: { finishedOn: Date }) => a.finishedOn.getTime() - b.finishedOn.getTime());
 
     if (booksWithDates.length === 0) return 0;
 
@@ -353,9 +362,9 @@ export class UserProfileBuilder {
   /**
    * Get book from database (with caching)
    */
-  private bookCache = new Map<string, any>();
+  private bookCache = new Map<string, LeanBook>();
 
-  private async getBook(bookId: mongoose.Types.ObjectId): Promise<any | null> {
+  private async getBook(bookId: mongoose.Types.ObjectId): Promise<LeanBook | null> {
     const cacheKey = bookId.toString();
 
     if (this.bookCache.has(cacheKey)) {

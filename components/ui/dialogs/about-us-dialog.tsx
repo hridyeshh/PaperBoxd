@@ -41,7 +41,7 @@ export function AboutUsDialog({
               PaperBoxd was conceived to solve a fundamental problem: reading is a deeply personal yet inherently social activity, but existing platforms fragment the experience. Our mission is to create a unified space where readers can:
             </p>
             <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
-              <li><strong>Track their journey:</strong> From "to-be-read" aspirations to completed masterpieces</li>
+              <li><strong>Track their journey:</strong> From &quot;to-be-read&quot; aspirations to completed masterpieces</li>
               <li><strong>Discover meaningfully:</strong> Through community curation and authentic recommendations</li>
               <li><strong>Express authentically:</strong> With rich profiles, custom lists, and thoughtful reviews</li>
               <li><strong>Connect organically:</strong> By following fellow readers and exploring their literary landscapes</li>
@@ -67,7 +67,7 @@ export function AboutUsDialog({
               <div>
                 <h3 className="text-base font-medium mb-2">Book Management</h3>
                 <p className="text-muted-foreground">
-                  Organize your reading journey with bookshelves, likes, and to-be-read lists. Track what you've read, what you loved, and what you want to read next.
+                  Organize your reading journey with bookshelves, likes, and to-be-read lists. Track what you&apos;ve read, what you loved, and what you want to read next.
                 </p>
               </div>
               <div>

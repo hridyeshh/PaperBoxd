@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import connectDB from '@/lib/db/mongodb';
 import User from '@/lib/db/models/User';
@@ -7,7 +7,7 @@ import User from '@/lib/db/models/User';
  * DEBUG: Check if current user's data is being fetched correctly
  * GET /api/debug/user-data
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await auth();
 
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
         topBooksCount: user.topBooks?.length || 0,
         activitiesCount: user.activities?.length || 0,
       },
-      bookshelfSample: user.bookshelf?.slice(0, 2).map((b: any) => ({
+      bookshelfSample: user.bookshelf?.slice(0, 2).map((b) => ({
         bookId: b.bookId?.toString(),
         title: b.title,
         author: b.author,
@@ -69,11 +69,13 @@ export async function GET(request: NextRequest) {
         emailMatch: session.user.email === user.email,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
     return NextResponse.json({
       error: 'Failed to fetch user data',
-      message: error.message,
-      stack: error.stack,
+      message: errorMessage,
+      stack: errorStack,
     }, { status: 500 });
   }
 }

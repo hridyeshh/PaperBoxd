@@ -10,6 +10,43 @@ import {
   transformOpenLibraryBook,
 } from "@/lib/api/open-library";
 
+// Types for MongoDB lean documents
+type BookLean = {
+  _id: { toString(): string };
+  isbndbId?: string;
+  openLibraryId?: string;
+  apiSource?: "isbndb" | "google_books" | "open_library";
+  cachedAt?: Date | string;
+  volumeInfo?: {
+    title?: string;
+    authors?: string[];
+    description?: string;
+    imageLinks?: {
+      thumbnail?: string;
+      smallThumbnail?: string;
+    };
+  };
+  saleInfo?: unknown;
+  score?: number; // For text search results
+};
+
+type BookWithScore = BookLean & {
+  _matchScore?: number;
+};
+
+type MongoQueryCondition = {
+  [key: string]: unknown;
+  $regex?: string;
+  $options?: string;
+};
+
+type MongoQuery = {
+  [key: string]: unknown;
+  $text?: { $search: string };
+  $or?: Array<MongoQueryCondition | { $and?: MongoQueryCondition[] }>;
+  $and?: MongoQueryCondition[];
+};
+
 /**
  * Search for books using ISBNdb API (primary) with Open Library fallback
  *
@@ -53,7 +90,7 @@ export async function GET(request: NextRequest) {
     } else {
     // First, try to find books in our database using text search
     // If text index doesn't exist, this will fail gracefully and fall back to regex search
-    let cachedBooks: any[] = [];
+    let cachedBooks: BookLean[] = [];
     try {
       const textSearchResults = await Book.find(
         {
@@ -64,14 +101,23 @@ export async function GET(request: NextRequest) {
         .sort({ score: { $meta: "textScore" } })
         .limit(maxResults * 2) // Get more to filter by minimum score
         .skip(startIndex)
-        .exec();
+        .exec() as Array<BookLean & { score?: number }>;
       
       // Filter by minimum text score to ensure relevance (at least 1.0 score)
       // This prevents random books from being returned
-      cachedBooks = textSearchResults.filter((book: any) => {
-        const score = (book as any).score || 0;
-        return score >= 1.0; // Minimum relevance threshold
-      }).slice(0, maxResults);
+      cachedBooks = textSearchResults
+        .map((book) => {
+          const score = book.score ?? 0;
+          return { ...book, score } as BookWithScore;
+        })
+        .filter((book) => (book.score ?? 0) >= 1.0) // Minimum relevance threshold
+        .slice(0, maxResults)
+        .map((book) => {
+          // Remove score property
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { score, ...bookWithoutScore } = book;
+          return bookWithoutScore as BookLean;
+        });
     } catch (textSearchError) {
       // Text index might not exist - use regex search instead
       console.log("Text search not available, using regex search:", textSearchError instanceof Error ? textSearchError.message : "Unknown error");
@@ -99,7 +145,7 @@ export async function GET(request: NextRequest) {
         } else {
           // Build search conditions: match if all significant words appear in the title
           // This handles cases like "a lord of the ring" -> matches "The Lord of the Rings"
-          const searchConditions: any[] = [
+          const searchConditions: Array<MongoQueryCondition | { $and?: MongoQueryCondition[] }> = [
             // Simple partial match: query appears anywhere in title
             { "volumeInfo.title": { $regex: escapedQuery, $options: "i" } },
           ];
@@ -111,8 +157,9 @@ export async function GET(request: NextRequest) {
               try {
                 const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 return { "volumeInfo.title": { $regex: escapedWord, $options: "i" } };
-              } catch (err) {
-                console.warn(`Failed to create regex for word "${word}":`, err);
+              } catch (err: unknown) {
+                const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+                console.warn(`Failed to create regex for word "${word}":`, errorMsg);
                 return null;
               }
             }).filter(Boolean);
@@ -140,15 +187,16 @@ export async function GET(request: NextRequest) {
           
           // Search with regex for partial matching
           try {
-            const regexBooks = await Book.find({
+            const queryObj: MongoQuery = {
               $or: [
-                ...searchConditions,
+                ...(searchConditions as Array<MongoQueryCondition | { $and?: MongoQueryCondition[] }>),
                 // Also match in authors
                 { "volumeInfo.authors": { $regex: escapedQuery, $options: "i" } },
-              ],
-            })
+              ] as Array<MongoQueryCondition | { $and?: MongoQueryCondition[] }>,
+            };
+            const regexBooks = await Book.find(queryObj)
               .limit(maxResults * 3) // Get more results to sort and dedupe
-              .lean();
+              .lean() as BookLean[];
 
             // Filter results: prioritize books where all significant words appear
             let allWordsRegex: RegExp | null = null;
@@ -159,11 +207,12 @@ export async function GET(request: NextRequest) {
                   'i'
                 );
               }
-            } catch (regexErr) {
-              console.warn("Failed to create allWordsRegex:", regexErr);
+            } catch (regexErr: unknown) {
+              const errorMsg = regexErr instanceof Error ? regexErr.message : 'Unknown error';
+              console.warn("Failed to create allWordsRegex:", errorMsg);
             }
 
-            const scoredBooks = regexBooks.map((book: any) => {
+            const scoredBooks: BookWithScore[] = regexBooks.map((book) => {
               const title = (book.volumeInfo?.title || '').toLowerCase();
               let score = 0;
               
@@ -184,13 +233,15 @@ export async function GET(request: NextRequest) {
                 }
               });
               
-              return { ...book, _matchScore: score };
+              return { ...book, _matchScore: score } as BookWithScore;
             });
 
             // Sort by match score (highest first), then by title
-            scoredBooks.sort((a: any, b: any) => {
-              if (b._matchScore !== a._matchScore) {
-                return b._matchScore - a._matchScore;
+            scoredBooks.sort((a, b) => {
+              const scoreA = a._matchScore || 0;
+              const scoreB = b._matchScore || 0;
+              if (scoreB !== scoreA) {
+                return scoreB - scoreA;
               }
               return (a.volumeInfo?.title || '').localeCompare(b.volumeInfo?.title || '');
             });
@@ -199,19 +250,25 @@ export async function GET(request: NextRequest) {
             // Only include books with meaningful match score (at least 2 points)
             // This ensures we don't return random books that barely match
             const existingIds = new Set(cachedBooks.map(b => b._id.toString()));
-            const additionalBooks = scoredBooks
-              .filter((b: any) => {
+            const additionalBooks: BookLean[] = scoredBooks
+              .filter((b) => {
                 const isNotDuplicate = !existingIds.has(b._id.toString());
-                const hasGoodMatch = b._matchScore >= 2; // Minimum match threshold
+                const hasGoodMatch = (b._matchScore || 0) >= 2; // Minimum match threshold
                 return isNotDuplicate && hasGoodMatch;
               })
               .slice(0, maxResults - cachedBooks.length)
-              .map(({ _matchScore, ...book }: any) => book); // Remove score before returning
+              .map((b) => {
+                // Remove _matchScore before returning
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { _matchScore, ...book } = b;
+                return book as BookLean;
+              });
 
             // Add to cached books
             cachedBooks = [...cachedBooks, ...additionalBooks];
-          } catch (dbError) {
-            console.warn("Database query failed in regex search:", dbError instanceof Error ? dbError.message : "Unknown error");
+          } catch (dbError: unknown) {
+            const errorMsg = dbError instanceof Error ? dbError.message : "Unknown error";
+            console.warn("Database query failed in regex search:", errorMsg);
             // Continue without regex results - not critical
           }
         }
@@ -228,8 +285,10 @@ export async function GET(request: NextRequest) {
       // Check for stale books (7 days old) and refresh them in the background
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      const staleBooks = cachedBooks.filter((book: any) => {
-        return new Date(book.cachedAt) < sevenDaysAgo;
+      const staleBooks = cachedBooks.filter((book: BookLean & { cachedAt?: Date | string }) => {
+        if (!book.cachedAt) return false;
+        const cachedDate = typeof book.cachedAt === 'string' ? new Date(book.cachedAt) : book.cachedAt;
+        return cachedDate < sevenDaysAgo;
       });
 
       // Refresh stale books in the background (don't block the response)
@@ -237,31 +296,48 @@ export async function GET(request: NextRequest) {
         console.log(`[Search] 🔄 Found ${staleBooks.length} stale books, refreshing in background...`);
         // Refresh stale books asynchronously - don't await to avoid blocking
         Promise.all(
-          staleBooks.map(async (book: any) => {
+          staleBooks.map(async (book: BookLean & { apiSource?: string }) => {
             try {
               // Re-fetch from the original API source using the book's title
               if (book.apiSource === "isbndb" && book.volumeInfo?.title) {
                 const result = await searchISBNdbWithFallback(book.volumeInfo.title, 1, 1);
-                if (result.success && result.data?.books?.length > 0) {
+                if (result.success && result.data && result.data.books && result.data.books.length > 0) {
                   const transformed = transformISBNdbBook(result.data.books[0]);
                   await Book.findOrCreateFromISBNdb(transformed);
                   console.log(`[Search] ✅ Refreshed stale ISBNdb book: ${book.volumeInfo.title}`);
                 }
               } else if (book.apiSource === "open_library" && book.volumeInfo?.title) {
                 const result = await searchOpenLibraryWithFallback(book.volumeInfo.title, 1, 0);
-                if (result.success && result.data?.docs?.length > 0) {
+                if (result.success && result.data && result.data.docs && result.data.docs.length > 0) {
                   const transformed = transformOpenLibraryBook(result.data.docs[0]);
-                  await Book.findOrCreateFromOpenLibrary(transformed);
+                  // Handle null imageLinks by converting to undefined and creating new object
+                  const transformedWithFixedImageLinks = {
+                    ...transformed,
+                    volumeInfo: {
+                      ...transformed.volumeInfo,
+                      imageLinks: transformed.volumeInfo.imageLinks ? {
+                        smallThumbnail: transformed.volumeInfo.imageLinks.smallThumbnail ?? undefined,
+                        thumbnail: transformed.volumeInfo.imageLinks.thumbnail ?? undefined,
+                        small: transformed.volumeInfo.imageLinks.small ?? undefined,
+                        medium: transformed.volumeInfo.imageLinks.medium ?? undefined,
+                        large: transformed.volumeInfo.imageLinks.large ?? undefined,
+                        extraLarge: transformed.volumeInfo.imageLinks.extraLarge ?? undefined,
+                      } : undefined,
+                    },
+                  };
+                  await Book.findOrCreateFromOpenLibrary(transformedWithFixedImageLinks as Parameters<typeof Book.findOrCreateFromOpenLibrary>[0]);
                   console.log(`[Search] ✅ Refreshed stale Open Library book: ${book.volumeInfo.title}`);
                 }
               }
-            } catch (refreshError) {
-              console.warn(`Failed to refresh stale book ${book._id}:`, refreshError);
+            } catch (refreshError: unknown) {
+              const errorMsg = refreshError instanceof Error ? refreshError.message : 'Unknown error';
+              console.warn(`Failed to refresh stale book ${book._id}:`, errorMsg);
               // Don't fail - just log the error
             }
           })
-        ).catch((error) => {
-          console.warn("Background book refresh failed:", error);
+        ).catch((error: unknown) => {
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          console.warn("Background book refresh failed:", errorMsg);
         });
       }
 
@@ -309,9 +385,10 @@ export async function GET(request: NextRequest) {
 
       // Cache the results in our database
       await Promise.all(
-        transformedBooks.map(async (book: any) => {
+        transformedBooks.map(async (book) => {
           try {
-            await Book.findOrCreateFromISBNdb(book);
+            // Type assertion needed due to filter(Boolean) in transform function
+            await Book.findOrCreateFromISBNdb(book as Parameters<typeof Book.findOrCreateFromISBNdb>[0]);
           } catch (error) {
             console.error(`Failed to cache ISBNdb book ${book.isbndbId}:`, error);
           }
@@ -323,7 +400,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         kind: "books#volumes",
         totalItems: isbndbResult.data.total,
-        items: transformedBooks.map((book: any) => ({
+        items: transformedBooks.map((book) => ({
           id: book.isbndbId,
           isbndbId: book.isbndbId, // Include explicitly for easier access
           volumeInfo: book.volumeInfo,
@@ -346,9 +423,10 @@ export async function GET(request: NextRequest) {
 
       // Cache the results in our database
       await Promise.all(
-        transformedBooks.map(async (book: any) => {
+        transformedBooks.map(async (book) => {
           try {
-            await Book.findOrCreateFromOpenLibrary(book);
+            // Type assertion needed due to null vs undefined in imageLinks
+            await Book.findOrCreateFromOpenLibrary(book as Parameters<typeof Book.findOrCreateFromOpenLibrary>[0]);
           } catch (error) {
             console.error(`Failed to cache Open Library book ${book.openLibraryId}:`, error);
           }
@@ -360,7 +438,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         kind: "books#volumes",
         totalItems: openLibraryResult.data.numFound,
-        items: transformedBooks.map((book: any) => ({
+        items: transformedBooks.map((book) => ({
           id: book.openLibraryId,
           openLibraryId: book.openLibraryId, // Include explicitly for easier access
           volumeInfo: book.volumeInfo,

@@ -3,13 +3,12 @@
 import * as React from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
-import { Calendar, BookOpen, Users, Star, MapPin, Globe, FileText, Loader2, Heart, Library, Hand, Share2, PenTool, NotebookPen, Link2, Search, Send, BookMarked } from "lucide-react";
+import { Calendar, BookOpen, Star, MapPin, Globe, FileText, Heart, Share2, NotebookPen, Link2, Search, Send, BookMarked } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { NotFoundPage } from "@/components/ui/pages/not-found-page";
-import { InteractiveHoverButton } from "@/components/ui/buttons/interactive-hover-button";
 import { Button } from "@/components/ui/primitives/button";
 import { Header } from "@/components/ui/layout/header-with-search";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
@@ -96,17 +95,22 @@ export default function BookDetailPage() {
   const [existingDiaryContent, setExistingDiaryContent] = React.useState<string>("");
   
   // Share dialog state
+  type UserForShare = {
+    id: string;
+    username: string;
+    name?: string;
+    avatar?: string;
+  };
   const [isShareOpen, setIsShareOpen] = React.useState(false);
-  const [following, setFollowing] = React.useState<any[]>([]);
+  const [following, setFollowing] = React.useState<UserForShare[]>([]);
   const [isLoadingFollowing, setIsLoadingFollowing] = React.useState(false);
   const [shareSearchQuery, setShareSearchQuery] = React.useState("");
-  const [searchResults, setSearchResults] = React.useState<any[]>([]);
+  const [searchResults, setSearchResults] = React.useState<UserForShare[]>([]);
   const [isSearchingUsers, setIsSearchingUsers] = React.useState(false);
   
   // Carousel data
   const [similarBooks, setSimilarBooks] = React.useState<BookCarouselBook[]>([]);
   const [authorBooks, setAuthorBooks] = React.useState<BookCarouselBook[]>([]);
-  const [loadingCarousels, setLoadingCarousels] = React.useState(false);
 
   React.useEffect(() => {
     if (!slug) return;
@@ -187,9 +191,16 @@ export default function BookDetailPage() {
           fetch(`/api/users/${encodeURIComponent(username)}/books?type=tbr`),
         ]);
 
+        type UserBook = {
+          bookId?: { toString(): string } | string;
+          isbndbId?: string;
+          openLibraryId?: string;
+          title?: string;
+        };
+
         if (likedRes.ok) {
           const likedData = await likedRes.json();
-          const isInLiked = likedData.books?.some((b: any) => {
+          const isInLiked = likedData.books?.some((b: UserBook) => {
             const bookId = book._id || book.bookId;
             return (
               (bookId && (b.bookId?.toString() === bookId.toString() || b.bookId === bookId)) ||
@@ -202,7 +213,7 @@ export default function BookDetailPage() {
 
         if (bookshelfRes.ok) {
           const bookshelfData = await bookshelfRes.json();
-          const isInShelf = bookshelfData.books?.some((b: any) => {
+          const isInShelf = bookshelfData.books?.some((b: UserBook) => {
             const bookId = book._id || book.bookId;
             return (
               (bookId && (b.bookId?.toString() === bookId.toString() || b.bookId === bookId)) ||
@@ -215,7 +226,7 @@ export default function BookDetailPage() {
 
         if (tbrRes.ok) {
           const tbrData = await tbrRes.json();
-          const isInTbr = tbrData.books?.some((b: any) => {
+          const isInTbr = tbrData.books?.some((b: UserBook) => {
             const bookId = book._id || book.bookId;
             return (
               (bookId && (b.bookId?.toString() === bookId.toString() || b.bookId === bookId)) ||
@@ -397,12 +408,16 @@ export default function BookDetailPage() {
       if (response.ok) {
         toast.success(`Book shared with @${targetUsername}!`);
       } else {
-        let error: any = {};
+        type ErrorResponse = {
+          error?: string;
+          details?: string;
+        };
+        let error: ErrorResponse = {};
         try {
           const contentType = response.headers.get("content-type");
           if (contentType && contentType.includes("application/json")) {
             const text = await response.text();
-            error = text ? JSON.parse(text) : {};
+            error = text ? JSON.parse(text) as ErrorResponse : {};
           } else {
             // Handle HTML responses (404 pages, etc.)
             error = { error: `Failed to share book (${response.status})` };
@@ -427,7 +442,6 @@ export default function BookDetailPage() {
 
     const fetchCarousels = async () => {
       try {
-        setLoadingCarousels(true);
         const bookId = book._id || book.bookId;
         const primaryAuthor = book.volumeInfo?.authors?.[0];
 
@@ -436,8 +450,7 @@ export default function BookDetailPage() {
           fetch(`/api/recommendations/similar/${bookId}?limit=20`)
             .then(res => res.ok ? res.json() : { books: [] })
             .then(data => setSimilarBooks(data.books || []))
-            .catch((err) => {
-              console.error("Error fetching similar books:", err);
+            .catch(() => {
               setSimilarBooks([]);
             }),
         ];
@@ -448,25 +461,19 @@ export default function BookDetailPage() {
             fetch(`/api/books/by-author?author=${encodeURIComponent(primaryAuthor)}&excludeBookId=${bookId}&limit=20`)
               .then(res => res.ok ? res.json() : { books: [] })
               .then(data => setAuthorBooks(data.books || []))
-              .catch((err) => {
-                console.error("Error fetching author books:", err);
+              .catch(() => {
                 setAuthorBooks([]);
               })
           );
         }
 
         await Promise.all(promises);
-      } catch (err) {
-        console.error("Error fetching carousels:", err);
-      } finally {
-        setLoadingCarousels(false);
+      } catch {
+        // Error already logged in individual catch blocks
       }
     };
 
-    fetchCarousels().catch((error) => {
-      console.error("Unhandled error in fetchCarousels:", error);
-      setLoadingCarousels(false);
-    });
+    fetchCarousels();
   }, [book]);
 
   if (loading) {
@@ -481,7 +488,7 @@ export default function BookDetailPage() {
     return <NotFoundPage />;
   }
 
-  const { volumeInfo, saleInfo, paperboxdStats } = book;
+  const { volumeInfo, paperboxdStats } = book;
   // Prioritize larger images for detail page to ensure clarity
   // All book cover images should be displayed at maximum quality without optimization
   const coverImage = volumeInfo.imageLinks?.extraLarge ||
@@ -584,7 +591,7 @@ export default function BookDetailPage() {
                       const wasRemoved = data.removed || false;
                         setIsLiked(!wasRemoved);
                     }
-                  } catch (err) {
+                  } catch {
                       // Silent fail - no toast
                   } finally {
                     setIsUpdating(false);
@@ -632,7 +639,7 @@ export default function BookDetailPage() {
                       const wasRemoved = data.removed || false;
                         setIsInBookshelf(!wasRemoved);
                     }
-                  } catch (err) {
+                  } catch {
                       // Silent fail - no toast
                   } finally {
                     setIsUpdating(false);
@@ -679,7 +686,7 @@ export default function BookDetailPage() {
                       const wasRemoved = data.removed || false;
                       setIsInTBR(!wasRemoved);
                     }
-                  } catch (err) {
+                  } catch {
                     // Silent fail - no toast
                   } finally {
                     setIsUpdating(false);
@@ -721,8 +728,12 @@ export default function BookDetailPage() {
                     fetch(`/api/users/${encodeURIComponent(session.user.username)}/diary`)
                       .then((res) => res.json())
                       .then((data) => {
+                        type DiaryEntry = {
+                          bookId?: { toString(): string } | string;
+                          content?: string;
+                        };
                         const bookId = book._id || book.bookId || book.id;
-                        const existingEntry = data.entries?.find((entry: any) => {
+                        const existingEntry = data.entries?.find((entry: DiaryEntry) => {
                           return (
                             entry.bookId?.toString() === bookId?.toString() ||
                             (book.id && entry.bookId === book.id)
@@ -732,7 +743,9 @@ export default function BookDetailPage() {
                           setExistingDiaryContent(existingEntry.content || "");
                         }
                       })
-                      .catch((err) => console.error("Error refreshing diary:", err));
+                      .catch(() => {
+                        // Error already logged
+                      });
                   }
                 }}
               />
@@ -1011,7 +1024,7 @@ export default function BookDetailPage() {
                       const avatar = user.avatar || DEFAULT_AVATAR;
                       const initials = user.name
                         ?.split(" ")
-                        .map((n: string) => n[0])
+                        .map((n) => n[0])
                         .join("")
                         .toUpperCase()
                         .slice(0, 2) || user.username?.[0]?.toUpperCase() || "?";

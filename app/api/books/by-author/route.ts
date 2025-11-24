@@ -49,16 +49,30 @@ export async function GET(request: NextRequest) {
 
     // Deduplicate by title+author
     const seenBooks = new Set<string>();
+    type BookWithVolumeInfo = {
+      _id: { toString(): string };
+      volumeInfo?: {
+        title?: string;
+        authors?: string[];
+        imageLinks?: {
+          thumbnail?: string;
+          smallThumbnail?: string;
+          medium?: string;
+          large?: string;
+        };
+      };
+    };
     const transformedBooks = books
-      .filter((book: any) => {
+      .filter((book: BookWithVolumeInfo) => {
         const hasCover =
           book.volumeInfo?.imageLinks?.thumbnail ||
           book.volumeInfo?.imageLinks?.smallThumbnail ||
           book.volumeInfo?.imageLinks?.medium ||
           book.volumeInfo?.imageLinks?.large;
-        return hasCover && book.volumeInfo?.title && book.volumeInfo?.authors?.length > 0;
+        const hasAuthors = (book.volumeInfo?.authors?.length ?? 0) > 0;
+        return hasCover && book.volumeInfo?.title && hasAuthors;
       })
-      .map((book: any) => ({
+      .map((book: BookWithVolumeInfo) => ({
         id: book._id.toString(),
         title: book.volumeInfo?.title || 'Unknown Title',
         author: book.volumeInfo?.authors?.[0] || 'Unknown Author',
@@ -84,10 +98,11 @@ export async function GET(request: NextRequest) {
       author,
       count: transformedBooks.length,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching books by author:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to fetch books by author', details: error.message },
+      { error: 'Failed to fetch books by author', details: errorMessage },
       { status: 500 }
     );
   }

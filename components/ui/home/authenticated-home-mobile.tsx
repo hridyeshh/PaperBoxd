@@ -27,6 +27,26 @@ type Book = {
   publisher?: string;
 };
 
+type BookFromAPI = {
+  id?: string;
+  _id?: string;
+  title?: string;
+  authors?: string[] | string;
+  author?: string;
+  description?: string;
+  publishedDate?: string;
+  cover?: string;
+  isbn?: string;
+  isbn13?: string;
+  openLibraryId?: string;
+  isbndbId?: string;
+  averageRating?: number;
+  ratingsCount?: number;
+  pageCount?: number;
+  categories?: string[];
+  publisher?: string;
+};
+
 const BOOKS_PER_PAGE = 20; // 2 columns x 10 rows = 20 books per load
 
 export function AuthenticatedHomeMobile() {
@@ -55,7 +75,7 @@ export function AuthenticatedHomeMobile() {
         const bookMap = new Map<string, Book>();
         
         // Add latest books first (they get priority)
-        (latestData.books || []).forEach((book: any) => {
+        (latestData.books || []).forEach((book: BookFromAPI) => {
           const bookId = book.id || book._id;
           if (bookId && !bookMap.has(bookId)) {
             bookMap.set(bookId, {
@@ -93,7 +113,7 @@ export function AuthenticatedHomeMobile() {
           const friendsData = friendsResponse.ok ? await friendsResponse.json() : { books: [] };
 
           // Add onboarding-based books first (they get priority as they match user's explicit preferences)
-          (onboardingData.books || []).forEach((book: any) => {
+          (onboardingData.books || []).forEach((book: BookFromAPI) => {
             const bookId = book.id || book._id;
             if (bookId && !bookMap.has(bookId)) {
               bookMap.set(bookId, {
@@ -118,7 +138,7 @@ export function AuthenticatedHomeMobile() {
           });
 
           // Add recommended books (only if not already in map)
-          (recommendationsData.books || []).forEach((book: any) => {
+          (recommendationsData.books || []).forEach((book: BookFromAPI) => {
             const bookId = book.id || book._id;
             if (bookId && !bookMap.has(bookId)) {
               bookMap.set(bookId, {
@@ -143,7 +163,7 @@ export function AuthenticatedHomeMobile() {
           });
 
           // Add friends' liked books (only if not already in map)
-          (friendsData.books || []).forEach((book: any) => {
+          (friendsData.books || []).forEach((book: BookFromAPI) => {
             const bookId = book.id || book._id;
             if (bookId && !bookMap.has(bookId)) {
               bookMap.set(bookId, {
@@ -316,7 +336,7 @@ export function AuthenticatedHomeMobile() {
         {/* End of feed message */}
         {!hasMore && books.length > 0 && (
           <div className="text-center py-8 text-sm text-muted-foreground">
-            You've reached the end of your feed
+            You&apos;ve reached the end of your feed
           </div>
         )}
       </div>

@@ -15,7 +15,6 @@ import {
 
 import { motion, AnimatePresence } from "framer-motion"
 
-import { Home, PenTool, Bell } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-media-query"
 import Image from "next/image"
 import { DEFAULT_AVATAR } from "@/lib/utils"

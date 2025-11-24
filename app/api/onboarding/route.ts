@@ -3,7 +3,6 @@ import { auth } from '@/lib/auth';
 import connectDB from '@/lib/db/mongodb';
 import { UserProfileBuilder } from '@/lib/services/UserProfileBuilder';
 import { EventTracker } from '@/lib/services/EventTracker';
-import { EventType } from '@/lib/db/models/Event';
 
 /**
  * POST /api/onboarding
@@ -72,10 +71,11 @@ export async function POST(request: NextRequest) {
         authors,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error completing onboarding:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to complete onboarding', details: error.message },
+      { error: 'Failed to complete onboarding', details: errorMessage },
       { status: 500 }
     );
   }
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
  * Get list of popular genres for onboarding quiz.
  * Public endpoint.
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Predefined list of popular genres
     const genres = [
@@ -111,10 +111,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       genres,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error getting genres:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to get genres', details: error.message },
+      { error: 'Failed to get genres', details: errorMessage },
       { status: 500 }
     );
   }

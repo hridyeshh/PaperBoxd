@@ -212,7 +212,7 @@ export function getConfigForUser(userId: string): typeof RecommendationConfig {
   const bucket = hash % 100;
 
   let cumulative = 0;
-  for (const [key, variant] of Object.entries(RecommendationConfig.abTesting.variants)) {
+  for (const [, variant] of Object.entries(RecommendationConfig.abTesting.variants)) {
     cumulative += variant.percentage;
     if (bucket < cumulative) {
       // Merge variant config with default config (deep merge for nested objects)

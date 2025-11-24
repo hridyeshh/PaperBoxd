@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import * as React from "react";
-import { BookOpen } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
@@ -50,6 +49,48 @@ type ActivityEntry = {
   listBooksCount?: number; // For shared_list and collaboration_request activities
 };
 
+// Type for diary entry data used in dialog
+type DiaryEntryData = {
+  id: string;
+  bookId?: string | null;
+  bookTitle?: string | null;
+  bookAuthor?: string | null;
+  bookCover?: string | null;
+  content: string; // Required by DiaryEntryDialog
+  createdAt: string; // Required by DiaryEntryDialog
+  updatedAt: string; // Required by DiaryEntryDialog
+  isLiked?: boolean;
+  likesCount?: number;
+};
+
+// Type for activity data from API
+type ActivityFromAPI = {
+  _id?: string | { toString(): string };
+  type: "diary_entry" | "read" | "rated" | "liked" | "added_to_list" | "started_reading" | "reviewed" | "shared_list" | "shared_book" | "collaboration_request" | "granted_access";
+  userName?: string;
+  username?: string;
+  userAvatar?: string;
+  timestamp?: string | Date;
+  bookId?: string | null;
+  bookTitle?: string | null;
+  bookAuthor?: string | null;
+  bookCover?: string | null;
+  rating?: number;
+  diaryEntryId?: string;
+  content?: string;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+  isLiked?: boolean;
+  likesCount?: number;
+  isGeneralEntry?: boolean;
+  subject?: string | null;
+  listId?: string;
+  listTitle?: string;
+  listCover?: string;
+  listBooksCount?: number;
+  sharedByUsername?: string;
+};
+
 const ACTIVITY_PAGE_SIZE = 10;
 
 export default function ActivityPage() {
@@ -60,8 +101,7 @@ export default function ActivityPage() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [currentPage, setCurrentPage] = React.useState(1);
   const [totalPages, setTotalPages] = React.useState(1);
-  const [hasFriendsActivities, setHasFriendsActivities] = React.useState(false);
-  const [selectedDiaryEntry, setSelectedDiaryEntry] = React.useState<any | null>(null);
+  const [selectedDiaryEntry, setSelectedDiaryEntry] = React.useState<DiaryEntryData | null>(null);
   const [selectedDiaryEntryUsername, setSelectedDiaryEntryUsername] = React.useState<string | null>(null);
   const [processingRequest, setProcessingRequest] = React.useState<string | null>(null);
 
@@ -120,7 +160,7 @@ export default function ActivityPage() {
   };
 
   // Format activity action helper
-  const formatActivity = (activity: any) => {
+  const formatActivity = (activity: ActivityFromAPI) => {
     let action = "";
     // Use bookTitle from populated book data, fallback to undefined (will be handled in display)
     let bookTitle = activity.bookTitle || undefined;
@@ -189,7 +229,7 @@ export default function ActivityPage() {
           console.log('[ACTIVITY PAGE] Got data:', data);
           console.log('[ACTIVITY PAGE] Activities count:', data.activities?.length);
           const transformedActivities: ActivityEntry[] = Array.isArray(data.activities)
-            ? data.activities.map((activity: any, idx: number) => {
+            ? data.activities.map((activity: ActivityFromAPI, idx: number) => {
                 const { action, bookTitle } = formatActivity(activity);
                 
               const baseEntry: ActivityEntry = {
@@ -200,7 +240,7 @@ export default function ActivityPage() {
                   action,
                   detail: activity.isGeneralEntry 
                     ? (activity.subject && activity.subject.trim() ? activity.subject : "a diary entry")
-                    : (activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? activity.listTitle : bookTitle),
+                    : (activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? (activity.listTitle || "") : (bookTitle || "")),
                   bookTitle: activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? activity.listTitle : bookTitle,
                   timeAgo: formatTimeAgo(activity.timestamp),
                   cover: activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access"
@@ -215,8 +255,8 @@ export default function ActivityPage() {
                 baseEntry.bookId = activity.bookId;
                 baseEntry.bookAuthor = activity.bookAuthor;
                 baseEntry.content = activity.content;
-                baseEntry.createdAt = activity.createdAt;
-                baseEntry.updatedAt = activity.updatedAt;
+                baseEntry.createdAt = activity.createdAt ? (typeof activity.createdAt === 'string' ? activity.createdAt : activity.createdAt.toISOString()) : undefined;
+                baseEntry.updatedAt = activity.updatedAt ? (typeof activity.updatedAt === 'string' ? activity.updatedAt : activity.updatedAt.toISOString()) : undefined;
                 baseEntry.isLiked = activity.isLiked;
                 baseEntry.likesCount = activity.likesCount;
                 baseEntry.isGeneralEntry = activity.isGeneralEntry;
@@ -242,45 +282,17 @@ export default function ActivityPage() {
             : [];
           setActivities(transformedActivities);
           setTotalPages(data.totalPages || 1);
-          // Set indicator if there are any activities (total > 0)
-          setHasFriendsActivities((data.total || 0) > 0);
         })
         .catch((error) => {
           console.error("[ACTIVITY PAGE] Failed to fetch following activities:", error);
           setActivities([]);
           setTotalPages(1);
-          setHasFriendsActivities(false);
         })
         .finally(() => {
           setIsLoading(false);
         });
   }, [isAuthenticated, session?.user?.username, currentPage]);
 
-  // Fetch Friends activities count on mount and when view changes to check for indicator
-  React.useEffect(() => {
-    if (!isAuthenticated || !session?.user?.username) {
-      return;
-    }
-
-    const username = session.user.username;
-    
-    // Fetch first page to get total count for indicator
-    fetch(`/api/users/${encodeURIComponent(username)}/activities/following?page=1&pageSize=1`)
-      .then((res) => {
-        if (!res.ok) {
-          return;
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (data) {
-          setHasFriendsActivities((data.total || 0) > 0);
-        }
-      })
-      .catch((error) => {
-        console.error("Failed to fetch friends activities count:", error);
-      });
-  }, [isAuthenticated, session?.user?.username]);
 
   // Handle collaboration request accept/reject
   const handleCollaborationRequest = async (entry: ActivityEntry, action: "accept" | "reject") => {
@@ -317,7 +329,7 @@ export default function ActivityPage() {
           .then((res) => res.json())
           .then((data) => {
             const transformedActivities: ActivityEntry[] = Array.isArray(data.activities)
-              ? data.activities.map((activity: any, idx: number) => {
+              ? data.activities.map((activity: ActivityFromAPI, idx: number) => {
                   const { action, bookTitle } = formatActivity(activity);
                   const baseEntry: ActivityEntry = {
                     id: activity._id?.toString() || `activity-${idx}`,
@@ -327,7 +339,7 @@ export default function ActivityPage() {
                     action,
                     detail: activity.isGeneralEntry 
                       ? (activity.subject && activity.subject.trim() ? activity.subject : "a diary entry")
-                      : (activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? activity.listTitle : bookTitle),
+                      : (activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? (activity.listTitle || "") : (bookTitle || "")),
                     bookTitle: activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? activity.listTitle : bookTitle,
                     timeAgo: formatTimeAgo(activity.timestamp),
                     cover: activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access"
@@ -341,8 +353,8 @@ export default function ActivityPage() {
                     baseEntry.bookId = activity.bookId;
                     baseEntry.bookAuthor = activity.bookAuthor;
                     baseEntry.content = activity.content;
-                    baseEntry.createdAt = activity.createdAt;
-                    baseEntry.updatedAt = activity.updatedAt;
+                    baseEntry.createdAt = activity.createdAt ? (typeof activity.createdAt === 'string' ? activity.createdAt : activity.createdAt.toISOString()) : undefined;
+                    baseEntry.updatedAt = activity.updatedAt ? (typeof activity.updatedAt === 'string' ? activity.updatedAt : activity.updatedAt.toISOString()) : undefined;
                     baseEntry.isLiked = activity.isLiked;
                     baseEntry.likesCount = activity.likesCount;
                     baseEntry.isGeneralEntry = activity.isGeneralEntry;
@@ -433,9 +445,9 @@ export default function ActivityPage() {
                           bookTitle: entry.bookTitle,
                           bookAuthor: entry.bookAuthor,
                           bookCover: entry.cover,
-                          content: entry.content,
-                          createdAt: entry.createdAt,
-                          updatedAt: entry.updatedAt,
+                          content: entry.content || "",
+                          createdAt: entry.createdAt || new Date().toISOString(),
+                          updatedAt: entry.updatedAt || new Date().toISOString(),
                           isLiked: entry.isLiked,
                           likesCount: entry.likesCount,
                         });
@@ -615,7 +627,7 @@ export default function ActivityPage() {
                   const data = await response.json();
                   
                   const transformedActivities: ActivityEntry[] = Array.isArray(data.activities)
-                    ? data.activities.map((activity: any, idx: number) => {
+                    ? data.activities.map((activity: ActivityFromAPI, idx: number) => {
                         const { action, bookTitle } = formatActivity(activity);
                         
                         const baseEntry: ActivityEntry = {
@@ -626,7 +638,7 @@ export default function ActivityPage() {
                           action,
                           detail: activity.isGeneralEntry 
                             ? (activity.subject && activity.subject.trim() ? activity.subject : "a diary entry")
-                            : (activity.type === "shared_list" || activity.type === "collaboration_request" ? activity.listTitle : bookTitle),
+                            : (activity.type === "shared_list" || activity.type === "collaboration_request" ? (activity.listTitle || "") : (bookTitle || "")),
                           bookTitle: activity.type === "shared_list" || activity.type === "collaboration_request" ? activity.listTitle : bookTitle,
                           timeAgo: formatTimeAgo(activity.timestamp),
                           cover: activity.type === "shared_list" || activity.type === "collaboration_request"
@@ -641,8 +653,8 @@ export default function ActivityPage() {
                           baseEntry.bookId = activity.bookId;
                           baseEntry.bookAuthor = activity.bookAuthor;
                           baseEntry.content = activity.content;
-                          baseEntry.createdAt = activity.createdAt;
-                          baseEntry.updatedAt = activity.updatedAt;
+                          baseEntry.createdAt = activity.createdAt ? (typeof activity.createdAt === 'string' ? activity.createdAt : activity.createdAt.toISOString()) : undefined;
+                          baseEntry.updatedAt = activity.updatedAt ? (typeof activity.updatedAt === 'string' ? activity.updatedAt : activity.updatedAt.toISOString()) : undefined;
                           baseEntry.isLiked = activity.isLiked;
                           baseEntry.likesCount = activity.likesCount;
                           baseEntry.isGeneralEntry = activity.isGeneralEntry;
@@ -675,9 +687,9 @@ export default function ActivityPage() {
                       bookTitle: updatedEntry.bookTitle,
                       bookAuthor: updatedEntry.bookAuthor,
                       bookCover: updatedEntry.cover,
-                      content: updatedEntry.content,
-                      createdAt: updatedEntry.createdAt,
-                      updatedAt: updatedEntry.updatedAt,
+                      content: updatedEntry.content || "",
+                      createdAt: updatedEntry.createdAt || new Date().toISOString(),
+                      updatedAt: updatedEntry.updatedAt || new Date().toISOString(),
                       isLiked: updatedEntry.isLiked,
                       likesCount: updatedEntry.likesCount,
                     });

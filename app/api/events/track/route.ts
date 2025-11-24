@@ -53,10 +53,11 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Event tracked successfully',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error tracking event:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to track event', details: error.message },
+      { error: 'Failed to track event', details: errorMessage },
       { status: 500 }
     );
   }
@@ -104,10 +105,11 @@ export async function PUT(request: NextRequest) {
       success: true,
       message: `${events.length} events tracked successfully`,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error tracking batch events:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to track events', details: error.message },
+      { error: 'Failed to track events', details: errorMessage },
       { status: 500 }
     );
   }

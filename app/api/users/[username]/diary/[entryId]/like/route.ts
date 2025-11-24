@@ -2,7 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import connectDB from '@/lib/db/mongodb';
 import User from '@/lib/db/models/User';
+import type { IDiaryEntry } from '@/lib/db/models/User';
 import mongoose from 'mongoose';
+
+// Type for diary entry with _id (can be Mongoose subdocument or plain object)
+type DiaryEntryWithId = IDiaryEntry & {
+  _id?: mongoose.Types.ObjectId | string;
+  toObject?: () => IDiaryEntry & { _id?: mongoose.Types.ObjectId | string; createdAt?: Date };
+};
+
 
 // Force Node.js runtime (required for Mongoose)
 export const runtime = 'nodejs';
@@ -43,9 +51,10 @@ export async function POST(
     
     // First, try to find by _id (most common case)
     entryIndex = user.diaryEntries.findIndex(
-      (entry: any) => {
-        if (!entry._id) return false;
-        const entryIdStr = entry._id.toString();
+      (entry) => {
+        const entryWithId = entry as DiaryEntryWithId;
+        if (!entryWithId._id) return false;
+        const entryIdStr = entryWithId._id.toString();
         return entryIdStr === entryId;
       }
     );
@@ -53,9 +62,10 @@ export async function POST(
     // If not found, try comparing as strings (handles edge cases)
     if (entryIndex === -1) {
       entryIndex = user.diaryEntries.findIndex(
-        (entry: any) => {
-          if (!entry._id) return false;
-          const entryIdStr = String(entry._id);
+        (entry) => {
+          const entryWithId = entry as DiaryEntryWithId;
+          if (!entryWithId._id) return false;
+          const entryIdStr = String(entryWithId._id);
           const compareId = String(entryId);
           return entryIdStr === compareId;
         }
@@ -66,12 +76,15 @@ export async function POST(
       console.error('[Diary Like API] Entry not found:', {
         entryId,
         entryIdType: typeof entryId,
-        entryIds: user.diaryEntries.map((e: any, idx: number) => ({
-          index: idx,
-          _id: e._id?.toString(),
-          _idType: typeof e._id,
-          hasId: !!e._id,
-        })),
+        entryIds: user.diaryEntries.map((e, idx: number) => {
+          const entryWithId = e as DiaryEntryWithId;
+          return {
+            index: idx,
+            _id: entryWithId._id?.toString(),
+            _idType: typeof entryWithId._id,
+            hasId: !!entryWithId._id,
+          };
+        }),
         totalEntries: user.diaryEntries.length,
       });
       return NextResponse.json({ 
@@ -80,7 +93,7 @@ export async function POST(
       }, { status: 404 });
     }
 
-    const entry = user.diaryEntries[entryIndex];
+    const entry = user.diaryEntries[entryIndex] as DiaryEntryWithId;
     const userId = new mongoose.Types.ObjectId(session.user.id);
     const userIdStr = session.user.id;
 
@@ -91,7 +104,8 @@ export async function POST(
 
     // Check if user already liked this entry
     // Handle both ObjectId and string formats
-    const isLiked = entry.likes.some((id: any) => {
+    type LikeId = mongoose.Types.ObjectId | string;
+    const isLiked = entry.likes.some((id: LikeId) => {
       const idStr = id?.toString ? id.toString() : String(id);
       return idStr === userIdStr;
     });
@@ -101,7 +115,7 @@ export async function POST(
       userId: userIdStr,
       isLiked,
       currentLikesCount: entry.likes.length,
-      likes: entry.likes.map((id: any) => id?.toString ? id.toString() : String(id)),
+      likes: entry.likes.map((id: LikeId) => id?.toString ? id.toString() : String(id)),
     });
 
     // Use direct MongoDB update to avoid validating all entries
@@ -110,10 +124,11 @@ export async function POST(
       // Unlike: remove user ID from likes array
       // Need to remove both ObjectId and string formats
       // First try with ObjectId
+      const entryIdForQuery = entry._id as mongoose.Types.ObjectId | string;
       let updateResult = await User.updateOne(
         { 
           _id: user._id,
-          'diaryEntries._id': entry._id
+          'diaryEntries._id': entryIdForQuery
         },
         {
           $pull: {
@@ -127,7 +142,7 @@ export async function POST(
         updateResult = await User.updateOne(
           { 
             _id: user._id,
-            'diaryEntries._id': entry._id
+            'diaryEntries._id': entryIdForQuery
           },
           {
             $pull: {
@@ -142,10 +157,11 @@ export async function POST(
       }
     } else {
       // Like: add user ID to likes array (avoid duplicates using $addToSet)
+      const entryIdForQuery = entry._id as mongoose.Types.ObjectId | string;
       const updateResult = await User.updateOne(
         { 
           _id: user._id,
-          'diaryEntries._id': entry._id
+          'diaryEntries._id': entryIdForQuery
         },
         {
           $addToSet: {
@@ -160,25 +176,28 @@ export async function POST(
     }
 
     // Fetch the updated entry to get the new likes count
+    const entryIdForQuery = entry._id as mongoose.Types.ObjectId | string;
     const updatedUser = await User.findOne({
       _id: user._id,
-      'diaryEntries._id': entry._id
+      'diaryEntries._id': entryIdForQuery
     }).select('diaryEntries');
 
     if (!updatedUser) {
       throw new Error('Failed to fetch updated entry');
     }
 
-    const updatedEntry = updatedUser.diaryEntries.find((e: any) => 
-      e._id?.toString() === entry._id?.toString()
-    );
+    const entryIdStr = entry._id?.toString();
+    const updatedEntry = updatedUser.diaryEntries.find((e) => {
+      const entryWithId = e as DiaryEntryWithId;
+      return entryWithId._id?.toString() === entryIdStr;
+    });
 
     if (!updatedEntry) {
       throw new Error('Entry not found after update');
     }
 
     const newLikesCount = updatedEntry.likes?.length || 0;
-    const newLiked = updatedEntry.likes?.some((id: any) => {
+    const newLiked = updatedEntry.likes?.some((id: LikeId) => {
       const idStr = id?.toString ? id.toString() : String(id);
       return idStr === userIdStr;
     }) || false;
@@ -192,18 +211,21 @@ export async function POST(
       liked: newLiked,
       likesCount: newLikesCount,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Diary Like API] Error toggling diary entry like:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorName = error instanceof Error ? error.name : 'UnknownError';
+    const errorStack = error instanceof Error ? error.stack?.substring(0, 500) : undefined;
     console.error('[Diary Like API] Error details:', {
-      message: error?.message,
-      name: error?.name,
-      stack: error?.stack?.substring(0, 500),
+      message: errorMessage,
+      name: errorName,
+      stack: errorStack,
     });
     return NextResponse.json(
       { 
         error: 'Failed to toggle like', 
-        details: error?.message || 'Unknown error',
-        errorName: error?.name || 'UnknownError'
+        details: errorMessage,
+        errorName: errorName
       },
       { status: 500 }
     );

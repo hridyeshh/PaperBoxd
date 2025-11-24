@@ -88,20 +88,23 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
             message: "If an account exists with this email, a password reset link has been sent."
         }, {status: 200});
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Password reset error:', error);
         
         // Provide more specific error messages
-        if (error.code === 'ECONNREFUSED') {
-            return NextResponse.json({
-                message: "Unable to connect to email server. Please try again later or contact support."
-            }, {status: 500});
-        }
-        
-        if (error.code === 'EAUTH') {
-            return NextResponse.json({
-                message: "Email authentication failed. Please contact support."
-            }, {status: 500});
+        if (error && typeof error === 'object' && 'code' in error) {
+            const errorCode = (error as { code?: string }).code;
+            if (errorCode === 'ECONNREFUSED') {
+                return NextResponse.json({
+                    message: "Unable to connect to email server. Please try again later or contact support."
+                }, {status: 500});
+            }
+            
+            if (errorCode === 'EAUTH') {
+                return NextResponse.json({
+                    message: "Email authentication failed. Please contact support."
+                }, {status: 500});
+            }
         }
 
         return NextResponse.json({

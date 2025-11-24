@@ -107,11 +107,48 @@ export interface IBook extends Document {
   updateStats(type: "read" | "like" | "tbr" | "rating", value?: number): Promise<this>;
 }
 
+// Types for data passed to findOrCreate methods
+export interface IISBNdbBookData {
+  isbndbId?: string;
+  isbn?: string;
+  isbn13?: string;
+  volumeInfo: IVolumeInfo;
+  isbndbMetadata?: {
+    binding?: string;
+    edition?: string;
+    dimensions?: string;
+    deweyDecimal?: string;
+    msrp?: number;
+    overview?: string;
+    excerpt?: string;
+    synopsis?: string;
+  };
+}
+
+export interface IGoogleBooksBookData {
+  id?: string; // googleBooksId
+  volumeInfo: IVolumeInfo;
+  saleInfo?: ISaleInfo;
+}
+
+export interface IOpenLibraryBookData {
+  openLibraryId?: string;
+  key?: string; // openLibraryKey
+  volumeInfo: IVolumeInfo;
+  openLibraryMetadata?: {
+    wantToReadCount?: number;
+    currentlyReadingCount?: number;
+    alreadyReadCount?: number;
+    editionCount?: number;
+    firstPublishYear?: number;
+  };
+}
+
 // Model interface with static methods
 export interface IBookModel extends Model<IBook> {
-  findOrCreateFromISBNdb(isbndbData: any): Promise<IBook>;
-  findOrCreateFromGoogleBooks(googleBooksData: any): Promise<IBook>;
-  findOrCreateFromOpenLibrary(openLibraryData: any): Promise<IBook>;
+  findOrCreateFromISBNdb(isbndbData: IISBNdbBookData): Promise<IBook>;
+  findOrCreateFromGoogleBooks(googleBooksData: IGoogleBooksBookData): Promise<IBook>;
+  findOrCreateFromOpenLibrary(openLibraryData: IOpenLibraryBookData): Promise<IBook>;
 }
 
 // =====================================================
@@ -296,7 +333,7 @@ BookSchema.methods.updateStats = async function (
 
 // Find or create book from Google Books data
 BookSchema.statics.findOrCreateFromGoogleBooks = async function (
-  googleBooksData: any
+  googleBooksData: IGoogleBooksBookData
 ) {
   const googleBooksId = googleBooksData.id;
 
@@ -318,7 +355,8 @@ BookSchema.statics.findOrCreateFromGoogleBooks = async function (
   } else {
     // Create new book entry
     // Only include fields that have values to avoid null duplicate key errors with sparse indexes
-    const createData: any = {
+    type BookCreateData = Partial<Pick<IBook, 'volumeInfo' | 'saleInfo' | 'googleBooksId' | 'cachedAt' | 'lastUpdated' | 'apiSource'>>;
+    const createData: BookCreateData = {
       volumeInfo: googleBooksData.volumeInfo,
       cachedAt: new Date(),
       lastUpdated: new Date(),
@@ -334,9 +372,10 @@ BookSchema.statics.findOrCreateFromGoogleBooks = async function (
 
     try {
       book = await this.create(createData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Handle duplicate key errors (e.g., if book was created concurrently)
-      if (error.code === 11000) {
+      const errorObj = error as { code?: number };
+      if (errorObj.code === 11000) {
         // Try to find the existing book
         book = await this.findOne({ googleBooksId });
 
@@ -354,10 +393,10 @@ BookSchema.statics.findOrCreateFromGoogleBooks = async function (
           await book.save();
         } else {
           // Re-throw if we can't handle it
-          throw error;
+          throw errorObj;
         }
       } else {
-        throw error;
+        throw errorObj;
       }
     }
   }
@@ -367,7 +406,7 @@ BookSchema.statics.findOrCreateFromGoogleBooks = async function (
 
 // Find or create book from Open Library data
 BookSchema.statics.findOrCreateFromOpenLibrary = async function (
-  openLibraryData: any
+  openLibraryData: IOpenLibraryBookData
 ) {
   const openLibraryId = openLibraryData.openLibraryId;
   const openLibraryKey = openLibraryData.key;
@@ -390,7 +429,8 @@ BookSchema.statics.findOrCreateFromOpenLibrary = async function (
   } else {
     // Create new book entry
     // Only include fields that have values to avoid null duplicate key errors with sparse indexes
-    const createData: any = {
+    type BookCreateData = Partial<Pick<IBook, 'volumeInfo' | 'openLibraryId' | 'openLibraryKey' | 'cachedAt' | 'lastUpdated' | 'apiSource'>>;
+    const createData: BookCreateData = {
       volumeInfo: openLibraryData.volumeInfo,
       cachedAt: new Date(),
       lastUpdated: new Date(),
@@ -406,9 +446,10 @@ BookSchema.statics.findOrCreateFromOpenLibrary = async function (
     
     try {
       book = await this.create(createData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Handle duplicate key errors (e.g., if book was created concurrently)
-      if (error.code === 11000) {
+      const errorObj = error as { code?: number };
+      if (errorObj.code === 11000) {
         // Try to find the existing book
         book = await this.findOne({ openLibraryId });
         
@@ -443,7 +484,7 @@ BookSchema.statics.findOrCreateFromOpenLibrary = async function (
 
 // Find or create book from ISBNdb data
 BookSchema.statics.findOrCreateFromISBNdb = async function (
-  isbndbData: any
+  isbndbData: IISBNdbBookData
 ) {
   const isbndbId = isbndbData.isbndbId;
   const isbn = isbndbData.isbn;
@@ -455,7 +496,7 @@ BookSchema.statics.findOrCreateFromISBNdb = async function (
       { isbndbId },
       { isbn13 },
       { isbn },
-    ].filter(obj => Object.values(obj)[0]) // Filter out undefined values
+    ].filter((obj: { [key: string]: string | undefined }) => Object.values(obj)[0]) // Filter out undefined values
   });
 
   if (book) {
@@ -476,7 +517,8 @@ BookSchema.statics.findOrCreateFromISBNdb = async function (
   } else {
     // Create new book entry
     // Only include fields that have values to avoid null duplicate key errors with sparse indexes
-    const createData: any = {
+    type BookCreateData = Partial<Pick<IBook, 'volumeInfo' | 'isbndbId' | 'isbn' | 'isbn13' | 'cachedAt' | 'lastUpdated' | 'apiSource'>>;
+    const createData: BookCreateData = {
       volumeInfo: isbndbData.volumeInfo,
       cachedAt: new Date(),
       lastUpdated: new Date(),
@@ -493,16 +535,17 @@ BookSchema.statics.findOrCreateFromISBNdb = async function (
     
     try {
       book = await this.create(createData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Handle duplicate key errors (e.g., if book was created concurrently)
-      if (error.code === 11000) {
+      const errorObj = error as { code?: number };
+      if (errorObj.code === 11000) {
         // Try to find the existing book
         book = await this.findOne({
           $or: [
             { isbndbId },
             { isbn13 },
             { isbn },
-          ].filter(obj => Object.values(obj)[0])
+          ].filter((obj: { [key: string]: string | undefined }) => Object.values(obj)[0])
         });
         
         if (!book) {

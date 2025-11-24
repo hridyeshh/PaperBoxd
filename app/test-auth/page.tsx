@@ -5,7 +5,12 @@ import { useState } from "react";
 
 export default function TestAuthPage() {
   const { data: session, status } = useSession();
-  const [testResult, setTestResult] = useState<any>(null);
+  type TestResult = {
+    user?: unknown;
+    error?: string;
+    [key: string]: unknown;
+  };
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
 
   const testBackendAuth = async () => {
     const res = await fetch("/api/auth/test");

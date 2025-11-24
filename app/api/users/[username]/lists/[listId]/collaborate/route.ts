@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
+import type { IActivity } from "@/lib/db/models/User";
 import { auth } from "@/lib/auth";
 import mongoose from "mongoose";
+
+// Type for activity with _id (can be Mongoose subdocument)
+type ActivityWithId = IActivity & {
+  _id?: mongoose.Types.ObjectId | string;
+};
 
 /**
  * Accept or reject a collaboration request
@@ -59,8 +65,9 @@ export async function POST(
     }
 
     const activityIndex = currentUser.activities.findIndex(
-      (activity: any) => {
-        const activityIdStr = activity._id?.toString() || "";
+      (activity) => {
+        const activityWithId = activity as ActivityWithId;
+        const activityIdStr = activityWithId._id?.toString() || "";
         return activityIdStr === activityId && 
                activity.type === "collaboration_request" &&
                activity.listId === listId;
@@ -100,7 +107,10 @@ export async function POST(
       }
 
       const currentUserId = currentUser._id as mongoose.Types.ObjectId;
-      if (!list.collaborators.some((id: any) => id.toString() === currentUserId.toString())) {
+      if (!list.collaborators.some((id) => {
+        const idObj = id as mongoose.Types.ObjectId | string;
+        return idObj.toString() === currentUserId.toString();
+      })) {
         list.collaborators.push(currentUserId);
         list.updatedAt = new Date();
         await listOwner.save();
@@ -115,7 +125,7 @@ export async function POST(
       message: `Collaboration request ${action}ed successfully`,
       action,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Collaboration request error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
