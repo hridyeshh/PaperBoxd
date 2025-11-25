@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { cn } from "@/lib/utils";
@@ -164,15 +165,19 @@ const DropdownPopover = React.forwardRef<HTMLDivElement, DropdownPopoverProps>(
         const estimatedWidth = 200; // min-w-[200px]
         const estimatedHeight = 100; // approximate height
 
-        const newStyle: React.CSSProperties = {};
+        // Calculate available space on left and right
+        const spaceOnRight = viewportWidth - triggerRect.right;
+        const spaceOnLeft = triggerRect.left;
+        
+        // Use fixed positioning with calculated coordinates from viewport
+        const newStyle: React.CSSProperties = {
+          // Default: position below trigger
+          top: `${triggerRect.bottom + 8}px`,
+        };
 
         if (isMobile) {
           // On mobile, always constrain width
           newStyle.maxWidth = "calc(100vw - 1rem)";
-          
-          // Calculate available space on left and right
-          const spaceOnRight = viewportWidth - triggerRect.right;
-          const spaceOnLeft = triggerRect.left;
           
           // Determine best alignment based on available space
           if (align === "end") {
@@ -183,7 +188,7 @@ const DropdownPopover = React.forwardRef<HTMLDivElement, DropdownPopoverProps>(
               newStyle.right = "auto";
             } else {
               // Enough space on right, but add padding to prevent edge overflow
-              newStyle.right = Math.max(0.5, viewportWidth - triggerRect.right - estimatedWidth) + "rem";
+              newStyle.right = `${Math.max(8, viewportWidth - triggerRect.right - estimatedWidth)}px`;
               newStyle.left = "auto";
             }
           } else {
@@ -194,7 +199,7 @@ const DropdownPopover = React.forwardRef<HTMLDivElement, DropdownPopoverProps>(
               newStyle.left = "auto";
             } else {
               // Enough space on left, but add padding to prevent edge overflow
-              newStyle.left = Math.max(0.5, triggerRect.left - estimatedWidth) + "rem";
+              newStyle.left = `${Math.max(8, triggerRect.left)}px`;
               newStyle.right = "auto";
             }
           }
@@ -203,10 +208,41 @@ const DropdownPopover = React.forwardRef<HTMLDivElement, DropdownPopoverProps>(
           const spaceBelow = viewportHeight - triggerRect.bottom;
           if (spaceBelow < estimatedHeight) {
             // Not enough space below, position above instead
-            newStyle.bottom = `${triggerRect.height + 8}px`;
             newStyle.top = "auto";
-            newStyle.marginTop = "0";
-            newStyle.marginBottom = "0.5rem";
+            newStyle.bottom = `${viewportHeight - triggerRect.top + 8}px`;
+          }
+        } else {
+          // Desktop: Use fixed positioning relative to viewport
+          if (align === "end") {
+            // For "end" alignment, check if dropdown would overflow on the right
+            if (spaceOnRight < estimatedWidth) {
+              // Not enough space on right, align to left instead
+              newStyle.left = `${Math.max(8, triggerRect.left)}px`;
+              newStyle.right = "auto";
+            } else {
+              // Enough space on right
+              newStyle.right = `${Math.max(8, viewportWidth - triggerRect.right)}px`;
+              newStyle.left = "auto";
+            }
+          } else {
+            // For "start" alignment, check if dropdown would overflow on the left
+            if (spaceOnLeft < estimatedWidth) {
+              // Not enough space on left, align to right instead
+              newStyle.right = `${Math.max(8, viewportWidth - triggerRect.right)}px`;
+              newStyle.left = "auto";
+            } else {
+              // Enough space on left
+              newStyle.left = `${Math.max(8, triggerRect.left)}px`;
+              newStyle.right = "auto";
+            }
+          }
+          
+          // Check bottom overflow on desktop
+          const spaceBelow = viewportHeight - triggerRect.bottom;
+          if (spaceBelow < estimatedHeight) {
+            // Not enough space below, position above instead
+            newStyle.top = "auto";
+            newStyle.bottom = `${viewportHeight - triggerRect.top + 8}px`;
           }
         }
 
@@ -229,12 +265,12 @@ const DropdownPopover = React.forwardRef<HTMLDivElement, DropdownPopoverProps>(
           setPositionStyle((prevStyle) => {
             const newStyle: React.CSSProperties = { ...prevStyle };
 
-            if (isMobile) {
-              // Fine-tune position based on actual dimensions
-              const overflowsRight = dropdownRect.right > viewportWidth - 8;
-              const overflowsLeft = dropdownRect.left < 8;
-              const overflowsBottom = dropdownRect.bottom > viewportHeight - 8;
+            // Fine-tune position based on actual dimensions for both mobile and desktop
+            const overflowsRight = dropdownRect.right > viewportWidth - 8;
+            const overflowsLeft = dropdownRect.left < 8;
+            const overflowsBottom = dropdownRect.bottom > viewportHeight - 8;
 
+            if (isMobile) {
               if (overflowsRight) {
                 newStyle.right = "0.5rem";
                 newStyle.left = "auto";
@@ -251,6 +287,23 @@ const DropdownPopover = React.forwardRef<HTMLDivElement, DropdownPopoverProps>(
               }
 
               newStyle.maxWidth = "calc(100vw - 1rem)";
+            } else {
+              // Desktop overflow handling - adjust fixed positioning
+              if (overflowsRight) {
+                newStyle.right = `${Math.max(8, viewportWidth - dropdownRect.right)}px`;
+                newStyle.left = "auto";
+              } else if (overflowsLeft) {
+                newStyle.left = `${Math.max(8, dropdownRect.left)}px`;
+                newStyle.right = "auto";
+              }
+
+              if (overflowsBottom) {
+                newStyle.top = "auto";
+                newStyle.bottom = `${viewportHeight - triggerRect.top + 8}px`;
+              } else {
+                newStyle.top = `${triggerRect.bottom + 8}px`;
+                newStyle.bottom = "auto";
+              }
             }
 
             return newStyle;
@@ -266,7 +319,13 @@ const DropdownPopover = React.forwardRef<HTMLDivElement, DropdownPopoverProps>(
       };
     }, [open, contentRef, triggerRef, align]);
 
-    return (
+    const [mounted, setMounted] = React.useState(false);
+
+    React.useEffect(() => {
+      setMounted(true);
+    }, []);
+
+    const dropdownContent = (
       <AnimatePresence>
         {open ? (
           <motion.div
@@ -284,15 +343,11 @@ const DropdownPopover = React.forwardRef<HTMLDivElement, DropdownPopoverProps>(
               }
             }}
             className={cn(
-              "absolute z-50 mt-2 overflow-hidden rounded-2xl border border-border/60 bg-background p-1 shadow-xl",
+              "fixed z-50 overflow-hidden rounded-2xl border border-border/60 bg-background p-1 shadow-xl",
               // Responsive width - ensure it doesn't exceed viewport on mobile
               "min-w-[200px]",
               // On mobile, constrain width to viewport. On desktop, no max-width constraint
               "max-w-[calc(100vw-1rem)] md:max-w-none",
-              // Alignment based on prop
-              align === "end" 
-                ? "right-0 md:right-0" 
-                : "left-0 md:left-0",
               className,
             )}
             style={{
@@ -306,6 +361,10 @@ const DropdownPopover = React.forwardRef<HTMLDivElement, DropdownPopoverProps>(
         ) : null}
       </AnimatePresence>
     );
+
+    // Use portal to render outside container hierarchy to avoid overflow clipping
+    if (!mounted) return null;
+    return createPortal(dropdownContent, document.body);
   },
 );
 DropdownPopover.displayName = "DropdownPopover";

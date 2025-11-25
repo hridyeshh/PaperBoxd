@@ -128,7 +128,6 @@ const RecommendationCacheSchema = new Schema<IRecommendationCache>(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      unique: true,
     },
 
     homeRecommendations: {
