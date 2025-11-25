@@ -66,7 +66,7 @@ type DiaryEntryData = {
 // Type for activity data from API
 type ActivityFromAPI = {
   _id?: string | { toString(): string };
-  type: "diary_entry" | "read" | "rated" | "liked" | "added_to_list" | "started_reading" | "reviewed" | "shared_list" | "shared_book" | "collaboration_request" | "granted_access";
+  type: "diary_entry" | "read" | "rated" | "liked" | "added_to_list" | "started_reading" | "reviewed" | "shared_list" | "shared_book" | "collaboration_request" | "granted_access" | "liked_diary_entry";
   userName?: string;
   username?: string;
   userAvatar?: string;
@@ -195,6 +195,9 @@ export default function ActivityPage() {
     } else if (activity.type === "granted_access") {
       action = "granted access to";
       bookTitle = activity.listTitle;
+    } else if (activity.type === "liked_diary_entry") {
+      action = "liked your note on";
+      bookTitle = activity.subject || "diary entry";
     } else {
       console.warn(`Unknown activity type: "${activity.type}"`);
     }
@@ -238,9 +241,11 @@ export default function ActivityPage() {
                   username: activity.username,
                   userAvatar: activity.userAvatar,
                   action,
-                  detail: activity.isGeneralEntry 
-                    ? (activity.subject && activity.subject.trim() ? activity.subject : "a diary entry")
-                    : (activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? (activity.listTitle || "") : (bookTitle || "")),
+                  detail: activity.type === "liked_diary_entry"
+                    ? (activity.subject || "diary entry")
+                    : (activity.isGeneralEntry 
+                      ? (activity.subject && activity.subject.trim() ? activity.subject : "a diary entry")
+                      : (activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? (activity.listTitle || "") : (bookTitle || ""))),
                   bookTitle: activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? activity.listTitle : bookTitle,
                   timeAgo: formatTimeAgo(activity.timestamp),
                   cover: activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access"
@@ -360,6 +365,10 @@ export default function ActivityPage() {
                     baseEntry.isGeneralEntry = activity.isGeneralEntry;
                   }
                   
+                  if (activity.type === "liked_diary_entry") {
+                    baseEntry.diaryEntryId = activity.diaryEntryId;
+                  }
+                  
                   if (activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access") {
                     baseEntry.listId = activity.listId;
                     baseEntry.listTitle = activity.listTitle;
@@ -453,6 +462,40 @@ export default function ActivityPage() {
                         });
                         setSelectedDiaryEntryUsername(entry.username || null);
                       }
+                      // If it's a liked_diary_entry, fetch and open the diary entry
+                      // The owner is the current user (since the activity is in their activities array)
+                      else if (entry.type === "liked_diary_entry" && entry.diaryEntryId && session?.user?.username) {
+                        // Fetch the diary entry from the current user's diary
+                        fetch(`/api/users/${encodeURIComponent(session.user.username)}/diary`)
+                          .then((res) => res.json())
+                          .then((data: { entries?: Array<{ _id?: { toString(): string } | string; id?: string; bookId?: { toString(): string } | string; bookTitle?: string; bookAuthor?: string; bookCover?: string; content?: string; createdAt?: string; updatedAt?: string; isLiked?: boolean; likesCount?: number }> }) => {
+                            const diaryEntry = data.entries?.find((e) => 
+                              (e._id?.toString() || e.id) === entry.diaryEntryId
+                            );
+                            if (diaryEntry) {
+                              const entryId = typeof diaryEntry._id === 'string' ? diaryEntry._id : (diaryEntry._id?.toString() || diaryEntry.id || '');
+                              const bookIdValue = diaryEntry.bookId 
+                                ? (typeof diaryEntry.bookId === 'string' ? diaryEntry.bookId : diaryEntry.bookId.toString())
+                                : null;
+                              setSelectedDiaryEntry({
+                                id: entryId,
+                                bookId: bookIdValue,
+                                bookTitle: diaryEntry.bookTitle || null,
+                                bookAuthor: diaryEntry.bookAuthor || null,
+                                bookCover: diaryEntry.bookCover || null,
+                                content: diaryEntry.content || "",
+                                createdAt: diaryEntry.createdAt || new Date().toISOString(),
+                                updatedAt: diaryEntry.updatedAt || new Date().toISOString(),
+                                isLiked: diaryEntry.isLiked,
+                                likesCount: diaryEntry.likesCount,
+                              });
+                              setSelectedDiaryEntryUsername(session.user.username || null);
+                            }
+                          })
+                          .catch((error) => {
+                            console.error("Error fetching diary entry:", error);
+                          });
+                      }
                       // If it's a shared list or granted access, navigate to the list
                       else if ((entry.type === "shared_list" || entry.type === "granted_access") && entry.listId && entry.sharedByUsername) {
                         router.push(`/u/${entry.sharedByUsername}/lists/${entry.listId}`);
@@ -485,7 +528,7 @@ export default function ActivityPage() {
                       // Don't navigate for collaboration requests - they have buttons
                     }}
                     className={`flex gap-4 rounded-3xl border border-border/70 bg-background/90 p-4 shadow-sm transition hover:-translate-y-1 ${
-                      (entry.type === "diary_entry" || entry.type === "shared_list" || entry.type === "shared_book" || entry.type === "granted_access") ? "cursor-pointer" : ""
+                      (entry.type === "diary_entry" || entry.type === "shared_list" || entry.type === "shared_book" || entry.type === "granted_access" || entry.type === "liked_diary_entry") ? "cursor-pointer" : ""
                     }`}
                   >
                     {/* Show profile picture of the person who did the activity */}

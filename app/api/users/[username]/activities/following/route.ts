@@ -303,16 +303,65 @@ export async function GET(
 
     console.log(`[DEBUG ${username}] After adding granted_access: allActivities.length = ${allActivities.length}, granted_access count = ${allActivities.filter((a: any) => a.type === 'granted_access').length}`);
 
+    // Add liked_diary_entry activities from current user's activities
+    const likedDiaryEntryActivities = currentUserActivities.filter((activity: any) =>
+      activity.type === "liked_diary_entry"
+    );
+    console.log(`[DEBUG ${username}] Found ${likedDiaryEntryActivities.length} liked_diary_entry activities`);
+
+    // Get unique usernames of people who liked diary entries
+    const likedByUsernames = [...new Set(likedDiaryEntryActivities.map((a: any) => a.sharedByUsername).filter(Boolean))];
+    
+    // Fetch user info for people who liked diary entries (even if not followed)
+    const likedByUsers = likedByUsernames.length > 0
+      ? await User.find({ username: { $in: likedByUsernames } })
+          .select("_id username name avatar")
+          .lean()
+      : [];
+    
+    likedDiaryEntryActivities.forEach((activity: any) => {
+      // Convert Mongoose subdocument to plain object
+      const activityObj = activity.toObject ? activity.toObject() : {
+        _id: activity._id,
+        type: activity.type,
+        diaryEntryId: activity.diaryEntryId,
+        subject: activity.subject,
+        sharedBy: activity.sharedBy,
+        sharedByUsername: activity.sharedByUsername,
+        timestamp: activity.timestamp,
+      };
+      
+      if (activityObj.sharedByUsername) {
+        // Find the user who liked it to get their avatar and name
+        const likedByUser = likedByUsers.find((u: any) => u.username === activityObj.sharedByUsername) ||
+                            followedUsers.find((u: any) => u.username === activityObj.sharedByUsername);
+        const activityToAdd = {
+          ...activityObj,
+          userId: activityObj.sharedBy?.toString() || '',
+          username: activityObj.sharedByUsername,
+          userName: likedByUser?.name || activityObj.sharedByUsername,
+          userAvatar: likedByUser?.avatar,
+        };
+        console.log(`[DEBUG ${username}] Adding liked_diary_entry activity - type: ${activityToAdd.type}, timestamp: ${activityToAdd.timestamp}`);
+        allActivities.push(activityToAdd);
+      } else {
+        console.log(`[DEBUG ${username}] SKIPPING liked_diary_entry activity - no sharedByUsername`);
+      }
+    });
+
+    console.log(`[DEBUG ${username}] After adding liked_diary_entry: allActivities.length = ${allActivities.length}, liked_diary_entry count = ${allActivities.filter((a: any) => a.type === 'liked_diary_entry').length}`);
+
     followedUsers.forEach((user: any) => {
-      // Add regular activities (excluding shared_list, shared_book, collaboration_request, and granted_access as those are handled above)
+      // Add regular activities (excluding shared_list, shared_book, collaboration_request, granted_access, and liked_diary_entry as those are handled above)
       const activities = Array.isArray(user.activities) ? user.activities : [];
-      // Filter out any search-related activities, shared_list, shared_book, collaboration_request, and granted_access (handled separately)
+      // Filter out any search-related activities, shared_list, shared_book, collaboration_request, granted_access, and liked_diary_entry (handled separately)
       const filteredActivities = activities.filter((activity: any) => 
         activity.type !== "search" &&
         activity.type !== "shared_list" &&
         activity.type !== "shared_book" &&
         activity.type !== "collaboration_request" &&
-        activity.type !== "granted_access"
+        activity.type !== "granted_access" &&
+        activity.type !== "liked_diary_entry"
       );
       filteredActivities.forEach((activity: any) => {
         // Convert Mongoose subdocument to plain object

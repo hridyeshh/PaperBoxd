@@ -449,9 +449,9 @@ function ProfileSummary({
                   </DialogHeader>
                 </DialogContent>
               </Dialog>
-            ) : (
+            ) : canEdit ? (
               <p className="text-sm text-muted-foreground">Add a bio to share your vibe.</p>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
@@ -2465,7 +2465,9 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, onListDeleted,
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Lists</h2>
-          <p className="text-sm text-muted-foreground">Your curated collections</p>
+          <p className="text-sm text-muted-foreground">
+            {canEdit ? "Your curated collections" : `${username}'s curated collection`}
+          </p>
         </div>
         {canEdit && (
           <>

@@ -67,15 +67,17 @@ export interface IDiaryEntry {
 }
 
 export interface IActivity {
-  type: "read" | "rated" | "liked" | "added_to_list" | "started_reading" | "reviewed" | "shared_list" | "shared_book" | "collaboration_request" | "granted_access";
+  type: "read" | "rated" | "liked" | "added_to_list" | "started_reading" | "reviewed" | "shared_list" | "shared_book" | "collaboration_request" | "granted_access" | "liked_diary_entry";
   bookId?: mongoose.Types.ObjectId;
   listId?: string;
   listTitle?: string; // Title of the list for granted_access activities
+  diaryEntryId?: mongoose.Types.ObjectId | string; // For liked_diary_entry activities
+  subject?: string; // Subject/title of the diary entry for liked_diary_entry activities
   rating?: number;
   review?: string;
   timestamp: Date;
-  sharedBy?: mongoose.Types.ObjectId; // User who shared the list/book
-  sharedByUsername?: string; // Username of the person who shared/granted access
+  sharedBy?: mongoose.Types.ObjectId; // User who shared the list/book/liked the diary entry
+  sharedByUsername?: string; // Username of the person who shared/granted access/liked
 }
 
 export interface IAuthorStats {
@@ -228,12 +230,14 @@ const DiaryEntrySchema = new Schema({
 const ActivitySchema = new Schema({
   type: {
     type: String,
-    enum: ["read", "rated", "liked", "added_to_list", "started_reading", "reviewed", "shared_list", "shared_book", "collaboration_request", "granted_access"],
+    enum: ["read", "rated", "liked", "added_to_list", "started_reading", "reviewed", "shared_list", "shared_book", "collaboration_request", "granted_access", "liked_diary_entry"],
     required: true,
   },
   bookId: { type: Schema.Types.ObjectId, ref: "Book" },
   listId: { type: String },
   listTitle: { type: String }, // Title of the list for granted_access activities
+  diaryEntryId: { type: Schema.Types.Mixed }, // Can be ObjectId or string for liked_diary_entry activities
+  subject: { type: String }, // Subject/title of the diary entry for liked_diary_entry activities
   rating: { type: Number, min: 1, max: 5 },
   review: { type: String },
   timestamp: { type: Date, default: Date.now },

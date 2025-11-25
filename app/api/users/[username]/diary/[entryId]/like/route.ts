@@ -173,6 +173,41 @@ export async function POST(
       if (!updateResult.acknowledged) {
         throw new Error('Failed to like entry');
       }
+
+      // Create activity notification for the diary entry owner
+      // Only create activity if the liker is not the owner (don't notify yourself)
+      const ownerIdStr = user._id?.toString ? user._id.toString() : String(user._id);
+      if (ownerIdStr !== userIdStr) {
+        // Get the liker's user info
+        const likerUser = await User.findById(userId).select('username name avatar').lean();
+        
+        if (likerUser) {
+          // Determine the diary entry name/subject
+          const entrySubject = entry.subject && entry.subject.trim() 
+            ? entry.subject 
+            : (entry.bookTitle || 'your diary entry');
+          
+          // Add activity to the diary entry owner's activities
+          const newActivity = {
+            type: "liked_diary_entry" as const,
+            diaryEntryId: entryIdForQuery,
+            subject: entrySubject,
+            sharedBy: userId,
+            sharedByUsername: likerUser.username || '',
+            timestamp: new Date(),
+          };
+
+          // Re-fetch the user to ensure we have the latest document
+          const freshUser = await User.findById(user._id);
+          if (freshUser) {
+            if (!freshUser.activities) {
+              freshUser.activities = [];
+            }
+            freshUser.activities.push(newActivity);
+            await freshUser.save();
+          }
+        }
+      }
     }
 
     // Fetch the updated entry to get the new likes count
