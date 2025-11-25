@@ -103,22 +103,15 @@ export default function BooksPage() {
     }
   }, [status, isAuthenticated, session?.user, router]);
 
-  // Fetch books (latest + personalized recommendations + friends' liked books)
+  // Fetch all recommendation types
   React.useEffect(() => {
     const fetchBooks = async () => {
       try {
         setIsLoading(true);
-        
-        // Fetch latest books (always fetch)
-        const latestResponse = await fetch(
-          `/api/books/latest?page=1&pageSize=200`
-        );
-        const latestData = latestResponse.ok ? await latestResponse.json() : { books: [] };
 
         // Combine and deduplicate books
         const bookMap = new Map<string, Book>();
         
-        // Add latest books first (they get priority)
         type BookFromAPI = {
           id?: string;
           _id?: string;
@@ -138,95 +131,35 @@ export default function BooksPage() {
           categories?: string[];
           publisher?: string;
         };
-        (latestData.books || []).forEach((book: BookFromAPI) => {
-          const bookId = book.id || book._id;
-          if (bookId && !bookMap.has(bookId)) {
-            bookMap.set(bookId, {
-              id: bookId,
-              _id: book._id || bookId,
-              title: book.title || "Unknown Title",
-              authors: Array.isArray(book.authors) ? book.authors : (book.authors ? [book.authors] : ["Unknown Author"]),
-              description: book.description || "",
-              publishedDate: book.publishedDate || "",
-              cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
-              isbn: book.isbn,
-              isbn13: book.isbn13,
-              openLibraryId: book.openLibraryId,
-              isbndbId: book.isbndbId,
-              averageRating: book.averageRating,
-              ratingsCount: book.ratingsCount,
-              pageCount: book.pageCount,
-              categories: book.categories,
-              publisher: book.publisher,
-            });
-          }
-        });
 
-        // If authenticated, also fetch personalized recommendations, onboarding books, and friends' liked books
+        // If authenticated, fetch all recommendation types
         if (isAuthenticated && session?.user?.id) {
-          // Fetch all personalized sources in parallel
-          const [recommendationsResponse, onboardingResponse, friendsResponse] = await Promise.all([
+          // Fetch all recommendation types in parallel
+          const [recommendedResponse, friendsResponse, favoritesResponse, authorsResponse, genresResponse] = await Promise.all([
             fetch(`/api/books/personalized?type=recommended&limit=100`),
-            fetch(`/api/books/personalized?type=onboarding&limit=100`),
             fetch(`/api/books/personalized?type=friends&limit=100`),
+            fetch(`/api/books/personalized?type=favorites&limit=100`),
+            fetch(`/api/books/personalized?type=authors&limit=100`),
+            fetch(`/api/books/personalized?type=genres&limit=100`),
           ]);
 
-          const recommendationsData = recommendationsResponse.ok ? await recommendationsResponse.json() : { books: [] };
-          const onboardingData = onboardingResponse.ok ? await onboardingResponse.json() : { books: [] };
+          const recommendedData = recommendedResponse.ok ? await recommendedResponse.json() : { books: [] };
           const friendsData = friendsResponse.ok ? await friendsResponse.json() : { books: [] };
+          const favoritesData = favoritesResponse.ok ? await favoritesResponse.json() : { books: [] };
+          const authorsData = authorsResponse.ok ? await authorsResponse.json() : { books: [] };
+          const genresData = genresResponse.ok ? await genresResponse.json() : { books: [] };
 
-          // Add onboarding-based books first (they get priority as they match user's explicit preferences)
-          (onboardingData.books || []).forEach((book: BookFromAPI) => {
-            const bookId = book.id || book._id;
-            if (bookId && !bookMap.has(bookId)) {
-              bookMap.set(bookId, {
-                id: bookId,
-                _id: book._id || bookId,
-                title: book.title || "Unknown Title",
-                authors: Array.isArray(book.authors) ? book.authors : (book.authors ? [book.authors] : (book.author ? [book.author] : ["Unknown Author"])),
-                description: book.description || "",
-                publishedDate: book.publishedDate || "",
-                cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
-                isbn: book.isbn,
-                isbn13: book.isbn13,
-                openLibraryId: book.openLibraryId,
-                isbndbId: book.isbndbId,
-                averageRating: book.averageRating,
-                ratingsCount: book.ratingsCount,
-                pageCount: book.pageCount,
-                categories: book.categories,
-                publisher: book.publisher,
-              });
-            }
-          });
+          // Combine all books from all recommendation types
+          const allBooksData = [
+            ...(recommendedData.books || []),
+            ...(friendsData.books || []),
+            ...(favoritesData.books || []),
+            ...(authorsData.books || []),
+            ...(genresData.books || []),
+          ];
 
-          // Add recommended books (only if not already in map)
-          (recommendationsData.books || []).forEach((book: BookFromAPI) => {
-            const bookId = book.id || book._id;
-            if (bookId && !bookMap.has(bookId)) {
-              bookMap.set(bookId, {
-                id: bookId,
-                _id: book._id || bookId,
-                title: book.title || "Unknown Title",
-                authors: Array.isArray(book.authors) ? book.authors : (book.authors ? [book.authors] : (book.author ? [book.author] : ["Unknown Author"])),
-                description: book.description || "",
-                publishedDate: book.publishedDate || "",
-                cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
-                isbn: book.isbn,
-                isbn13: book.isbn13,
-                openLibraryId: book.openLibraryId,
-                isbndbId: book.isbndbId,
-                averageRating: book.averageRating,
-                ratingsCount: book.ratingsCount,
-                pageCount: book.pageCount,
-                categories: book.categories,
-                publisher: book.publisher,
-              });
-            }
-          });
-
-          // Add friends' liked books (only if not already in map)
-          (friendsData.books || []).forEach((book: BookFromAPI) => {
+          // Add all books, removing duplicates
+          allBooksData.forEach((book: BookFromAPI) => {
             const bookId = book.id || book._id;
             if (bookId && !bookMap.has(bookId)) {
               bookMap.set(bookId, {
@@ -467,10 +400,10 @@ export default function BooksPage() {
         <div className="space-y-10">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-              Feed
+              Recommendations
             </h1>
             <p className="text-sm text-muted-foreground mt-2">
-              Latest releases, personalized recommendations, and books your friends are loving.
+              Personalized picks based on your reading taste, books your friends are enjoying, and more.
             </p>
           </div>
 

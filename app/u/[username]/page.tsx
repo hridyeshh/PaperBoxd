@@ -892,7 +892,7 @@ function EditableFavoriteBooksCarousel({
   canEdit,
   onUpdate,
 }: {
-  title: string;
+  title: React.ReactNode;
   subtitle: string;
   books: ProfileBook[];
   username: string;
@@ -2460,13 +2460,19 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, onListDeleted,
     }
   };
 
+
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Lists</h2>
           <p className="text-sm text-muted-foreground">
-            {canEdit ? "Your curated collections" : `${username}'s curated collection`}
+            {canEdit ? "Your curated collections" : 
+            <>
+            <span className="italic">{username}</span>&apos;s curated collection
+            </>
+            }
           </p>
         </div>
         {canEdit && (
@@ -4078,7 +4084,11 @@ export default function UserProfilePage() {
                     )
                   )}
                   <EditableFavoriteBooksCarousel
-                    title="Books that I love"
+                    title={isOwnProfile ? "Books that I love" : (
+                      <>
+                        Books that <span className="italic">{profileData?.username || activeUsername}</span> loves
+                      </>
+                    )}
                     subtitle="Comfort stories and obsessions that always earn a re-read."
                     books={favoriteBooks}
                     username={activeUsername}

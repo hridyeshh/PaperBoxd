@@ -99,7 +99,15 @@ export function MobileDock() {
           {
             icon: Home,
             label: "Home",
-            onClick: () => router.push("/feed"),
+            onClick: () => {
+              // Only navigate if not already on home page
+              if (pathname !== "/") {
+                router.push("/");
+              } else {
+                // If already on home, scroll to top
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+            },
           },
           {
             icon: Search,

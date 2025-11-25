@@ -345,7 +345,15 @@ export function Header({
       <nav className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-4 sm:px-6">
         <button
           type="button"
-          onClick={() => router.push("/")}
+          onClick={() => {
+            // Only navigate if not already on home page
+            if (pathname !== "/") {
+              router.push("/");
+            } else {
+              // If already on home, scroll to top
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+          }}
           className="flex items-center gap-2 rounded-full px-1 py-1 transition hover:bg-white dark:hover:bg-black cursor-pointer"
         >
           {mounted && (isDark !== undefined) ? (
@@ -372,7 +380,7 @@ export function Header({
                 e.preventDefault();
                 e.stopPropagation();
                 if (isAuthenticated) {
-                  router.push("/feed");
+                  router.push("/recommendations");
                 } else {
                   router.push("/auth");
                 }
@@ -382,7 +390,7 @@ export function Header({
                 className: "font-medium text-foreground/80 hover:text-foreground",
               })}
             >
-              Feed
+              Recommendations
             </button>
             {isAuthenticated && session?.user?.username ? (
               <>

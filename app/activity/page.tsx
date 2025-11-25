@@ -244,7 +244,7 @@ export default function ActivityPage() {
                   detail: activity.type === "liked_diary_entry"
                     ? (activity.subject || "diary entry")
                     : (activity.isGeneralEntry 
-                      ? (activity.subject && activity.subject.trim() ? activity.subject : "a diary entry")
+                    ? (activity.subject && activity.subject.trim() ? activity.subject : "a diary entry")
                       : (activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? (activity.listTitle || "") : (bookTitle || ""))),
                   bookTitle: activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? activity.listTitle : bookTitle,
                   timeAgo: formatTimeAgo(activity.timestamp),
