@@ -1,0 +1,22 @@
+User-agent: *
+Allow: /
+
+# Disallow API routes and private pages
+Disallow: /api/
+Disallow: /auth/
+Disallow: /profile/
+Disallow: /choose-username/
+Disallow: /onboarding/
+Disallow: /clear-cookies/
+Disallow: /test-auth/
+
+# Allow public pages
+Allow: /
+Allow: /b/
+Allow: /u/
+Allow: /recommendations
+Allow: /search
+Allow: /feed
+
+Sitemap: https://paperboxd.in/sitemap.xml
+

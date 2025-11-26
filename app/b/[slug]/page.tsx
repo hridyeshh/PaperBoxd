@@ -521,8 +521,44 @@ export default function BookDetailPage() {
 
   const publishedDate = formatPublishedDate(volumeInfo.publishedDate);
 
+  // Generate structured data for SEO
+  const structuredData = book ? {
+    "@context": "https://schema.org",
+    "@type": "Book",
+    "name": book.volumeInfo.title,
+    "author": book.volumeInfo.authors?.map((author: string) => ({
+      "@type": "Person",
+      "name": author
+    })) || [],
+    "publisher": book.volumeInfo.publisher ? {
+      "@type": "Organization",
+      "name": book.volumeInfo.publisher
+    } : undefined,
+    "datePublished": book.volumeInfo.publishedDate,
+    "description": book.volumeInfo.description ? stripHtmlTags(book.volumeInfo.description).substring(0, 500) : undefined,
+    "image": book.volumeInfo.imageLinks?.large || book.volumeInfo.imageLinks?.medium || book.volumeInfo.imageLinks?.thumbnail,
+    "numberOfPages": book.volumeInfo.pageCount,
+    "inLanguage": book.volumeInfo.language,
+    "genre": book.volumeInfo.categories,
+    "isbn": book.id && /^(\d{10}|\d{13})$/.test(book.id) ? book.id : undefined,
+    "aggregateRating": book.volumeInfo.averageRating && book.volumeInfo.ratingsCount ? {
+      "@type": "AggregateRating",
+      "ratingValue": book.volumeInfo.averageRating,
+      "reviewCount": book.volumeInfo.ratingsCount,
+      "bestRating": 5,
+      "worstRating": 1
+    } : undefined,
+    "url": `https://paperboxd.in/b/${slug}`
+  } : null;
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-background">
+      {structuredData && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        />
+      )}
       <AnimatedGridPattern
         numSquares={120}
         maxOpacity={0.08}
