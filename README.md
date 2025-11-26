@@ -10,7 +10,7 @@ A modern social book tracking platform that empowers readers to discover, track,
 
 ### Vision
 
-PaperBoxd was conceived to solve a fundamental problem: reading is a deeply personal yet inherently social activity, but existing platforms fragment the experience. Our mission is to create a unified space where readers can:
+PaperBoxd was conceived to solve a fundamental problem: reading is a deeply personal yet inherently social activity, but existing platforms fragment the experience. My mission is to create a unified space where readers can:
 
 - **Track their journey**: From "to-be-read" aspirations to completed masterpieces
 - **Discover meaningfully**: Through community curation and authentic recommendations
@@ -19,7 +19,7 @@ PaperBoxd was conceived to solve a fundamental problem: reading is a deeply pers
 
 ### Core Philosophy
 
-We believe that the best book recommendations come from people, not algorithms. PaperBoxd is designed around the principle that reading communities thrive when readers can express themselves, discover through trusted networks, and maintain control over their personal data and privacy.
+I believe that the best book recommendations come from people, not algorithms. PaperBoxd is designed around the principle that reading communities thrive when readers can express themselves, discover through trusted networks, and maintain control over their personal data and privacy.
 
 ---
 
@@ -59,7 +59,7 @@ PaperBoxd follows a **modern full-stack architecture** optimized for performance
 
 #### 1. **Server-First Rendering with Progressive Enhancement**
 
-We leverage Next.js 15's App Router to prioritize server-side rendering for initial page loads, ensuring fast Time to First Byte (TTFB) and excellent SEO. Client-side interactivity is added progressively, creating a resilient experience that works even with JavaScript disabled for core navigation.
+I leverage Next.js 15's App Router to prioritize server-side rendering for initial page loads, ensuring fast Time to First Byte (TTFB) and excellent SEO. Client-side interactivity is added progressively, creating a resilient experience that works even with JavaScript disabled for core navigation.
 
 **Implementation**:
 - Server Components by default for static content and data fetching
@@ -91,6 +91,7 @@ All data operations flow through well-defined RESTful API routes (`/app/api/*`),
 │   ├── [username]/lists/[listId]/access # Grant/revoke access to private lists
 │   ├── [username]/activities/check-new # Check for new friend activities
 │   ├── [username]/activities/following # Get activities from followed users
+│   ├── [username]/diary/[entryId]/like # Like/unlike diary entries
 │   ├── register            # User registration
 │   ├── search              # User search
 │   └── check-username      # Username availability check
@@ -120,10 +121,10 @@ All data operations flow through well-defined RESTful API routes (`/app/api/*`),
 
 #### 3. **Data Normalization with Strategic Caching**
 
-We use a **hybrid caching strategy** to optimize performance and minimize external API calls:
+I use a **hybrid caching strategy** to optimize performance and minimize external API calls:
 
 - **Database-First for Book Search**: Search queries first check MongoDB for previously fetched books, reducing Google Books API calls by ~70-80%
-- **Google Books as Fallback**: Only fetch from Google Books API when books aren't in our database
+- **Google Books as Fallback**: Only fetch from Google Books API when books aren't in my database
 - **Automatic Caching**: Newly fetched books are immediately stored in MongoDB for future queries
 - **Time-Based Invalidation**: Books not accessed in 15+ days are automatically cleaned up to manage storage within free tier limits
 
@@ -135,7 +136,7 @@ We use a **hybrid caching strategy** to optimize performance and minimize extern
 
 #### 4. **Authentication & Session Management**
 
-We implement **NextAuth.js v5** with a dual authentication strategy:
+I implement **NextAuth.js v5** with a dual authentication strategy:
 
 **Credentials Provider**:
 - Email/password authentication with bcrypt hashing
@@ -155,7 +156,7 @@ We implement **NextAuth.js v5** with a dual authentication strategy:
 
 #### 5. **Component Composition & Reusability**
 
-We follow a **layered component architecture** that promotes reusability and maintainability:
+I follow a **layered component architecture** that promotes reusability and maintainability:
 
 **Layer 1: Primitives** (`components/ui/`)
 - Unstyled, accessible components built on Radix UI primitives
@@ -241,7 +242,7 @@ TypeScript is used end-to-end with strict mode enabled:
 
 ### 3. **State Management Philosophy**
 
-We use a **hybrid state management approach**:
+I use a **hybrid state management approach**:
 
 **Server State**:
 - Managed by Next.js server components and API routes
@@ -375,7 +376,11 @@ We use a **hybrid state management approach**:
 **Profile Sections**:
 - **Profile Summary**: Avatar, username, name, bio, pronouns, follower/following counts
 - **Dock Navigation**: Tabs for Bookshelf, Diary, Authors, Lists, To-Be-Read, Likes
-- **Owner-Specific Content**: "Your Library, organised" (owner) vs "{username}'s library" (others) with custom CoFo Glassier font
+- **Owner-Specific Content**: 
+  - "Your Library, organised" (owner) vs "{username}'s library" (others) with custom CoFo Glassier font
+  - Bio placeholder "Add a bio to share your vibe" only visible to profile owner
+  - Lists section: "Your curated collections" (owner) vs "{username}'s curated collection" (visitors)
+  - Favorite books: "Books that I love" (owner) vs "Books that {username} loves" (visitors, with username in italics)
 - **Edit Profile**: Side sheet modal with comprehensive form (username, bio, gender, pronouns, birthday, links)
 - **Profile Link Sharing**: Copy profile link to clipboard from header dropdown menu
 
@@ -422,7 +427,7 @@ We use a **hybrid state management approach**:
   - "Write about it" button with rich text editor for book-specific diary entries
   - Share book functionality with followers
   - Clean button styling (no borders) for Bookshelf, Like, and TBR actions
-- **Feed Page** (`/feed`): Main book discovery feed (renamed from `/books`)
+- **Recommendations Page** (`/recommendations`): Dedicated page for personalized recommendation carousels
 - **Recommendation System**: Sophisticated rule-based engine with multi-signal learning, friend-based recommendations, and diversity injection
 
 ### Social Features
@@ -445,15 +450,16 @@ We use a **hybrid state management approach**:
 
 **Activity Feed**:
 - Dedicated `/activity` page for logged-in user's activity
-- Tracks book additions, list creations, profile updates, list shares, book shares, and granted access notifications
+- Tracks book additions, list creations, profile updates, list shares, book shares, granted access notifications, and diary entry likes
 - Filterable by "Friends" and "Me"
 - Real-time activity indicator in header ("Updates" button) when new friend activities are available
 - Activity format: `[username] [action] [bookname]` for clear readability
-- Clickable activities that navigate to relevant content (e.g., shared lists, shared books, granted access lists)
+- Clickable activities that navigate to relevant content (e.g., shared lists, shared books, granted access lists, diary entries)
 - **Activity Types**:
   - `shared_list`: When a follower shares a list with you
   - `shared_book`: When a follower shares a book with you
   - `granted_access`: When someone grants you access to their private list
+  - `liked_diary_entry`: When someone likes your diary entry (format: "[username] liked your note on [diary_entry_name]")
 
 **Reading Lists**:
 - **List Creation**: Pinterest-style modal for creating new lists with title, description, and privacy options
@@ -520,20 +526,48 @@ We use a **hybrid state management approach**:
 - Footer with newsletter subscription, quick links, and legal information
 
 **Authenticated Home Page**:
-- Personalized hero section (no "Start saving" button)
-- Personalized carousels:
+- **Pinterest-Style Endless Feed**: Responsive masonry grid layout (6 columns on desktop, responsive on mobile)
+  - Infinite scroll with Intersection Observer API
+  - Combines all recommendation types into a unified endless feed
+  - Cached with localStorage (30-minute TTL) for instant loading
+  - Pull-to-refresh on mobile devices
+  - MorphingSquare loader for loading states
+  - Responsive column layout (2-6 columns based on screen size)
+- Footer with newsletter subscription and legal information
+
+**Recommendations Page** (`/recommendations`):
+- Dedicated page for personalized recommendation carousels
+- All recommendation types displayed as horizontal carousels:
   - "Recommended for You"
   - "Your Friends Are Liking These" (only shown if 5+ books available)
   - "Based on Your Favorites"
   - "From Your Favorite Authors"
   - "Trending in Your Genres"
   - "Continue Reading"
-- Footer with newsletter subscription and legal information
+- Same animated grid background as home page
 
 **Loading States**:
 - Tetris loader for consistent loading experience
+- MorphingSquare loader for infinite scroll loading
 - Single load per page visit (prevents re-fetching on re-renders)
 - Optimized data fetching with parallel API calls
+- Client-side caching for improved performance
+
+### SEO & Discoverability
+
+**Search Engine Optimization**:
+- **Sitemap**: Dynamic sitemap (`/sitemap.xml`) with all public pages
+- **Robots.txt**: Properly configured to allow search engine crawling while blocking private routes
+- **Meta Tags**: Comprehensive metadata including title, description, keywords, Open Graph, and Twitter Cards
+- **Structured Data**: JSON-LD Schema.org markup for book pages (enables rich snippets in search results)
+- **Canonical URLs**: Proper canonical tags to prevent duplicate content issues
+- **Performance**: Optimized for Core Web Vitals (LCP, FID, CLS)
+
+**Google Search Console Ready**:
+- Sitemap submission ready
+- URL inspection ready
+- Indexing requests supported
+- See `docs/SEO_SETUP.md` for detailed setup instructions
 
 ### Legal & Compliance
 
@@ -638,10 +672,12 @@ paperboxd/
 │   ├── choose-username/          # Username selection page
 │   ├── onboarding/               # Onboarding questionnaire page
 │   ├── activity/                 # User activity feed
+│   ├── recommendations/          # Recommendations page with carousels
 │   ├── feed/                     # Main book feed page (renamed from /books)
 │   ├── auth/                     # Authentication pages
 │   ├── layout.tsx                # Root layout (theme script, providers)
-│   ├── page.tsx                  # Homepage (public/authenticated)
+│   ├── page.tsx                  # Homepage (public/authenticated with Pinterest grid)
+│   ├── sitemap.ts                # Dynamic sitemap generation
 │   ├── not-found.tsx             # 404 page
 │   └── globals.css               # Global styles
 │
@@ -651,7 +687,7 @@ paperboxd/
 │       ├── dock/                 # Tab navigation components
 │       ├── forms/                # Form components
 │       ├── layout/               # Layout components (Header - fixed positioning)
-│       ├── home/                 # Homepage components (PublicHome, AuthenticatedHome, BookCarousel, Hero)
+│       ├── home/                 # Homepage components (PublicHome, AuthenticatedHome, PinterestGrid, BookCarousel, Hero)
 │       ├── shared/               # Shared utilities (animations)
 │       ├── demos/                # Component demos
 │       ├── onboarding-questionnaire.tsx  # Onboarding questionnaire component
@@ -663,6 +699,7 @@ paperboxd/
 │       ├── about-us-dialog.tsx           # About us dialog
 │       ├── signup-prompt-dialog.tsx      # Sign-up prompt for non-authenticated users
 │       ├── tetris-loader.tsx             # Tetris loading animation
+│       ├── morphing-square.tsx           # Morphing square loader for infinite scroll
 │       ├── tiptap-editor.tsx             # Rich text editor component
 │       ├── diary-editor-dialog.tsx       # Book-specific diary entry editor
 │       ├── general-diary-editor-dialog.tsx # General diary entry editor
@@ -694,7 +731,10 @@ paperboxd/
 ├── hooks/                        # Custom React Hooks
 │   └── use-media-query.tsx       # Responsive breakpoint hooks
 │
-└── public/                       # Static assets
+├── public/                       # Static assets
+│   └── robots.txt               # Search engine crawler directives
+└── docs/                        # Documentation
+    └── SEO_SETUP.md             # SEO setup and configuration guide
 ```
 
 ---
@@ -768,6 +808,11 @@ paperboxd/
 - **Book Sharing**: ✅ Implemented - Share books with followers via activity feed
 - **Private Lists**: ✅ Implemented - Private lists with username-based access management
 - **Profile Link Sharing**: ✅ Implemented - Copy profile link to clipboard from header dropdown
+- **Pinterest-Style Endless Feed**: ✅ Implemented - Responsive masonry grid with infinite scroll on home page
+- **Recommendations Page**: ✅ Implemented - Dedicated page for personalized recommendation carousels
+- **Diary Entry Likes**: ✅ Implemented - Like diary entries with activity notifications
+- **SEO Optimization**: ✅ Implemented - Sitemap, robots.txt, structured data, and comprehensive meta tags
+- **Home Page Caching**: ✅ Implemented - Client-side caching with pull-to-refresh for mobile
 - **Social Groups**: Book clubs and reading groups
 - **Reading Challenges**: Annual/yearly reading goals
 - **Export Data**: Export reading history (CSV, JSON)
@@ -786,4 +831,4 @@ paperboxd/
 
 ## Contributing
 
-PaperBoxd is open source, but contributions are managed through our internal development process.
+PaperBoxd is open source, but contributions are managed through my internal development process.
