@@ -126,7 +126,7 @@ function Footerdemo() {
               >
                 About Us
               </button>
-              <a href="/feed" className="block transition-colors hover:text-primary">
+              <a href="/recommendations" className="block transition-colors hover:text-primary">
                 Discover Books
               </a>
               {/* <a href="/contact" className="block transition-colors hover:text-primary">

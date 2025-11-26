@@ -34,7 +34,7 @@ export default function Home() {
             const data = await response.json();
             
             // Only check onboarding for new users
-            // Existing users should go directly to home/feed (no redirect)
+            // Existing users should go directly to home (no redirect)
             if (data.isNewUser) {
               // If no username, redirect to choose username
               if (!data.hasUsername) {

@@ -270,9 +270,8 @@ function AuthSignIn({ onSignUp }: AuthSignInProps) {
       
       if (result?.ok) {
         toast.success("Signed in successfully!");
-        // Redirect based on device type: mobile -> /feed, desktop -> /
-        const redirectUrl = isMobile ? "/feed" : "/";
-        window.location.href = redirectUrl;
+        // Redirect to home page
+        window.location.href = "/";
       }
     } catch (error) {
       // Set error message from the caught error

@@ -621,7 +621,7 @@ export function Header({
                     e.preventDefault();
                     e.stopPropagation();
                     if (isAuthenticated) {
-                      router.push("/feed");
+                      router.push("/recommendations");
                     } else {
                       router.push("/auth");
                     }

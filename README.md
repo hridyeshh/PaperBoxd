@@ -673,7 +673,6 @@ paperboxd/
 │   ├── onboarding/               # Onboarding questionnaire page
 │   ├── activity/                 # User activity feed
 │   ├── recommendations/          # Recommendations page with carousels
-│   ├── feed/                     # Main book feed page (renamed from /books)
 │   ├── auth/                     # Authentication pages
 │   ├── layout.tsx                # Root layout (theme script, providers)
 │   ├── page.tsx                  # Homepage (public/authenticated with Pinterest grid)
@@ -826,9 +825,3 @@ paperboxd/
 - **Analytics**: Server-side tracking implemented via EventTracker. Future: Optional privacy-respecting analytics (Plausible, PostHog) with user consent
 - **Testing**: Add unit tests (Vitest) and E2E tests (Playwright)
 - **Newsletter Email Service**: Currently stores emails in database. Future: Integrate with email service provider (SendGrid, Mailchimp, etc.)
-
----
-
-## Contributing
-
-PaperBoxd is open source, but contributions are managed through my internal development process.

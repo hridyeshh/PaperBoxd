@@ -111,9 +111,8 @@ export default function OnboardingPage() {
       <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
         <OnboardingQuestionnaire
           onComplete={() => {
-            // Redirect based on device type: mobile -> /feed, desktop -> /
-            const redirectUrl = isMobile ? "/feed" : "/";
-            router.push(redirectUrl);
+            // Redirect to home page
+            router.push("/");
           }}
         />
       </div>

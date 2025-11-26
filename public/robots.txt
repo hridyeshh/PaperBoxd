@@ -16,7 +16,6 @@ Allow: /b/
 Allow: /u/
 Allow: /recommendations
 Allow: /search
-Allow: /feed
 
 Sitemap: https://paperboxd.in/sitemap.xml
 
