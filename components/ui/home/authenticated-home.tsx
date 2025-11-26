@@ -73,19 +73,67 @@ export function AuthenticatedHome() {
       return;
     }
 
-    // Check if we have cached data in sessionStorage
-    const cachedData = typeof window !== 'undefined' ? sessionStorage.getItem('home_carousel_data') : null;
-    const cachedTimestamp = typeof window !== 'undefined' ? sessionStorage.getItem('home_carousel_timestamp') : null;
+    // Background fetch function (doesn't show loading state)
+    const fetchCarouselsInBackground = async () => {
+      try {
+        const data: Record<string, BookCarouselBook[]> = {};
+
+        const promises = carousels.map(async (carousel) => {
+          try {
+            const response = await fetch(
+              `/api/books/personalized?type=${carousel.type}&limit=20`
+            );
+            if (response.ok) {
+              const result = await response.json();
+              data[carousel.type] = result.books || [];
+            }
+          } catch (error) {
+            console.error(`Error fetching ${carousel.type} in background:`, error);
+          }
+        });
+
+        await Promise.all(promises);
+        
+        // Update cache silently
+        if (typeof window !== 'undefined' && Object.keys(data).length > 0) {
+          localStorage.setItem('home_carousel_data', JSON.stringify(data));
+          localStorage.setItem('home_carousel_timestamp', Date.now().toString());
+          // Update state if component is still mounted
+          setCarouselData(data);
+        }
+      } catch (error) {
+        console.error("Error in background fetch:", error);
+      }
+    };
+
+    // Check if this is an explicit page refresh (user pressed refresh button)
+    const isExplicitRefresh = typeof window !== 'undefined' && 
+      (performance.navigation?.type === 1 || 
+       (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming)?.type === 'reload');
+
+    // Check if we have cached data in localStorage (persists across sessions)
+    const cachedData = typeof window !== 'undefined' ? localStorage.getItem('home_carousel_data') : null;
+    const cachedTimestamp = typeof window !== 'undefined' ? localStorage.getItem('home_carousel_timestamp') : null;
     
-    // Use cached data if it's less than 5 minutes old
+    // Use cached data if it exists and:
+    // 1. Not an explicit refresh, OR
+    // 2. Cache is less than 30 minutes old (even on refresh, use cache if fresh)
     if (cachedData && cachedTimestamp) {
       const age = Date.now() - parseInt(cachedTimestamp);
-      if (age < 5 * 60 * 1000) { // 5 minutes
+      const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+      
+      if (!isExplicitRefresh || age < CACHE_DURATION) {
         try {
           const parsed = JSON.parse(cachedData);
           setCarouselData(parsed);
           setLoading(false);
           hasLoadedRef.current = true;
+          
+          // If cache is old but we're using it, refresh in background
+          if (age >= CACHE_DURATION) {
+            // Fetch fresh data in background without showing loading
+            fetchCarouselsInBackground();
+          }
           return;
         } catch {
           // If parsing fails, continue to fetch
@@ -124,10 +172,10 @@ export function AuthenticatedHome() {
       await Promise.all(promises);
       setCarouselData(data);
       
-      // Cache data in sessionStorage
+      // Cache data in localStorage (persists across sessions)
       if (typeof window !== 'undefined') {
-        sessionStorage.setItem('home_carousel_data', JSON.stringify(data));
-        sessionStorage.setItem('home_carousel_timestamp', Date.now().toString());
+        localStorage.setItem('home_carousel_data', JSON.stringify(data));
+        localStorage.setItem('home_carousel_timestamp', Date.now().toString());
       }
       
       setLoading(false);
@@ -355,8 +403,8 @@ export function AuthenticatedHome() {
         
         // Clear cache and reload
         if (typeof window !== 'undefined') {
-          sessionStorage.removeItem('home_carousel_data');
-          sessionStorage.removeItem('home_carousel_timestamp');
+          localStorage.removeItem('home_carousel_data');
+          localStorage.removeItem('home_carousel_timestamp');
         }
         
         hasLoadedRef.current = false;
@@ -385,8 +433,8 @@ export function AuthenticatedHome() {
           
           // Cache new data
           if (typeof window !== 'undefined') {
-            sessionStorage.setItem('home_carousel_data', JSON.stringify(data));
-            sessionStorage.setItem('home_carousel_timestamp', Date.now().toString());
+            localStorage.setItem('home_carousel_data', JSON.stringify(data));
+            localStorage.setItem('home_carousel_timestamp', Date.now().toString());
           }
         } catch (error) {
           console.error("Error refreshing:", error);

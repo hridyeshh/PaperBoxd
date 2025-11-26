@@ -113,7 +113,7 @@ export function DiaryEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
+      <DialogContent className="rounded-3xl max-w-[95vw] sm:max-w-2xl lg:max-w-3xl max-h-[85vh] sm:max-h-[90vh] p-4 sm:p-6 flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>Write about {bookTitle}</DialogTitle>
           <DialogDescription>
@@ -121,11 +121,11 @@ export function DiaryEditorDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 flex flex-col gap-4 min-h-0 overflow-y-auto">
+        <div className="flex-1 flex flex-col gap-3 sm:gap-4 min-h-0 overflow-y-auto">
           {/* Book Info */}
-          <div className="flex gap-4 p-4 rounded-lg border bg-muted/50 flex-shrink-0">
+          <div className="flex gap-3 sm:gap-4 p-3 sm:p-4 rounded-lg border bg-muted/50 flex-shrink-0">
             {bookCover && (
-              <div className="relative w-16 h-24 flex-shrink-0 overflow-hidden rounded-lg">
+              <div className="relative w-12 h-[4.5rem] sm:w-16 sm:h-24 flex-shrink-0 overflow-hidden rounded-lg">
                 <Image
                   src={bookCover}
                   alt={bookTitle}

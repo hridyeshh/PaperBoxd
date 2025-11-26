@@ -161,7 +161,7 @@ export function GeneralDiaryEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
+      <DialogContent className="rounded-3xl max-w-[95vw] sm:max-w-2xl lg:max-w-3xl max-h-[85vh] sm:max-h-[90vh] p-4 sm:p-6 flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>Write</DialogTitle>
           <DialogDescription>
@@ -169,7 +169,7 @@ export function GeneralDiaryEditorDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 flex flex-col gap-4 min-h-0 overflow-y-auto">
+        <div className="flex-1 flex flex-col gap-3 sm:gap-4 min-h-0 overflow-y-auto">
           {/* Subject Input */}
           <div className="flex flex-col gap-2 flex-shrink-0">
             <label htmlFor="subject" className="text-sm font-medium text-foreground">

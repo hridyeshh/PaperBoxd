@@ -198,7 +198,7 @@ export function PinterestGrid({ books, onLoadMore, hasMore = false, isLoading = 
       {hasMore && (
         <div ref={loadMoreRef} className="h-20 flex items-center justify-center mt-8">
           {isLoading && (
-            <MorphingSquare message="Loading books..." />
+            <MorphingSquare className="mt-8 text-sm text-muted-foreground" message="Loading books..." />
           )}
         </div>
       )}

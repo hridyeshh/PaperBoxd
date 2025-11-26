@@ -49,6 +49,15 @@ type BookFromAPI = {
 
 const BOOKS_PER_PAGE = 20; // 2 columns x 10 rows = 20 books per load
 
+// Helper function to get a random fallback cover image
+const getFallbackCover = () => {
+  const fallbackImages = [
+    "/cover_1.jpeg",
+    "/cover_2.jpeg"
+  ];
+  return fallbackImages[Math.floor(Math.random() * fallbackImages.length)];
+};
+
 export function AuthenticatedHomeMobile() {
   const router = useRouter();
   const { data: session } = useSession();
@@ -61,6 +70,123 @@ export function AuthenticatedHomeMobile() {
 
   // Fetch books (latest + personalized recommendations + friends' liked books)
   React.useEffect(() => {
+    // Background fetch function (doesn't show loading state)
+    const fetchBooksInBackground = async () => {
+      try {
+        const latestResponse = await fetch(`/api/books/latest?page=1&pageSize=200`);
+        const latestData = latestResponse.ok ? await latestResponse.json() : { books: [] };
+
+        const bookMap = new Map<string, Book>();
+        
+        (latestData.books || []).forEach((book: BookFromAPI) => {
+          const bookId = book.id || book._id;
+          if (bookId && !bookMap.has(bookId)) {
+            bookMap.set(bookId, {
+              id: bookId,
+              _id: book._id || bookId,
+              title: book.title || "Unknown Title",
+              authors: Array.isArray(book.authors) ? book.authors : (book.authors ? [book.authors] : ["Unknown Author"]),
+              description: book.description || "",
+              publishedDate: book.publishedDate || "",
+              cover: book.cover || getFallbackCover(),
+              isbn: book.isbn,
+              isbn13: book.isbn13,
+              openLibraryId: book.openLibraryId,
+              isbndbId: book.isbndbId,
+              averageRating: book.averageRating,
+              ratingsCount: book.ratingsCount,
+              pageCount: book.pageCount,
+              categories: book.categories,
+              publisher: book.publisher,
+            });
+          }
+        });
+
+        if (session?.user?.id) {
+          const [recommendationsResponse, onboardingResponse, friendsResponse] = await Promise.all([
+            fetch(`/api/books/personalized?type=recommended&limit=100`),
+            fetch(`/api/books/personalized?type=onboarding&limit=100`),
+            fetch(`/api/books/personalized?type=friends&limit=100`),
+          ]);
+
+          const recommendationsData = recommendationsResponse.ok ? await recommendationsResponse.json() : { books: [] };
+          const onboardingData = onboardingResponse.ok ? await onboardingResponse.json() : { books: [] };
+          const friendsData = friendsResponse.ok ? await friendsResponse.json() : { books: [] };
+
+          [onboardingData.books || [], recommendationsData.books || [], friendsData.books || []].forEach((bookList: BookFromAPI[]) => {
+            bookList.forEach((book: BookFromAPI) => {
+              const bookId = book.id || book._id;
+              if (bookId && !bookMap.has(bookId)) {
+                bookMap.set(bookId, {
+                  id: bookId,
+                  _id: book._id || bookId,
+                  title: book.title || "Unknown Title",
+                  authors: Array.isArray(book.authors) ? book.authors : (book.authors ? [book.authors] : (book.author ? [book.author] : ["Unknown Author"])),
+                  description: book.description || "",
+                  publishedDate: book.publishedDate || "",
+                  cover: book.cover || getFallbackCover(),
+                  isbn: book.isbn,
+                  isbn13: book.isbn13,
+                  openLibraryId: book.openLibraryId,
+                  isbndbId: book.isbndbId,
+                  averageRating: book.averageRating,
+                  ratingsCount: book.ratingsCount,
+                  pageCount: book.pageCount,
+                  categories: book.categories,
+                  publisher: book.publisher,
+                });
+              }
+            });
+          });
+        }
+
+        const combinedBooks = Array.from(bookMap.values());
+        
+        if (typeof window !== 'undefined' && combinedBooks.length > 0) {
+          localStorage.setItem('home_mobile_books_data', JSON.stringify(combinedBooks));
+          localStorage.setItem('home_mobile_books_timestamp', Date.now().toString());
+          allBooksRef.current = combinedBooks;
+          setBooks(combinedBooks.slice(0, BOOKS_PER_PAGE));
+          setHasMore(combinedBooks.length > BOOKS_PER_PAGE);
+        }
+      } catch (error) {
+        console.error("Error in background fetch:", error);
+      }
+    };
+
+    // Check if this is an explicit page refresh
+    const isExplicitRefresh = typeof window !== 'undefined' && 
+      (performance.navigation?.type === 1 || 
+       (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming)?.type === 'reload');
+
+    // Check if we have cached data in localStorage
+    const cachedData = typeof window !== 'undefined' ? localStorage.getItem('home_mobile_books_data') : null;
+    const cachedTimestamp = typeof window !== 'undefined' ? localStorage.getItem('home_mobile_books_timestamp') : null;
+    
+    // Use cached data if it exists and not an explicit refresh (or cache is fresh)
+    if (cachedData && cachedTimestamp) {
+      const age = Date.now() - parseInt(cachedTimestamp);
+      const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+      
+      if (!isExplicitRefresh || age < CACHE_DURATION) {
+        try {
+          const parsed = JSON.parse(cachedData);
+          allBooksRef.current = parsed;
+          setBooks(parsed.slice(0, BOOKS_PER_PAGE));
+          setHasMore(parsed.length > BOOKS_PER_PAGE);
+          setIsLoading(false);
+          
+          // If cache is old but we're using it, refresh in background
+          if (age >= CACHE_DURATION) {
+            fetchBooksInBackground();
+          }
+          return;
+        } catch {
+          // If parsing fails, continue to fetch
+        }
+      }
+    }
+
     const fetchBooks = async () => {
       try {
         setIsLoading(true);
@@ -191,6 +317,12 @@ export function AuthenticatedHomeMobile() {
         const combinedBooks = Array.from(bookMap.values());
         allBooksRef.current = combinedBooks;
         
+        // Cache data in localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('home_mobile_books_data', JSON.stringify(combinedBooks));
+          localStorage.setItem('home_mobile_books_timestamp', Date.now().toString());
+        }
+        
         // Load first page
         setBooks(combinedBooks.slice(0, BOOKS_PER_PAGE));
         setHasMore(combinedBooks.length > BOOKS_PER_PAGE);
@@ -291,7 +423,7 @@ export function AuthenticatedHomeMobile() {
                 {/* Book Cover Image */}
                 <div className="relative w-full aspect-[2/3] overflow-hidden bg-muted">
                   <Image
-                    src={book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80"}
+                    src={book.cover || getFallbackCover()}
                     alt={book.title}
                     fill
                     className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
