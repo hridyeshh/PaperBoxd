@@ -72,7 +72,6 @@ We leverage Next.js 15's App Router to prioritize server-side rendering for init
 All data operations flow through well-defined RESTful API routes (`/app/api/*`), creating a clear separation between presentation and business logic. This enables:
 
 - **Type safety**: Shared TypeScript interfaces between client and server
-- **Reusability**: API endpoints can be consumed by external services
 - **Testability**: API routes can be tested independently
 - **Future flexibility**: Easy migration to microservices if needed
 
