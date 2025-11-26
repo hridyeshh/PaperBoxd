@@ -7,6 +7,7 @@ import { Calendar, Star } from "lucide-react";
 import { format } from "date-fns";
 import { createBookSlug } from "@/lib/utils/book-slug";
 import { useRouter } from "next/navigation";
+import { MorphingSquare } from "@/components/ui/morphing-square";
 
 type Book = {
   id: string;
@@ -195,9 +196,9 @@ export function PinterestGrid({ books, onLoadMore, hasMore = false, isLoading = 
 
       {/* Load more trigger */}
       {hasMore && (
-        <div ref={loadMoreRef} className="h-20 flex items-center justify-center">
+        <div ref={loadMoreRef} className="h-20 flex items-center justify-center mt-8">
           {isLoading && (
-            <div className="text-sm text-muted-foreground">Loading more...</div>
+            <MorphingSquare message="Loading books..." />
           )}
         </div>
       )}

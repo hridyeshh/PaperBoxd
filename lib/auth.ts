@@ -25,7 +25,7 @@ if (!process.env.NEXTAUTH_URL && process.env.NODE_ENV === "development") {
 // Warn if NEXTAUTH_URL is not set in production
 if (!process.env.NEXTAUTH_URL && process.env.NODE_ENV === "production") {
   console.warn(
-    "⚠️  NEXTAUTH_URL is not set in production. Please set it in your Vercel environment variables to: https://paperboxd.vercel.app"
+    "⚠️  NEXTAUTH_URL is not set in production. Please set it in your Vercel environment variables to your custom domain (e.g., https://paperboxd.in)"
   );
 }
 
