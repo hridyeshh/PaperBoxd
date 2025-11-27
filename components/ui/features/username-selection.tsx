@@ -214,7 +214,7 @@ export function UsernameSelection({
       } else {
         console.log("[UsernameSelection] No onComplete callback, redirecting to onboarding");
         // Fallback: redirect to onboarding
-        window.location.href = "/onboarding";
+      window.location.href = "/onboarding";
       }
     } catch (error) {
       const errorMessage =

@@ -3007,6 +3007,8 @@ export default function UserProfilePage() {
   const [isSavingProfile, setIsSavingProfile] = React.useState(false);
   const [profileSaveError, setProfileSaveError] = React.useState<string | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = React.useState(true);
+  // Store original profile data when edit form opens to restore on cancel
+  const originalProfileDataRef = React.useRef<EditableProfile | null>(null);
   
   // Book collections from API
   const [topBooks, setTopBooks] = React.useState<ProfileBook[]>([]);
@@ -3944,6 +3946,25 @@ export default function UserProfilePage() {
           }
         }
 
+        // Update original profile ref with saved data
+        if (result.user) {
+          const updatedProfile = {
+            username: result.user.username ?? profileData.username,
+            name: result.user.name ?? profileData.name,
+            birthday: result.user.birthday ?? profileData.birthday,
+            email: result.user.email ?? profileData.email,
+            bio: result.user.bio ?? profileData.bio,
+            pronouns: Array.isArray(result.user.pronouns) ? result.user.pronouns : profileData.pronouns,
+            links: Array.isArray(result.user.links)
+              ? result.user.links.join(", ")
+              : result.user.links ?? profileData.links,
+            gender: result.user.gender ?? profileData.gender,
+            isPublic: typeof result.user.isPublic === "boolean" ? result.user.isPublic : profileData.isPublic,
+            avatar: result.user.avatar ?? profileData.avatar,
+          };
+          originalProfileDataRef.current = JSON.parse(JSON.stringify(updatedProfile));
+        }
+
         setIsEditOpen(false);
       }
     } catch (error) {
@@ -3972,6 +3993,17 @@ export default function UserProfilePage() {
       }
     }
   }, [isEditOpen, isMobile]);
+
+  // Store original profile data when edit form opens to restore on cancel
+  const prevIsEditOpenRef = React.useRef(false);
+  React.useEffect(() => {
+    // Only store original data when form transitions from closed to open
+    if (isEditOpen && !prevIsEditOpenRef.current && profileData) {
+      // Deep clone the profile data to store as original
+      originalProfileDataRef.current = JSON.parse(JSON.stringify(profileData));
+    }
+    prevIsEditOpenRef.current = isEditOpen;
+  }, [isEditOpen, profileData]);
 
   if (isLoadingProfile || !profileData) {
     return (
@@ -4680,7 +4712,13 @@ export default function UserProfilePage() {
             profile={profileData || defaultProfile}
             onProfileChange={setProfileData}
             onSubmitProfile={handleProfileSave}
-            onCancel={() => setIsEditOpen(false)}
+            onCancel={() => {
+              // Restore original profile data on cancel
+              if (originalProfileDataRef.current) {
+                setProfileData(originalProfileDataRef.current);
+              }
+              setIsEditOpen(false);
+            }}
             isSubmitting={isSavingProfile}
             submitError={profileSaveError}
           />

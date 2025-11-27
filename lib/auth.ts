@@ -22,11 +22,22 @@ if (!process.env.NEXTAUTH_URL && process.env.NODE_ENV === "development") {
   process.env.NEXTAUTH_URL = "http://localhost:3000";
 }
 
-// Warn if NEXTAUTH_URL is not set in production
-if (!process.env.NEXTAUTH_URL && process.env.NODE_ENV === "production") {
-  console.warn(
-    "⚠️  NEXTAUTH_URL is not set in production. Please set it in your Vercel environment variables to your custom domain (e.g., https://paperboxd.in)"
+// Validate NEXTAUTH_URL format if set (must include protocol)
+if (process.env.NEXTAUTH_URL && !process.env.NEXTAUTH_URL.match(/^https?:\/\//)) {
+  console.error(
+    "❌ NEXTAUTH_URL must include protocol (https:// or http://). Current value:",
+    process.env.NEXTAUTH_URL
   );
+  // Auto-fix by adding https:// if missing
+  if (!process.env.NEXTAUTH_URL.startsWith("http")) {
+    process.env.NEXTAUTH_URL = `https://${process.env.NEXTAUTH_URL}`;
+    console.log("✅ Auto-fixed NEXTAUTH_URL to:", process.env.NEXTAUTH_URL);
+  }
+}
+
+// Log NEXTAUTH_URL in development for debugging
+if (process.env.NODE_ENV === "development" || process.env.VERCEL) {
+  console.log("🔐 NEXTAUTH_URL:", process.env.NEXTAUTH_URL || "(using request origin via trustHost)");
 }
 
 // Extend the built-in session types
@@ -65,11 +76,12 @@ const providers: Provider[] = [
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        otpSessionToken: { label: "OTP Session Token", type: "text" },
       },
       async authorize(credentials) {
         try {
-          if (!credentials?.email || !credentials?.password) {
-            return null; // Return null instead of throwing for NextAuth to handle
+          if (!credentials?.email) {
+            return null;
           }
 
           await connectDB();
@@ -80,17 +92,57 @@ const providers: Provider[] = [
           });
 
           if (!user) {
-            return null; // Return null for invalid credentials
+            return null;
           }
 
-          // Verify password
-          const isPasswordValid = await bcrypt.compare(
-            credentials.password as string,
-            user.password
-          );
+          // Check if OTP session token is provided
+          if (credentials.otpSessionToken) {
+            // Use Web Crypto API which is available in both Edge and Node.js runtimes
+            // This avoids the Edge Runtime static analysis issue
+            let hashedToken: string;
+            try {
+              // Convert token to ArrayBuffer
+              const encoder = new TextEncoder();
+              const data = encoder.encode(credentials.otpSessionToken as string);
+              
+              // Hash using Web Crypto API (available in both runtimes)
+              const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+              
+              // Convert to hex string
+              const hashArray = Array.from(new Uint8Array(hashBuffer));
+              hashedToken = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            } catch {
+              // Fallback: This should never happen, but if it does, we can't verify the token
+              return null;
+            }
 
-          if (!isPasswordValid) {
-            return null; // Return null for invalid password
+            // Verify OTP session token
+            if (
+              user.passwordReset?.token === hashedToken &&
+              user.passwordReset?.expiresAt &&
+              new Date() < user.passwordReset.expiresAt
+            ) {
+              // Token is valid - clear it (one-time use) and allow sign-in
+              user.passwordReset = undefined;
+              await user.save();
+            } else {
+              return null; // Invalid or expired OTP session token
+            }
+          } else {
+            // Regular password authentication
+            if (!credentials?.password) {
+              return null;
+            }
+
+            // Verify password
+            const isPasswordValid = await bcrypt.compare(
+              credentials.password as string,
+              user.password
+            );
+
+            if (!isPasswordValid) {
+              return null;
+            }
           }
 
           // Update last active
@@ -141,7 +193,12 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  trustHost: true, // Trust the host header from the proxy (Vercel)
+  // trustHost allows NextAuth to use the request origin instead of NEXTAUTH_URL
+  // This is essential for multi-branch deployments (test branch, main branch, etc.)
+  // IMPORTANT: In Vercel, do NOT set NEXTAUTH_URL for preview branches
+  // Only set NEXTAUTH_URL for the production domain (paperboxd.in) if needed
+  // For preview branches, NextAuth will automatically use the preview domain
+  trustHost: true,
   providers,
   callbacks: {
     async signIn({ user, account }) {

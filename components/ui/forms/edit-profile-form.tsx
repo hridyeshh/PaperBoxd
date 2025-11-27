@@ -553,26 +553,26 @@ export function EditProfileForm({
                       e.stopPropagation();
                     }}
                   >
-                    <GridList
-                      aria-label="Pronouns"
-                      selectionMode="multiple"
-                      selectionBehavior="toggle"
-                      selectedKeys={pronounSelection}
+                  <GridList
+                    aria-label="Pronouns"
+                    selectionMode="multiple"
+                    selectionBehavior="toggle"
+                    selectedKeys={pronounSelection}
                       onSelectionChange={(selection) => {
                         // Process selection immediately
                         handlePronounSelection(selection);
                       }}
-                      className="max-h-60"
-                    >
-                      {pronounOptions.map((option) => (
+                    className="max-h-60"
+                  >
+                    {pronounOptions.map((option) => (
                         <GridListItem 
                           id={option} 
                           key={option}
                         >
-                          {option}
-                        </GridListItem>
-                      ))}
-                    </GridList>
+                        {option}
+                      </GridListItem>
+                    ))}
+                  </GridList>
                   </div>
                 </Dropdown.Popover>
               </Dropdown.Root>
@@ -604,25 +604,25 @@ export function EditProfileForm({
                       e.stopPropagation();
                     }}
                   >
-                    <GridList
-                      aria-label="Gender"
-                      selectionMode="single"
-                      selectedKeys={genderSelection}
+                  <GridList
+                    aria-label="Gender"
+                    selectionMode="single"
+                    selectedKeys={genderSelection}
                       onSelectionChange={(selection) => {
                         // Process selection immediately
                         handleGenderSelection(selection);
                       }}
-                      className="max-h-60"
-                    >
-                      {genderOptions.map((option) => (
+                    className="max-h-60"
+                  >
+                    {genderOptions.map((option) => (
                         <GridListItem 
                           id={option} 
                           key={option}
                         >
-                          {option}
-                        </GridListItem>
-                      ))}
-                    </GridList>
+                        {option}
+                      </GridListItem>
+                    ))}
+                  </GridList>
                   </div>
                 </Dropdown.Popover>
               </Dropdown.Root>
@@ -669,15 +669,15 @@ export function EditProfileForm({
             {isSubmitting ? "Saving..." : submitButtonText}
           </Button>
           {onCancel && (
-            <Button 
-              variant="ghost" 
-              type="button" 
-              className="rounded-full px-6" 
-              disabled={isSubmitting}
-              onClick={onCancel}
-            >
+          <Button 
+            variant="ghost" 
+            type="button" 
+            className="rounded-full px-6" 
+            disabled={isSubmitting}
+            onClick={onCancel}
+          >
               {cancelButtonText}
-            </Button>
+          </Button>
           )}
         </div>
       </div>
