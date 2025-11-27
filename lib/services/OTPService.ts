@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import connectDB from "@/lib/db/mongodb";
-import User from "@/lib/db/models/User";
+import User, { IUser } from "@/lib/db/models/User";
 import OTP from "@/lib/db/models/OTP";
 import { sendOTPLoginEmail } from "@/lib/email/otp-login";
 
@@ -177,8 +177,8 @@ class OTPService {
     }
 
     // Find user
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) {
+    const user: IUser | null = await User.findOne({ email: email.toLowerCase() });
+    if (!user || !user._id) {
       return {
         valid: false,
         message: "Invalid code",
