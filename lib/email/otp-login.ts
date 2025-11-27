@@ -37,12 +37,22 @@ export async function sendOTPLoginEmail({
   }
 
   try {
+    console.log("[sendOTPLoginEmail] Starting email send", { 
+      to, 
+      username, 
+      codeLength: code.length,
+      fromEmail: process.env.RESEND_FROM_EMAIL || "PaperBoxd <onboarding@resend.dev>",
+      hasApiKey: !!process.env.RESEND_API_KEY,
+      timestamp: new Date().toISOString() 
+    });
+    
     const resend = getResend();
     // Use Resend's default sending domain or configured domain
     // Format: "Name <email@domain.com>" or just "email@domain.com"
     // For Resend, you can use: "onboarding@resend.dev" (default) or your verified domain
     const fromEmail = process.env.RESEND_FROM_EMAIL || "PaperBoxd <onboarding@resend.dev>";
     
+    console.log("[sendOTPLoginEmail] Calling Resend API", { from: fromEmail, to });
     const result = await resend.emails.send({
       from: fromEmail,
       to,
@@ -134,17 +144,39 @@ export async function sendOTPLoginEmail({
     });
 
     // Log the result for debugging
+    console.log("[sendOTPLoginEmail] Resend API response:", { 
+      hasError: !!result.error, 
+      hasData: !!result.data,
+      error: result.error,
+      dataId: result.data?.id 
+    });
+    
     if (result.error) {
-      console.error("Resend API error:", result.error);
+      console.error("[sendOTPLoginEmail] Resend API error details:", {
+        error: result.error,
+        errorType: typeof result.error,
+        errorString: JSON.stringify(result.error, null, 2),
+        to,
+        from: fromEmail,
+        timestamp: new Date().toISOString(),
+      });
       throw new Error(`Failed to send email: ${JSON.stringify(result.error)}`);
     }
 
-    console.log("✅ OTP email sent successfully:", {
+    console.log("[sendOTPLoginEmail] ✅ OTP email sent successfully:", {
       to,
       id: result.data?.id,
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to send OTP login email:", error);
+    console.error("[sendOTPLoginEmail] Error caught:", {
+      error: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : undefined,
+      stack: error instanceof Error ? error.stack : undefined,
+      to,
+      username,
+      timestamp: new Date().toISOString(),
+    });
     
     // In development, still log the code even if email fails
     if (process.env.NODE_ENV === "development") {

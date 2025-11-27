@@ -9,12 +9,18 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+  let email: string | undefined;
+  
   try {
     await connectDB();
 
-    const { email } = await req.json();
+    const body = await req.json();
+    email = body.email;
+    
+    console.log("[Forgot Password] Request received:", { email, timestamp: new Date().toISOString() });
 
     if (!email) {
+      console.log("[Forgot Password] Error: Email is missing");
       return NextResponse.json(
         { message: "Email is required" },
         { status: 400 }
@@ -24,6 +30,7 @@ export async function POST(req: NextRequest) {
     // Validate email format
     const emailRegex = /^\S+@\S+\.\S+$/;
     if (!emailRegex.test(email)) {
+      console.log("[Forgot Password] Error: Invalid email format", { email });
       return NextResponse.json(
         { message: "Invalid email address" },
         { status: 400 }
@@ -31,9 +38,16 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
+    console.log("[Forgot Password] Normalized email:", { original: email, normalized: normalizedEmail });
 
     // Find user
+    console.log("[Forgot Password] Looking up user in database");
     const user = await User.findOne({ email: normalizedEmail });
+    console.log("[Forgot Password] User lookup result:", { 
+      found: !!user, 
+      userId: user?._id?.toString(),
+      email: user?.email 
+    });
 
     // Always return success (don't reveal if email exists)
     if (!user) {
@@ -68,14 +82,25 @@ export async function POST(req: NextRequest) {
     const resetUrl = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/auth/reset-password?token=${token}&email=${encodeURIComponent(normalizedEmail)}`;
 
     // Send email with unhashed token
+    console.log("[Forgot Password] Attempting to send email", { 
+      to: user.email, 
+      username: user.username,
+      resetUrlLength: resetUrl.length 
+    });
     try {
       await sendPasswordResetEmail({
         to: user.email,
         resetUrl,
         username: user.username,
       });
+      console.log("[Forgot Password] Email sent successfully", { to: user.email });
     } catch (error) {
-      console.error("Failed to send password reset email:", error);
+      console.error("[Forgot Password] Failed to send email:", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        to: user.email,
+        timestamp: new Date().toISOString(),
+      });
       // Still return success to prevent email enumeration
       return NextResponse.json(
         {
@@ -94,7 +119,12 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error("Password reset error:", error);
+    console.error("[Forgot Password] Error caught:", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      email: email || "unknown",
+      timestamp: new Date().toISOString(),
+    });
     // Always return success to prevent email enumeration
     return NextResponse.json(
       {
