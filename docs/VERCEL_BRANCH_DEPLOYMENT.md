@@ -47,10 +47,52 @@ With `trustHost: true` in the NextAuth configuration:
 - Preview branches will use their preview domains (e.g., `https://paperboxd-git-dev.vercel.app`)
 - Production will use the production domain (`https://paperboxd.in`)
 
+## Google OAuth Configuration for Preview Branches
+
+### Issue: `redirect_uri_mismatch` Error
+
+If you get a `redirect_uri_mismatch` error when signing in with Google on a preview branch, you need to add the preview domain's callback URL to Google Cloud Console.
+
+### Solution: Add Preview Domain to Google OAuth
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Navigate to **APIs & Services** → **Credentials**
+3. Find your OAuth 2.0 Client ID (the one used for PaperBoxd)
+4. Click **Edit** (pencil icon)
+5. Under **Authorized redirect URIs**, add:
+   ```
+   https://paperboxd-git-dev.vercel.app/api/auth/callback/google
+   ```
+6. If you have other preview branches, add their callback URLs too:
+   ```
+   https://paperboxd-git-<branch-name>.vercel.app/api/auth/callback/google
+   ```
+7. Click **Save**
+
+### Current Authorized Redirect URIs Should Include:
+
+- **Production**: `https://paperboxd.in/api/auth/callback/google`
+- **Preview (test branch)**: `https://paperboxd-git-dev.vercel.app/api/auth/callback/google`
+- **Local development**: `http://localhost:3000/api/auth/callback/google`
+
+### Note on Vercel Preview URLs
+
+Vercel preview branches use the pattern: `https://<project-name>-git-<branch-name>.vercel.app`
+
+For example:
+- Branch `test` → `https://paperboxd-git-test.vercel.app`
+- Branch `dev` → `https://paperboxd-git-dev.vercel.app`
+
+You can either:
+1. **Add each preview branch individually** as you create them
+2. **Use a wildcard** (if Google supports it, though they typically don't)
+3. **Add common preview branches** you use frequently
+
 ## Testing
 
-After updating the environment variables:
+After updating the environment variables and Google OAuth settings:
 1. Redeploy the preview branch
 2. Sign in on the preview domain
 3. Verify you stay on the preview domain after authentication
+4. Test Google OAuth sign-in to ensure it works without `redirect_uri_mismatch` errors
 
