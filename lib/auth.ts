@@ -22,10 +22,12 @@ if (!process.env.NEXTAUTH_URL && process.env.NODE_ENV === "development") {
   process.env.NEXTAUTH_URL = "http://localhost:3000";
 }
 
-// Warn if NEXTAUTH_URL is not set in production
-if (!process.env.NEXTAUTH_URL && process.env.NODE_ENV === "production") {
+// In production, if NEXTAUTH_URL is not set, NextAuth will use the request origin
+// This allows different branches to work with their own domains
+// Only warn if we're in a production-like environment and it's explicitly needed
+if (!process.env.NEXTAUTH_URL && process.env.NODE_ENV === "production" && !process.env.VERCEL) {
   console.warn(
-    "⚠️  NEXTAUTH_URL is not set in production. Please set it in your Vercel environment variables to your custom domain (e.g., https://paperboxd.in)"
+    "⚠️  NEXTAUTH_URL is not set. NextAuth will use the request origin (recommended for multi-branch deployments)"
   );
 }
 
@@ -141,7 +143,12 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  trustHost: true, // Trust the host header from the proxy (Vercel)
+  // trustHost allows NextAuth to use the request origin instead of NEXTAUTH_URL
+  // This is essential for multi-branch deployments (test branch, main branch, etc.)
+  // IMPORTANT: In Vercel, do NOT set NEXTAUTH_URL for preview branches
+  // Only set NEXTAUTH_URL for the production domain (paperboxd.in) if needed
+  // For preview branches, NextAuth will automatically use the preview domain
+  trustHost: true,
   providers,
   callbacks: {
     async signIn({ user, account }) {
