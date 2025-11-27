@@ -76,11 +76,12 @@ const providers: Provider[] = [
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        otpSessionToken: { label: "OTP Session Token", type: "text" },
       },
       async authorize(credentials) {
         try {
-          if (!credentials?.email || !credentials?.password) {
-            return null; // Return null instead of throwing for NextAuth to handle
+          if (!credentials?.email) {
+            return null;
           }
 
           await connectDB();
@@ -91,17 +92,57 @@ const providers: Provider[] = [
           });
 
           if (!user) {
-            return null; // Return null for invalid credentials
+            return null;
           }
 
-          // Verify password
-          const isPasswordValid = await bcrypt.compare(
-            credentials.password as string,
-            user.password
-          );
+          // Check if OTP session token is provided
+          if (credentials.otpSessionToken) {
+            // Use Web Crypto API which is available in both Edge and Node.js runtimes
+            // This avoids the Edge Runtime static analysis issue
+            let hashedToken: string;
+            try {
+              // Convert token to ArrayBuffer
+              const encoder = new TextEncoder();
+              const data = encoder.encode(credentials.otpSessionToken as string);
+              
+              // Hash using Web Crypto API (available in both runtimes)
+              const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+              
+              // Convert to hex string
+              const hashArray = Array.from(new Uint8Array(hashBuffer));
+              hashedToken = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            } catch {
+              // Fallback: This should never happen, but if it does, we can't verify the token
+              return null;
+            }
 
-          if (!isPasswordValid) {
-            return null; // Return null for invalid password
+            // Verify OTP session token
+            if (
+              user.passwordReset?.token === hashedToken &&
+              user.passwordReset?.expiresAt &&
+              new Date() < user.passwordReset.expiresAt
+            ) {
+              // Token is valid - clear it (one-time use) and allow sign-in
+              user.passwordReset = undefined;
+              await user.save();
+            } else {
+              return null; // Invalid or expired OTP session token
+            }
+          } else {
+            // Regular password authentication
+            if (!credentials?.password) {
+              return null;
+            }
+
+            // Verify password
+            const isPasswordValid = await bcrypt.compare(
+              credentials.password as string,
+              user.password
+            );
+
+            if (!isPasswordValid) {
+              return null;
+            }
           }
 
           // Update last active

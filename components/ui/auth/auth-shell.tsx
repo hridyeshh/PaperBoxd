@@ -36,17 +36,25 @@ export function AuthShell({
 }: AuthShellProps) {
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center">
-      <div className="grid w-full max-w-6xl grid-cols-1 gap-10 px-6 py-12 md:grid-cols-[minmax(0,1.1fr)_minmax(0,420px)] md:px-12 lg:px-16 md:items-center">
-        <div
-          className={cn(
-            "hidden flex-col overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-10 shadow-xl shadow-primary/10 backdrop-blur lg:flex",
-            sideContent ? "md:flex" : "md:hidden",
-          )}
-        >
-          {sideContent}
-        </div>
-        <div className="flex flex-col gap-8">
-          <div className="flex flex-col gap-3 text-center md:text-left">
+      <div className={cn(
+        "grid w-full max-w-6xl gap-10 px-6 py-12 md:px-12 lg:px-16 md:items-center",
+        sideContent 
+          ? "grid-cols-1 md:grid-cols-[minmax(0,1.1fr)_minmax(0,420px)]" 
+          : "grid-cols-1"
+      )}>
+        {sideContent && (
+          <div className="hidden flex-col overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-10 shadow-xl shadow-primary/10 backdrop-blur md:flex">
+            {sideContent}
+          </div>
+        )}
+        <div className={cn(
+          "flex flex-col gap-8",
+          !sideContent && "items-center"
+        )}>
+          <div className={cn(
+            "flex flex-col gap-3",
+            sideContent ? "text-center md:text-left" : "text-center"
+          )}>
             {badge ? (
               <span className="inline-flex w-fit items-center gap-2 rounded-full border border-border/80 bg-background/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
                 {badge}
@@ -63,7 +71,8 @@ export function AuthShell({
           </div>
           <div
             className={cn(
-              "rounded-3xl border border-border/70 bg-background/95 p-6 shadow-lg shadow-primary/5 backdrop-blur w-full max-w-md sm:max-w-lg md:max-w-2xl lg:max-w-3xl",
+              "rounded-3xl border border-border/70 bg-background/95 p-6 shadow-lg shadow-primary/5 backdrop-blur w-full",
+              "max-w-md sm:max-w-lg md:max-w-2xl lg:max-w-3xl",
               "md:p-8",
               className,
             )}
@@ -71,7 +80,10 @@ export function AuthShell({
             {children}
           </div>
           {footer ? (
-            <div className="text-center text-sm text-muted-foreground md:text-left">
+            <div className={cn(
+              "text-center text-sm text-muted-foreground",
+              sideContent && "md:text-left"
+            )}>
               {footer}
             </div>
           ) : null}

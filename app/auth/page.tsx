@@ -81,7 +81,7 @@ export default function AuthPage() {
             <p>
               Need help?{" "}
               <a
-                href="mailto:support@paperboxd.com"
+                href="mailto:paperboxd@gmail.com"
                 className="font-medium text-primary underline-offset-4 hover:underline"
               >
                 Contact support
