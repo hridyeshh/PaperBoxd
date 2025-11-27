@@ -292,15 +292,15 @@ export default function TetrisLoading({
   }
 
   return (
-    <div>
-      <div className="mb-6">
-        <div className={`border-2 border-gray-800 dark:border-gray-200 bg-white dark:bg-black ${config.padding} transition-colors`}>
+    <div className="flex flex-col items-center">
+      <div className="mb-6 w-fit">
+        <div className={`border-2 border-gray-800 dark:border-gray-200 bg-white dark:bg-black ${config.padding} transition-colors inline-block`}>
           {renderGrid()}
         </div>
       </div>
 
       {showLoadingText && (
-        <div className="text-center">
+        <div className="text-center w-full">
           <p className="text-black dark:text-white font-medium transition-colors">{loadingText}</p>
         </div>
       )}
