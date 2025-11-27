@@ -22,13 +22,22 @@ if (!process.env.NEXTAUTH_URL && process.env.NODE_ENV === "development") {
   process.env.NEXTAUTH_URL = "http://localhost:3000";
 }
 
-// In production, if NEXTAUTH_URL is not set, NextAuth will use the request origin
-// This allows different branches to work with their own domains
-// Only warn if we're in a production-like environment and it's explicitly needed
-if (!process.env.NEXTAUTH_URL && process.env.NODE_ENV === "production" && !process.env.VERCEL) {
-  console.warn(
-    "⚠️  NEXTAUTH_URL is not set. NextAuth will use the request origin (recommended for multi-branch deployments)"
+// Validate NEXTAUTH_URL format if set (must include protocol)
+if (process.env.NEXTAUTH_URL && !process.env.NEXTAUTH_URL.match(/^https?:\/\//)) {
+  console.error(
+    "❌ NEXTAUTH_URL must include protocol (https:// or http://). Current value:",
+    process.env.NEXTAUTH_URL
   );
+  // Auto-fix by adding https:// if missing
+  if (!process.env.NEXTAUTH_URL.startsWith("http")) {
+    process.env.NEXTAUTH_URL = `https://${process.env.NEXTAUTH_URL}`;
+    console.log("✅ Auto-fixed NEXTAUTH_URL to:", process.env.NEXTAUTH_URL);
+  }
+}
+
+// Log NEXTAUTH_URL in development for debugging
+if (process.env.NODE_ENV === "development" || process.env.VERCEL) {
+  console.log("🔐 NEXTAUTH_URL:", process.env.NEXTAUTH_URL || "(using request origin via trustHost)");
 }
 
 // Extend the built-in session types

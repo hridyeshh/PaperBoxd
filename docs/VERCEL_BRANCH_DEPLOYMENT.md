@@ -29,7 +29,16 @@ You can optionally set `NEXTAUTH_URL` to `https://paperboxd.in` for the producti
 ### Recommended Setup:
 
 - **Production (main branch)**: `NEXTAUTH_URL` = `https://paperboxd.in` (optional)
-- **Preview branches (test, dev, etc.)**: `NEXTAUTH_URL` = **Not set** (let NextAuth auto-detect)
+- **Preview branches (test, dev, etc.)**: 
+  - **Option 1 (Recommended)**: `NEXTAUTH_URL` = **Not set** (let NextAuth auto-detect)
+  - **Option 2**: `NEXTAUTH_URL` = `https://paperboxd-git-dev.vercel.app` (must include `https://`)
+
+### Important Notes:
+
+- If you set `NEXTAUTH_URL` for preview branches, **it MUST include the protocol** (`https://`)
+- Example: `https://paperboxd-git-dev.vercel.app` ✅
+- Example: `paperboxd-git-dev.vercel.app` ❌ (will cause errors)
+- The code will auto-fix missing protocols, but it's better to set it correctly in Vercel
 
 ## How It Works
 
