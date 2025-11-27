@@ -34,7 +34,7 @@ export default function ChooseUsernamePage() {
             if (data.completed) {
               // Onboarding complete, go to profile
               console.log("[ChooseUsernamePage] Onboarding complete, redirecting to profile");
-              router.replace(`/u/${session.user.username}`);
+      router.replace(`/u/${session.user.username}`);
             } else {
               // Not completed - user is in onboarding flow, let UnifiedOnboarding handle it
               console.log("[ChooseUsernamePage] Onboarding not complete, staying on page for UnifiedOnboarding to handle flow");
@@ -67,10 +67,10 @@ export default function ChooseUsernamePage() {
 
   return (
     <UnifiedOnboarding
-      onComplete={() => {
+          onComplete={() => {
         router.push("/");
-      }}
-    />
+          }}
+        />
   );
 }
 
