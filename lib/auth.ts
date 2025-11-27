@@ -22,11 +22,22 @@ if (!process.env.NEXTAUTH_URL && process.env.NODE_ENV === "development") {
   process.env.NEXTAUTH_URL = "http://localhost:3000";
 }
 
-// Warn if NEXTAUTH_URL is not set in production
-if (!process.env.NEXTAUTH_URL && process.env.NODE_ENV === "production") {
-  console.warn(
-    "⚠️  NEXTAUTH_URL is not set in production. Please set it in your Vercel environment variables to your custom domain (e.g., https://paperboxd.in)"
+// Validate NEXTAUTH_URL format if set (must include protocol)
+if (process.env.NEXTAUTH_URL && !process.env.NEXTAUTH_URL.match(/^https?:\/\//)) {
+  console.error(
+    "❌ NEXTAUTH_URL must include protocol (https:// or http://). Current value:",
+    process.env.NEXTAUTH_URL
   );
+  // Auto-fix by adding https:// if missing
+  if (!process.env.NEXTAUTH_URL.startsWith("http")) {
+    process.env.NEXTAUTH_URL = `https://${process.env.NEXTAUTH_URL}`;
+    console.log("✅ Auto-fixed NEXTAUTH_URL to:", process.env.NEXTAUTH_URL);
+  }
+}
+
+// Log NEXTAUTH_URL in development for debugging
+if (process.env.NODE_ENV === "development" || process.env.VERCEL) {
+  console.log("🔐 NEXTAUTH_URL:", process.env.NEXTAUTH_URL || "(using request origin via trustHost)");
 }
 
 // Extend the built-in session types
@@ -141,7 +152,12 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  trustHost: true, // Trust the host header from the proxy (Vercel)
+  // trustHost allows NextAuth to use the request origin instead of NEXTAUTH_URL
+  // This is essential for multi-branch deployments (test branch, main branch, etc.)
+  // IMPORTANT: In Vercel, do NOT set NEXTAUTH_URL for preview branches
+  // Only set NEXTAUTH_URL for the production domain (paperboxd.in) if needed
+  // For preview branches, NextAuth will automatically use the preview domain
+  trustHost: true,
   providers,
   callbacks: {
     async signIn({ user, account }) {

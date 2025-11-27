@@ -13,6 +13,14 @@ import {
 import { Checkbox } from "@/components/ui/primitives/checkbox";
 import { cn } from "@/lib/utils";
 
+// Wrapper component that receives selection props from react-aria-components
+function SelectionCheckbox(props: React.ComponentPropsWithoutRef<typeof Checkbox> & { isSelected?: boolean }) {
+  // When using slot="selection", react-aria-components automatically passes
+  // isSelected prop. Map it to checked for Radix UI Checkbox
+  const { isSelected, ...restProps } = props;
+  return <Checkbox {...restProps} checked={isSelected ?? false} />;
+}
+
 export function GridList<T extends object>({ children, ...props }: AriaGridListProps<T>) {
   return (
     <AriaGridList
@@ -57,7 +65,10 @@ export function GridListItem({ children, className, ...props }: AriaGridListItem
             </AriaButton>
           ) : null}
           {renderProps.selectionMode === "multiple" && renderProps.selectionBehavior === "toggle" ? (
-            <Checkbox slot="selection" />
+            <SelectionCheckbox 
+              slot="selection"
+              isSelected={renderProps.isSelected}
+            />
           ) : null}
           {childNodes}
         </>
