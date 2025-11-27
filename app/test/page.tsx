@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export default function TestPage() {
@@ -45,18 +46,18 @@ export default function TestPage() {
         </div>
 
         <div className="mt-6 flex gap-3">
-          <a
+          <Link
             href="/"
             className="rounded-lg bg-gray-800 px-4 py-2 text-white transition hover:bg-gray-900"
           >
             Go to Home
-          </a>
-          <a
+          </Link>
+          <Link
             href="/profile"
             className="rounded-lg bg-gray-200 px-4 py-2 text-gray-800 transition hover:bg-gray-300"
           >
             Go to Profile
-          </a>
+          </Link>
         </div>
       </div>
     </main>
