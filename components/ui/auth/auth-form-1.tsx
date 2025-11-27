@@ -7,6 +7,9 @@ import { z } from "zod";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Loader2,
+  Mail,
+  KeyRound,
+  ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,10 +30,14 @@ import { TermsOfServiceDialog } from "@/components/ui/dialogs/terms-of-service-d
 import { useIsMobile } from "@/hooks/use-media-query";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { signIn as nextAuthSignIn } from "next-auth/react";
 
 enum AuthView {
   SIGN_IN = "sign-in",
   SIGN_UP = "sign-up",
+  FORGOT_PASSWORD = "forgot-password",
+  OTP_LOGIN = "otp-login",
+  RESET_PASSWORD = "reset-password",
 }
 
 interface AuthState {
@@ -77,7 +84,7 @@ function Auth({ className, ...props }: React.ComponentProps<"div">) {
       className={cn("mx-auto w-full max-w-md", className)}
       {...props}
     >
-      <div className="relative min-h-[560px] overflow-hidden rounded-xl border border-border/50 bg-card/80 shadow-xl backdrop-blur-sm">
+      <div className="relative min-h-[560px] overflow-hidden rounded-3xl border border-border/70 bg-background/95 shadow-lg shadow-primary/5 backdrop-blur">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-secondary/5" />
         <div className="relative z-10">
           <AnimatePresence mode="wait">
@@ -85,12 +92,33 @@ function Auth({ className, ...props }: React.ComponentProps<"div">) {
               <AuthSignIn
                 key="sign-in"
                 onSignUp={() => setView(AuthView.SIGN_UP)}
+                onForgotPassword={() => setView(AuthView.FORGOT_PASSWORD)}
               />
             )}
             {state.view === AuthView.SIGN_UP && (
               <AuthSignUp
                 key="sign-up"
                 onSignIn={() => setView(AuthView.SIGN_IN)}
+              />
+            )}
+            {state.view === AuthView.FORGOT_PASSWORD && (
+              <ForgotPasswordCard
+                key="forgot-password"
+                onBack={() => setView(AuthView.SIGN_IN)}
+                onOTPLogin={() => setView(AuthView.OTP_LOGIN)}
+                onResetPassword={() => setView(AuthView.RESET_PASSWORD)}
+              />
+            )}
+            {state.view === AuthView.OTP_LOGIN && (
+              <OTPLoginCard
+                key="otp-login"
+                onBack={() => setView(AuthView.SIGN_IN)}
+              />
+            )}
+            {state.view === AuthView.RESET_PASSWORD && (
+              <ResetPasswordCard
+                key="reset-password"
+                onBack={() => setView(AuthView.SIGN_IN)}
               />
             )}
           </AnimatePresence>
@@ -194,6 +222,7 @@ function AuthSeparator({ text = "Or continue with" }: AuthSeparatorProps) {
 
 interface AuthSignInProps {
   onSignUp: () => void;
+  onForgotPassword: () => void;
 }
 
 // Video player component that ensures autoplay on mobile
@@ -236,7 +265,7 @@ function VideoPlayer({ src }: { src: string }) {
   );
 }
 
-function AuthSignIn({ onSignUp }: AuthSignInProps) {
+function AuthSignIn({ onSignUp, onForgotPassword }: AuthSignInProps) {
   const isMobile = useIsMobile();
   const router = useRouter();
   const { update: updateSession } = useSession();
@@ -356,7 +385,7 @@ function AuthSignIn({ onSignUp }: AuthSignInProps) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="flex h-full flex-col p-8"
+      className="flex h-full flex-col p-6 md:p-8"
     >
       <div className="flex-1 space-y-6 overflow-y-auto pr-2">
         <div className="text-center">
@@ -400,7 +429,7 @@ function AuthSignIn({ onSignUp }: AuthSignInProps) {
                 type="button"
                 variant="link"
                 className="h-auto p-0 text-xs"
-                onClick={() => toast.info("Developer is working on this feature")}
+                onClick={onForgotPassword}
                 disabled={formState.isLoading}
               >
                 Forgot password?
@@ -541,7 +570,7 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="flex h-full flex-col p-8"
+      className="flex h-full flex-col p-6 md:p-8"
     >
       <div className="flex-1 space-y-6 overflow-y-auto pr-2">
         <div className="text-center">
@@ -687,6 +716,620 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
         open={termsDialogOpen} 
         onOpenChange={setTermsDialogOpen} 
       />
+    </motion.div>
+  );
+}
+
+interface ForgotPasswordCardProps {
+  onBack: () => void;
+  onOTPLogin: () => void;
+  onResetPassword: () => void;
+}
+
+function ForgotPasswordCard({ onBack, onOTPLogin, onResetPassword }: ForgotPasswordCardProps) {
+  const handleOTPLogin = () => {
+    onOTPLogin();
+  };
+
+  const handleResetPassword = () => {
+    onResetPassword();
+  };
+
+  return (
+    <motion.div
+      data-slot="auth-forgot-password"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.3, ease: "easeInOut" }}
+      className="flex h-full flex-col p-6 md:p-8"
+    >
+      <div className="flex-1 space-y-6 overflow-y-auto pr-2">
+        <div className="text-center">
+          <h1 className="text-3xl font-semibold text-foreground">
+            Forgot Password?
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Choose an option to recover your account
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={handleOTPLogin}
+            className={cn(
+              "w-full rounded-3xl border border-border/60 bg-background/95 p-6 shadow-lg shadow-primary/5 backdrop-blur transition-all hover:shadow-xl hover:shadow-primary/10 hover:border-border text-left",
+              "md:p-8"
+            )}
+          >
+            <div className="flex items-center gap-4">
+              <div className={cn(
+                "rounded-xl border border-border/40 bg-primary/5 p-3 flex-shrink-0"
+              )}>
+                <Mail className="h-5 w-5 text-primary" />
+              </div>
+              <div className="space-y-1 flex-1">
+                <h3 className="text-base font-semibold text-foreground">
+                  Log in through OTP
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Receive a one-time password via email to sign in
+                </p>
+              </div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleResetPassword}
+            className={cn(
+              "w-full rounded-3xl border border-border/60 bg-background/95 p-6 shadow-lg shadow-primary/5 backdrop-blur transition-all hover:shadow-xl hover:shadow-primary/10 hover:border-border text-left",
+              "md:p-8"
+            )}
+          >
+            <div className="flex items-center gap-4">
+              <div className={cn(
+                "rounded-xl border border-border/40 bg-primary/5 p-3 flex-shrink-0"
+              )}>
+                <KeyRound className="h-5 w-5 text-primary" />
+              </div>
+              <div className="space-y-1 flex-1">
+                <h3 className="text-base font-semibold text-foreground">
+                  Reset Password
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Get a password reset link sent to your email
+                </p>
+              </div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <Button
+          variant="ghost"
+          className="w-full"
+          onClick={onBack}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to sign in
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
+interface OTPLoginCardProps {
+  onBack: () => void;
+}
+
+type OTPStep = "email" | "code";
+
+const otpEmailSchema = z.object({
+  email: z.string().email("Invalid email address"),
+});
+
+const otpCodeSchema = z.object({
+  code: z.string().length(6, "Code must be 6 digits"),
+});
+
+type OTPEmailFormValues = z.infer<typeof otpEmailSchema>;
+type OTPCodeFormValues = z.infer<typeof otpCodeSchema>;
+
+function OTPLoginCard({ onBack }: OTPLoginCardProps) {
+  const router = useRouter();
+  const { update: updateSession } = useSession();
+  const [step, setStep] = React.useState<OTPStep>("email");
+  const [email, setEmail] = React.useState("");
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [attemptsRemaining, setAttemptsRemaining] = React.useState<number | undefined>();
+  const isSubmittingRef = React.useRef(false);
+  const hasSucceededRef = React.useRef(false);
+
+  const emailForm = useForm<OTPEmailFormValues>({
+    resolver: zodResolver(otpEmailSchema),
+    defaultValues: { email: "" },
+  });
+
+  const codeForm = useForm<OTPCodeFormValues>({
+    resolver: zodResolver(otpCodeSchema),
+    defaultValues: { code: "" },
+  });
+
+  const onEmailSubmit = async (data: OTPEmailFormValues) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/auth/otp-login/send-code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: data.email }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setEmail(data.email);
+        setStep("code");
+        toast.success("Code sent! Check your email.");
+      } else if (response.status === 429) {
+        toast.error(result.message || "Too many requests. Please try again later.");
+      } else {
+        toast.error(result.message || "Failed to send code");
+      }
+    } catch (error) {
+      console.error("Send code error:", error);
+      toast.error("An error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const onCodeSubmit = async (data: OTPCodeFormValues) => {
+    if (isSubmittingRef.current || isLoading || hasSucceededRef.current) {
+      return;
+    }
+    
+    isSubmittingRef.current = true;
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/auth/otp-login/verify-code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, code: data.code }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success && result.sessionToken) {
+        const signInResult = await nextAuthSignIn("credentials", {
+          email,
+          otpSessionToken: result.sessionToken,
+          redirect: false,
+        });
+
+        if (signInResult?.ok) {
+          hasSucceededRef.current = true;
+          toast.success("Signed in successfully!");
+          await updateSession();
+
+          setTimeout(async () => {
+            try {
+              const onboardingResponse = await fetch("/api/onboarding/status");
+              if (onboardingResponse.ok) {
+                const onboardingData = await onboardingResponse.json();
+                let redirectUrl = "/";
+
+                if (!onboardingData.hasUsername) {
+                  redirectUrl = "/choose-username";
+                } else if (onboardingData.isNewUser && !onboardingData.completed) {
+                  redirectUrl = "/onboarding";
+                } else if (onboardingData.username) {
+                  redirectUrl = `/u/${onboardingData.username}`;
+                }
+
+                router.push(redirectUrl);
+              } else {
+                router.push("/");
+              }
+            } catch (error) {
+              console.error("Failed to check onboarding status:", error);
+              router.push("/");
+            }
+          }, 100);
+          return;
+        } else if (signInResult?.error) {
+          console.error("Sign in error:", signInResult.error);
+          if (signInResult.error !== "Configuration") {
+            toast.error("Failed to create session. Please try again.");
+          }
+          return;
+        }
+      }
+
+      if ((!response.ok || !result.success) && !hasSucceededRef.current) {
+        setAttemptsRemaining(result.attemptsRemaining);
+        if (result.message && result.message !== "Code verified successfully") {
+          toast.error(result.message || "Invalid code");
+        }
+      }
+    } catch (error) {
+      if (hasSucceededRef.current) {
+        return;
+      }
+      
+      console.error("Verify code error:", error);
+      if (error instanceof Error && !error.message.includes("Failed to fetch")) {
+        toast.error("An error occurred. Please try again.");
+      }
+    } finally {
+      setIsLoading(false);
+      isSubmittingRef.current = false;
+    }
+  };
+
+  const handleResendCode = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/auth/otp-login/send-code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        toast.success("New code sent! Check your email.");
+        codeForm.reset({ code: "" });
+        setAttemptsRemaining(undefined);
+      } else {
+        toast.error(result.message || "Failed to send code");
+      }
+    } catch (error) {
+      console.error("Resend code error:", error);
+      toast.error("An error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const codeValue = codeForm.watch("code");
+  React.useEffect(() => {
+    if (
+      codeValue &&
+      codeValue.length === 6 &&
+      /^\d{6}$/.test(codeValue) &&
+      !isLoading &&
+      !isSubmittingRef.current &&
+      !hasSucceededRef.current &&
+      step === "code"
+    ) {
+      const timer = setTimeout(() => {
+        if (!isSubmittingRef.current && !isLoading && !hasSucceededRef.current) {
+          onCodeSubmit({ code: codeValue });
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codeValue, isLoading, step]);
+
+  return (
+    <motion.div
+      data-slot="auth-otp-login"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.3, ease: "easeInOut" }}
+      className="flex h-full flex-col p-6 md:p-8"
+    >
+      <div className="flex-1 space-y-6 overflow-y-auto pr-2">
+        <div className="text-center">
+          <h1 className="text-3xl font-semibold text-foreground">
+            {step === "email" ? "Sign in with Code" : "Enter Verification Code"}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {step === "email"
+              ? "Enter your email address and we&apos;ll send you a verification code."
+              : `We sent a code to ${email}. Enter it below to sign in.`}
+          </p>
+        </div>
+
+        <AnimatePresence mode="wait">
+          {step === "email" ? (
+            <motion.div
+              key="email"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <form onSubmit={emailForm.handleSubmit(onEmailSubmit)} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="otp-email">Email</Label>
+                  <Input
+                    id="otp-email"
+                    type="email"
+                    placeholder="Enter your email"
+                    disabled={isLoading}
+                    className={cn(
+                      "border border-border bg-background/95 px-4 focus-visible:border-black focus-visible:ring-0 focus-visible:ring-offset-0",
+                      emailForm.formState.errors.email && "border-destructive"
+                    )}
+                    {...emailForm.register("email")}
+                  />
+                  {emailForm.formState.errors.email ? (
+                    <p className="text-xs text-destructive">
+                      {emailForm.formState.errors.email.message}
+                    </p>
+                  ) : null}
+                </div>
+
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="mr-2 h-4 w-4" />
+                      Send Code
+                    </>
+                  )}
+                </Button>
+              </form>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="code"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <form onSubmit={codeForm.handleSubmit(onCodeSubmit)} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="otp-code">Verification Code</Label>
+                  <Input
+                    id="otp-code"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    placeholder="000000"
+                    disabled={isLoading}
+                    className={cn(
+                      "text-center text-2xl tracking-widest font-mono border border-border bg-background/95 px-4 focus-visible:border-black focus-visible:ring-0 focus-visible:ring-offset-0",
+                      codeForm.formState.errors.code && "border-destructive"
+                    )}
+                    {...codeForm.register("code", {
+                      pattern: {
+                        value: /^\d{6}$/,
+                        message: "Code must be 6 digits",
+                      },
+                    })}
+                  />
+                  {codeForm.formState.errors.code ? (
+                    <p className="text-xs text-destructive">
+                      {codeForm.formState.errors.code.message}
+                    </p>
+                  ) : attemptsRemaining !== undefined ? (
+                    <p className="text-xs text-muted-foreground">
+                      {attemptsRemaining} attempt{attemptsRemaining !== 1 ? "s" : ""} remaining
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Enter the 6-digit code from your email
+                    </p>
+                  )}
+                </div>
+
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="mr-2 h-4 w-4" />
+                      Verify Code
+                    </>
+                  )}
+                </Button>
+
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={handleResendCode}
+                    disabled={isLoading}
+                  >
+                    Didn&apos;t receive code? Send again
+                  </Button>
+
+                  <div className="text-center">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-auto p-0 text-sm"
+                      onClick={() => {
+                        setStep("email");
+                        codeForm.reset();
+                        setAttemptsRemaining(undefined);
+                      }}
+                    >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Use a different email
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <div className="mt-8">
+        <Button
+          variant="ghost"
+          className="w-full"
+          onClick={onBack}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to sign in
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
+interface ResetPasswordCardProps {
+  onBack: () => void;
+}
+
+const resetPasswordEmailSchema = z.object({
+  email: z.string().email("Invalid email address"),
+});
+
+type ResetPasswordEmailFormValues = z.infer<typeof resetPasswordEmailSchema>;
+
+function ResetPasswordCard({ onBack }: ResetPasswordCardProps) {
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [isSuccess, setIsSuccess] = React.useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<ResetPasswordEmailFormValues>({
+    resolver: zodResolver(resetPasswordEmailSchema),
+    defaultValues: { email: "" },
+  });
+
+  const onSubmit = async (data: ResetPasswordEmailFormValues) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: data.email }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setIsSuccess(true);
+        toast.success("Check your email for a password reset link");
+      } else {
+        toast.error(result.message || "Failed to send reset link");
+      }
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      toast.error("An error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <motion.div
+      data-slot="auth-reset-password"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.3, ease: "easeInOut" }}
+      className="flex h-full flex-col p-6 md:p-8"
+    >
+      <div className="flex-1 space-y-6 overflow-y-auto pr-2">
+        <div className="text-center">
+          <h1 className="text-3xl font-semibold text-foreground">
+            Reset Your Password
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Enter your email address and we&apos;ll send you a link to reset your password.
+          </p>
+        </div>
+
+        {isSuccess ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-4 text-center"
+          >
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+              <Mail className="h-8 w-8 text-primary" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold text-foreground">Check your email</h2>
+              <p className="text-sm text-muted-foreground">
+                We&apos;ve sent a password reset link to your email address.
+                The link will expire in 1 hour.
+              </p>
+            </div>
+          </motion.div>
+        ) : (
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="reset-email">Email</Label>
+              <Input
+                id="reset-email"
+                type="email"
+                placeholder="Enter your email"
+                disabled={isLoading}
+                className={cn(
+                  "border border-border bg-background/95 px-4 focus-visible:border-black focus-visible:ring-0 focus-visible:ring-offset-0",
+                  errors.email && "border-destructive"
+                )}
+                {...register("email")}
+              />
+              {errors.email ? (
+                <p className="text-xs text-destructive">
+                  {errors.email.message}
+                </p>
+              ) : null}
+            </div>
+
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Mail className="mr-2 h-4 w-4" />
+                  Send Reset Link
+                </>
+              )}
+            </Button>
+          </form>
+        )}
+      </div>
+
+      <div className="mt-8">
+        <Button
+          variant="ghost"
+          className="w-full"
+          onClick={onBack}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to sign in
+        </Button>
+      </div>
     </motion.div>
   );
 }
