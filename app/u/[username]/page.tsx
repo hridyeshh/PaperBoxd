@@ -47,7 +47,7 @@ import { Button } from "@/components/ui/primitives/button";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-media-query";
 
-const dockLabels = ["Favourites", "Bookshelf", "Diary", "Authors", "Lists", "'to-be-read'", "Likes"] as const;
+const dockLabels = ["Favourites", "Bookshelf", "Diary", "Authors", "Lists", "DNF", "Likes"] as const;
 type DockLabel = (typeof dockLabels)[number] | "Activity";
 type ActivityView = "Friends" | "Me";
 const BOOKSHELF_PAGE_SIZE = 12;
@@ -1382,7 +1382,7 @@ function BookshelfSection({
     return (
       <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
         <p className="text-lg font-semibold text-foreground">No books yet</p>
-        <p className="mt-2 text-sm text-muted-foreground">Books you&apos;ve marked as read will appear here.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Books marked as read will appear here.</p>
       </div>
     );
   }
@@ -1540,7 +1540,7 @@ function LikesSection({
     return (
       <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
         <p className="text-lg font-semibold text-foreground">No liked books yet</p>
-        <p className="mt-2 text-sm text-muted-foreground">Books you&apos;ve marked as liked will appear here.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Books marked as liked will appear here.</p>
       </div>
     );
   }
@@ -1687,7 +1687,7 @@ function TbrSection({
     return (
       <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
         <p className="text-lg font-semibold text-foreground">No to-be-read books yet</p>
-        <p className="mt-2 text-sm text-muted-foreground">Books you&apos;ve added to your TBR list will appear here.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Books added to DNF (Did Not Finish) list will appear here.</p>
       </div>
     );
   }
@@ -1871,7 +1871,7 @@ function AuthorsSection({
     return (
       <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
         <p className="text-lg font-semibold text-foreground">No authors yet</p>
-        <p className="mt-2 text-sm text-muted-foreground">Authors from your books will appear here.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Authors from the books will appear here.</p>
       </div>
     );
   }
@@ -4634,7 +4634,7 @@ export default function UserProfilePage() {
                     }
                   }}
                 />
-              ) : activeTab === "'to-be-read'" ? (
+              ) : activeTab === "DNF" ? (
                 <TbrSection books={tbrBooks} page={tbrPage} pageSize={isMobile ? 8 : TBR_PAGE_SIZE} onPageChange={setTbrPage} isMobile={isMobile} />
               ) : activeTab === "Diary" ? (
                 <DiarySection

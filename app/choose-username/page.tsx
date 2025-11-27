@@ -3,9 +3,8 @@
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { UsernameSelection } from "@/components/ui/features/username-selection";
+import { UnifiedOnboarding } from "@/components/ui/features/unified-onboarding";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
-import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 
 export default function ChooseUsernamePage() {
   const { data: session, status } = useSession();
@@ -22,9 +21,34 @@ export default function ChooseUsernamePage() {
       return;
     }
 
+    // Only redirect if user already has username AND onboarding is complete
+    // This prevents redirecting when the user just set their username in the UnifiedOnboarding flow
     if (status === "authenticated" && session?.user?.username) {
-      // Already has username, redirect to profile
-      router.replace(`/u/${session.user.username}`);
+      console.log("[ChooseUsernamePage] User has username, checking onboarding status");
+      const checkOnboarding = async () => {
+        try {
+          const response = await fetch("/api/onboarding/status");
+          if (response.ok) {
+            const data = await response.json();
+            console.log("[ChooseUsernamePage] Onboarding status:", data);
+            if (data.completed) {
+              // Onboarding complete, go to profile
+              console.log("[ChooseUsernamePage] Onboarding complete, redirecting to profile");
+              router.replace(`/u/${session.user.username}`);
+            } else {
+              // Not completed - user is in onboarding flow, let UnifiedOnboarding handle it
+              console.log("[ChooseUsernamePage] Onboarding not complete, staying on page for UnifiedOnboarding to handle flow");
+            }
+          } else {
+            // If we can't check status, don't redirect - let UnifiedOnboarding handle it
+            console.log("[ChooseUsernamePage] Could not check onboarding status, staying on page");
+          }
+        } catch (error) {
+          console.error("[ChooseUsernamePage] Error checking onboarding status:", error);
+          // Don't redirect on error - let UnifiedOnboarding handle it
+        }
+      };
+      checkOnboarding();
       return;
     }
   }, [status, session?.user?.username, router]);
@@ -42,25 +66,11 @@ export default function ChooseUsernamePage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-background">
-      <AnimatedGridPattern
-        numSquares={120}
-        maxOpacity={0.08}
-        duration={4}
-        repeatDelay={0.75}
-        className="text-slate-500 dark:text-slate-400"
-      />
-      <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
-        <UsernameSelection
-          name={session.user.name || "User"}
-          email={session.user.email || undefined}
-          onComplete={() => {
-            // Use window.location for full page reload to ensure fresh session
-            window.location.href = "/onboarding";
-          }}
-        />
-      </div>
-    </main>
+    <UnifiedOnboarding
+      onComplete={() => {
+        router.push("/");
+      }}
+    />
   );
 }
 

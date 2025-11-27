@@ -17,11 +17,11 @@ export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const isMobile = useIsMobile();
-  const [checkingOnboarding, setCheckingOnboarding] = useState(false);
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true); // Start as true to prevent flash
 
-  // Check onboarding status ONLY for new users (not existing users)
+  // Check onboarding status immediately for authenticated users
   useEffect(() => {
-    if (status === "loading" || !session?.user) {
+    if (status === "loading") {
       return;
     }
 
@@ -49,15 +49,20 @@ export default function Home() {
               }
             }
             // Existing users (not new) - no redirect, show home
+            setCheckingOnboarding(false);
+          } else {
+            setCheckingOnboarding(false);
           }
         } catch (error) {
           console.error("Failed to check onboarding status:", error);
-        } finally {
           setCheckingOnboarding(false);
         }
       };
 
       checkOnboarding();
+    } else if (status === "unauthenticated") {
+      // Not authenticated, show public home immediately
+      setCheckingOnboarding(false);
     }
   }, [status, session?.user, router]);
 

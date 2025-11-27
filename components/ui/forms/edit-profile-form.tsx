@@ -54,6 +54,8 @@ type EditProfileFormProps = {
   onCancel?: () => void;
   isSubmitting?: boolean;
   submitError?: string | null;
+  cancelButtonText?: string;
+  submitButtonText?: string;
 };
 
 export function EditProfileForm({
@@ -63,6 +65,8 @@ export function EditProfileForm({
   onCancel,
   isSubmitting = false,
   submitError,
+  cancelButtonText = "Cancel",
+  submitButtonText = "Save changes",
 }: EditProfileFormProps) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [avatarError, setAvatarError] = React.useState<string | null>(null);
@@ -73,17 +77,32 @@ export function EditProfileForm({
     () => profile.gender.length > 0 && !genderOptions.includes(profile.gender),
   );
   const [genderDropdownOpen, setGenderDropdownOpen] = React.useState(false);
+  const [pronounDropdownOpen, setPronounDropdownOpen] = React.useState(false);
   const [usernameAvailability, setUsernameAvailability] = React.useState<{
     available: boolean | null;
     checking: boolean;
   }>({ available: null, checking: false });
   const originalUsername = React.useRef(profile.username);
-  const pronounSelection = React.useMemo<Selection>(() => new Set(profile.pronouns), [profile.pronouns]);
-  const genderSelection = React.useMemo<Selection>(() => {
+  // Use state for selections to ensure they update immediately
+  const [pronounSelection, setPronounSelection] = React.useState<Selection>(() => new Set(profile.pronouns));
+  const [genderSelection, setGenderSelection] = React.useState<Selection>(() => {
     if (useCustomGender) {
       return new Set(["Custom"]);
     }
     return profile.gender ? new Set([profile.gender]) : new Set();
+  });
+  
+  // Sync selections when profile changes
+  React.useEffect(() => {
+    setPronounSelection(new Set(profile.pronouns));
+  }, [profile.pronouns]);
+  
+  React.useEffect(() => {
+    if (useCustomGender) {
+      setGenderSelection(new Set(["Custom"]));
+    } else {
+      setGenderSelection(profile.gender ? new Set([profile.gender]) : new Set());
+    }
   }, [profile.gender, useCustomGender]);
   const birthdayDate = React.useMemo(
     () => (profile.birthday ? new Date(profile.birthday) : undefined),
@@ -285,11 +304,15 @@ export function EditProfileForm({
   const handlePronounSelection = React.useCallback(
     (selection: Selection) => {
       if (selection === "all") {
-        updateProfile({ pronouns: [...pronounOptions] });
+        const allPronouns = [...pronounOptions];
+        setPronounSelection(new Set(allPronouns));
+        updateProfile({ pronouns: allPronouns });
         return;
       }
       const selected = Array.from(selection).map((key) => key.toString());
+      setPronounSelection(selection);
       updateProfile({ pronouns: selected });
+      // Keep dropdown open for multiple selection
     },
     [updateProfile],
   );
@@ -299,17 +322,25 @@ export function EditProfileForm({
       if (selection === "all") return;
       const [key] = Array.from(selection);
       const value = key?.toString() ?? "";
+      
+      // Update selection state immediately
+      setGenderSelection(selection);
+      
+      // Process selection
       if (value === "Custom") {
         setUseCustomGender(true);
         updateProfile({
           gender: !genderOptions.includes(profile.gender) ? profile.gender : "",
         });
-        setGenderDropdownOpen(false);
-        return;
+      } else {
+        setUseCustomGender(false);
+        updateProfile({ gender: value });
       }
-      setUseCustomGender(false);
-      setGenderDropdownOpen(false);
-      updateProfile({ gender: value });
+      
+      // Close dropdown after a short delay to ensure selection is processed
+      setTimeout(() => {
+        setGenderDropdownOpen(false);
+      }, 150);
     },
     [profile.gender, updateProfile],
   );
@@ -499,26 +530,50 @@ export function EditProfileForm({
               <Label className={fieldLabelClass} htmlFor="pronouns">
                 Pronouns
               </Label>
-              <Dropdown.Root className="w-full">
+              <Dropdown.Root 
+                className="w-full"
+                isOpen={pronounDropdownOpen}
+                onOpenChange={setPronounDropdownOpen}
+              >
                 <Dropdown.Trigger className="flex w-full items-center justify-between rounded-2xl border border-input bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                   <span className="truncate">{pronounDisplay}</span>
                   <ChevronDown className="h-4 w-4 text-muted-foreground" />
                 </Dropdown.Trigger>
                 <Dropdown.Popover align="start" className="w-64 p-2">
-                  <GridList
-                    aria-label="Pronouns"
-                    selectionMode="multiple"
-                    selectionBehavior="toggle"
-                    selectedKeys={pronounSelection}
-                    onSelectionChange={handlePronounSelection}
-                    className="max-h-60"
+                  <div 
+                    style={{ pointerEvents: 'auto' }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                    }}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
                   >
-                    {pronounOptions.map((option) => (
-                      <GridListItem id={option} key={option}>
-                        {option}
-                      </GridListItem>
-                    ))}
-                  </GridList>
+                    <GridList
+                      aria-label="Pronouns"
+                      selectionMode="multiple"
+                      selectionBehavior="toggle"
+                      selectedKeys={pronounSelection}
+                      onSelectionChange={(selection) => {
+                        // Process selection immediately
+                        handlePronounSelection(selection);
+                      }}
+                      className="max-h-60"
+                    >
+                      {pronounOptions.map((option) => (
+                        <GridListItem 
+                          id={option} 
+                          key={option}
+                        >
+                          {option}
+                        </GridListItem>
+                      ))}
+                    </GridList>
+                  </div>
                 </Dropdown.Popover>
               </Dropdown.Root>
             </div>
@@ -536,19 +591,39 @@ export function EditProfileForm({
                   <ChevronDown className="h-4 w-4 text-muted-foreground" />
                 </Dropdown.Trigger>
                 <Dropdown.Popover align="start" className="w-64 p-2">
-                  <GridList
-                    aria-label="Gender"
-                    selectionMode="single"
-                    selectedKeys={genderSelection}
-                    onSelectionChange={handleGenderSelection}
-                    className="max-h-60"
+                  <div 
+                    style={{ pointerEvents: 'auto' }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                    }}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
                   >
-                    {genderOptions.map((option) => (
-                      <GridListItem id={option} key={option}>
-                        {option}
-                      </GridListItem>
-                    ))}
-                  </GridList>
+                    <GridList
+                      aria-label="Gender"
+                      selectionMode="single"
+                      selectedKeys={genderSelection}
+                      onSelectionChange={(selection) => {
+                        // Process selection immediately
+                        handleGenderSelection(selection);
+                      }}
+                      className="max-h-60"
+                    >
+                      {genderOptions.map((option) => (
+                        <GridListItem 
+                          id={option} 
+                          key={option}
+                        >
+                          {option}
+                        </GridListItem>
+                      ))}
+                    </GridList>
+                  </div>
                 </Dropdown.Popover>
               </Dropdown.Root>
               {useCustomGender ? (
@@ -591,17 +666,19 @@ export function EditProfileForm({
         ) : null}
         <div className="flex gap-3">
         <Button type="submit" className="rounded-full px-6" disabled={isSubmitting}>
-            {isSubmitting ? "Saving..." : "Save changes"}
+            {isSubmitting ? "Saving..." : submitButtonText}
           </Button>
-          <Button 
-            variant="ghost" 
-            type="button" 
-            className="rounded-full px-6" 
-            disabled={isSubmitting}
-            onClick={onCancel}
-          >
-            Cancel
-          </Button>
+          {onCancel && (
+            <Button 
+              variant="ghost" 
+              type="button" 
+              className="rounded-full px-6" 
+              disabled={isSubmitting}
+              onClick={onCancel}
+            >
+              {cancelButtonText}
+            </Button>
+          )}
         </div>
       </div>
 

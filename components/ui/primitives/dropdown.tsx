@@ -59,11 +59,20 @@ const DropdownRoot: React.FC<DropdownRootProps> = ({
 
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
+      // Check if click is inside trigger or content
       if (
         triggerRef.current?.contains(target) ||
         contentRef.current?.contains(target)
       ) {
         return;
+      }
+      // Also check if the target is a descendant of content (for nested elements like GridList)
+      let parent = target.parentElement;
+      while (parent) {
+        if (contentRef.current?.contains(parent)) {
+          return;
+        }
+        parent = parent.parentElement;
       }
       setOpen(false);
     };

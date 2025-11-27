@@ -25,6 +25,8 @@ import {
 import { PrivacyPolicyDialog } from "@/components/ui/dialogs/privacy-policy-dialog";
 import { TermsOfServiceDialog } from "@/components/ui/dialogs/terms-of-service-dialog";
 import { useIsMobile } from "@/hooks/use-media-query";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 enum AuthView {
   SIGN_IN = "sign-in",
@@ -236,6 +238,8 @@ function VideoPlayer({ src }: { src: string }) {
 
 function AuthSignIn({ onSignUp }: AuthSignInProps) {
   const isMobile = useIsMobile();
+  const router = useRouter();
+  const { update: updateSession } = useSession();
   const [formState, setFormState] = React.useState<FormState>({
     isLoading: false,
     error: null,
@@ -270,8 +274,46 @@ function AuthSignIn({ onSignUp }: AuthSignInProps) {
       
       if (result?.ok) {
         toast.success("Signed in successfully!");
-        // Redirect to home page
-        window.location.href = "/";
+        
+        // Update session to ensure it's fresh
+        await updateSession();
+        
+        // Wait a moment for session to be established, then check onboarding status
+        setTimeout(async () => {
+          try {
+            const response = await fetch("/api/onboarding/status");
+            if (response.ok) {
+              const data = await response.json();
+              
+              // Determine redirect URL based on onboarding status
+              let redirectUrl = "/";
+              
+              if (!data.hasUsername) {
+                // No username - go to choose username
+                redirectUrl = "/choose-username";
+              } else if (data.isNewUser && !data.completed) {
+                // New user who hasn't completed onboarding - go to onboarding
+                // (setup-profile is only shown right after username selection)
+                redirectUrl = "/onboarding";
+              } else if (data.username) {
+                // Has username - go to profile
+                redirectUrl = `/u/${data.username}`;
+              } else {
+                // Fallback to home
+                redirectUrl = "/";
+              }
+              
+              router.push(redirectUrl);
+            } else {
+              // If API fails, redirect to home (it will check and redirect)
+              router.push("/");
+            }
+          } catch (error) {
+            console.error("Failed to check onboarding status:", error);
+            // On error, redirect to home (it will check and redirect)
+            router.push("/");
+          }
+        }, 100);
       }
     } catch (error) {
       // Set error message from the caught error

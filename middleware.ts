@@ -7,6 +7,12 @@ const protectedRoutes = ["/profile", "/settings"];
 // Routes that should redirect to profile if already authenticated
 const authRoutes = ["/auth"];
 
+// Auth routes that should be accessible even when logged in (e.g., forgot password, reset password)
+const publicAuthRoutes = ["/auth/forgot-password", "/auth/reset-password"];
+
+// Setup routes that should be accessible even when logged in (e.g., choose username, setup profile, onboarding)
+const setupRoutes = ["/choose-username", "/setup-profile", "/onboarding"];
+
 export default auth((req) => {
   const { nextUrl } = req;
   const isLoggedIn = !!req.auth;
@@ -14,6 +20,17 @@ export default auth((req) => {
   const isProtectedRoute = protectedRoutes.some((route) =>
     nextUrl.pathname.startsWith(route)
   );
+  
+  // Check if it's a setup route (should be accessible even when logged in)
+  const isSetupRoute = setupRoutes.some((route) =>
+    nextUrl.pathname.startsWith(route)
+  );
+  
+  // Check if it's a public auth route (should be accessible even when logged in)
+  const isPublicAuthRoute = publicAuthRoutes.some((route) =>
+    nextUrl.pathname.startsWith(route)
+  );
+  
   const isAuthRoute = authRoutes.some((route) =>
     nextUrl.pathname.startsWith(route)
   );
@@ -24,7 +41,8 @@ export default auth((req) => {
   }
 
   // Redirect to profile if trying to access auth routes while logged in
-  if (isAuthRoute && isLoggedIn) {
+  // BUT allow public auth routes (forgot password, reset password) and setup routes even when logged in
+  if (isAuthRoute && isLoggedIn && !isPublicAuthRoute && !isSetupRoute) {
     return NextResponse.redirect(new URL("/profile", nextUrl));
   }
 

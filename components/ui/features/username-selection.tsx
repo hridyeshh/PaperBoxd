@@ -32,17 +32,15 @@ interface UsernameSelectionProps {
   name: string;
   email?: string;
   initialUsername?: string; // Pre-generated username to pre-fill
-  onComplete?: () => void;
+  onComplete?: (username: string) => void;
 }
 
 export function UsernameSelection({
   name,
   email,
   initialUsername,
-  onComplete: _onComplete,
+  onComplete,
 }: UsernameSelectionProps) {
-  // Prevent unused variables (kept for API compatibility)
-  void _onComplete;
   const { update } = useSession();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [availability, setAvailability] = React.useState<{
@@ -131,7 +129,7 @@ export function UsernameSelection({
 
   const username = watch("username");
 
-  // Check username availability when user types (skip if it's the initial check)
+  // Check username availability when user types
   React.useEffect(() => {
     // Skip if this is the initial username and we haven't finished checking yet
     if (username === primaryUsername && hasCheckedInitial.current === false) {
@@ -143,8 +141,10 @@ export function UsernameSelection({
       return;
     }
 
+    // Always show loading state first
+    setAvailability({ available: null, checking: true });
+
     const timeoutId = setTimeout(async () => {
-      setAvailability({ available: null, checking: true });
       try {
         const response = await fetch(
           `/api/users/check-username?username=${encodeURIComponent(username)}`
@@ -192,9 +192,30 @@ export function UsernameSelection({
 
       toast.success("Username set successfully!");
       
-      // Use window.location for a full page reload to ensure fresh session
-      // This ensures the onboarding page gets the latest session data
-      window.location.href = "/onboarding";
+      // Use the onComplete callback if provided, otherwise default to onboarding
+      // Use result.username from API response (normalized) instead of form data
+      const savedUsername = result.username || data.username;
+      console.log("[UsernameSelection] ✅ Username saved successfully:", savedUsername);
+      console.log("[UsernameSelection] API result:", result);
+      console.log("[UsernameSelection] onComplete callback exists:", !!onComplete);
+      
+      if (onComplete) {
+        console.log("[UsernameSelection] Calling onComplete with username:", savedUsername);
+        // Small delay to ensure session is updated, then pass username
+        setTimeout(() => {
+          console.log("[UsernameSelection] Executing onComplete callback now");
+          try {
+            onComplete(savedUsername);
+            console.log("[UsernameSelection] ✅ onComplete callback executed successfully");
+          } catch (error) {
+            console.error("[UsernameSelection] ❌ Error in onComplete callback:", error);
+          }
+        }, 100);
+      } else {
+        console.log("[UsernameSelection] No onComplete callback, redirecting to onboarding");
+        // Fallback: redirect to onboarding
+        window.location.href = "/onboarding";
+      }
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to set username";
