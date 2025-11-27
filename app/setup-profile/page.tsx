@@ -3,7 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { EditProfileForm, type EditableProfile, defaultProfile } from "@/components/ui/forms/edit-profile-form";
+import { EditProfileForm, type EditableProfile } from "@/components/ui/forms/edit-profile-form";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 import { toast } from "sonner";
@@ -19,7 +19,7 @@ export default function SetupProfilePage() {
 
   // Load current user profile data
   useEffect(() => {
-    if (status === "loading" || !session?.user) {
+    if (status === "loading") {
       return;
     }
 

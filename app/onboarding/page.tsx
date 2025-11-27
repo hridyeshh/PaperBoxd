@@ -6,12 +6,10 @@ import { useEffect, useState } from "react";
 import { OnboardingQuestionnaire } from "@/components/ui/features/onboarding-questionnaire";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
-import { useIsMobile } from "@/hooks/use-media-query";
 
 export default function OnboardingPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const isMobile = useIsMobile();
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
