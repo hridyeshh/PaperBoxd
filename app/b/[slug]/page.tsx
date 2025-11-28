@@ -734,7 +734,7 @@ export default function BookDetailPage() {
                   isAuthenticated && isInTBR && "bg-green-600 text-white hover:bg-green-700"
                 )}
               >
-                {isAuthenticated && isInTBR ? "In TBR" : "Add to TBR"}
+                {isAuthenticated && isInTBR ? "In DNF" : "Add to DNF"}
               </Button>
             </div>
             

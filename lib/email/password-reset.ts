@@ -117,7 +117,7 @@ export async function sendPasswordResetEmail({
                             Security Notice
                           </p>
                           <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #5a5a5a;">
-                            Never share this link with anyone. PaperBoxd staff will never ask for your password reset link.
+                            Never share this link with anyone. PaperBoxd will never ask for your password reset link.
                           </p>
                         </div>
                         
