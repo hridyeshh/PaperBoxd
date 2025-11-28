@@ -141,8 +141,50 @@ export async function POST(
     }
 
     const currentUserId = user._id?.toString();
-    if (!currentUserId || currentUserId !== session.user.id) {
-      console.log('[Diary API] Forbidden - user mismatch:', { userId: currentUserId, sessionId: session.user.id });
+    const sessionUserId = session.user.id;
+    const sessionUsername = session.user.username;
+    const sessionEmail = session.user.email;
+    const userEmail = user.email;
+    
+    // Enhanced logging for debugging
+    console.log('[Diary API] Authorization check:', {
+      username,
+      currentUserId,
+      sessionUserId,
+      sessionUsername,
+      sessionEmail,
+      userEmail,
+      idsMatch: currentUserId === sessionUserId,
+      emailsMatch: userEmail?.toLowerCase() === sessionEmail?.toLowerCase(),
+      usernamesMatch: username === sessionUsername,
+    });
+
+    // Check authorization: either user ID matches OR email matches (handles account recreation)
+    // Also verify username matches for additional security
+    const idsMatch = currentUserId && currentUserId === sessionUserId;
+    const emailsMatch = userEmail?.toLowerCase() === sessionEmail?.toLowerCase();
+    const usernamesMatch = username === sessionUsername;
+
+    if (!idsMatch && !emailsMatch) {
+      console.log('[Diary API] Forbidden - neither ID nor email match:', { 
+        userId: currentUserId, 
+        sessionId: sessionUserId,
+        userEmail,
+        sessionEmail,
+        username,
+        sessionUsername,
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Additional check: username should also match session username
+    if (!usernamesMatch) {
+      console.log('[Diary API] Forbidden - username mismatch:', { 
+        urlUsername: username,
+        sessionUsername,
+        userId: currentUserId,
+        emailMatch: emailsMatch,
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
