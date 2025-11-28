@@ -116,7 +116,12 @@ All data operations flow through well-defined RESTful API routes (`/app/api/*`),
 ├── newsletter/
 │   └── subscribe           # Newsletter email subscription
 └── auth/
-    └── [...nextauth]/      # NextAuth authentication routes
+    ├── [...nextauth]/      # NextAuth authentication routes
+    ├── forgot-password/    # Password reset request endpoint
+    ├── reset-password/     # Password reset submission endpoint
+    └── otp-login/          # OTP login endpoints
+        ├── send-code/      # Send OTP code to email
+        └── verify-code/    # Verify OTP code and create session
 ```
 
 #### 3. **Data Normalization with Strategic Caching**
@@ -285,6 +290,11 @@ I use a **hybrid state management approach**:
 - JWT tokens signed with secure secret (32+ bytes)
 - HTTP-only cookies for session storage
 - CSRF protection via NextAuth
+- OTP codes hashed with SHA-256 before storage
+- Password reset tokens hashed with SHA-256 (one-time use, 1-hour expiry)
+- Rate limiting on OTP requests (max 3 per hour per email)
+- Email enumeration protection (consistent success messages)
+- Enhanced authorization checks (ID and email matching for account recreation scenarios)
 
 **Data Protection**:
 - Input sanitization on all user inputs
@@ -364,6 +374,7 @@ I use a **hybrid state management approach**:
 - **Google Books API** - Book metadata and search
 - **ISBNdb API** - Additional book metadata and search
 - **Open Library API** - Book metadata fallback
+- **Resend API** - Email delivery service for OTP codes and password reset links
 
 ---
 
@@ -547,7 +558,7 @@ I use a **hybrid state management approach**:
 - Same animated grid background as home page
 
 **Loading States**:
-- Tetris loader for consistent loading experience
+- **Tetris Loader**: Consistent loading animation with fixed block size (independent of text length)
 - MorphingSquare loader for infinite scroll loading
 - Single load per page visit (prevents re-fetching on re-renders)
 - Optimized data fetching with parallel API calls
@@ -636,14 +647,41 @@ I use a **hybrid state management approach**:
 **Sign-In**:
 - Email/password with error handling (toast notifications)
 - Google OAuth option (optional)
+- **OTP Login**: Passwordless authentication via email verification code
+  - 6-digit code sent to user's email
+  - 10-minute expiry with rate limiting (max 3 requests per hour)
+  - Secure one-time session token generation
+  - Integrated directly into auth card (no separate page)
 - Session persistence via NextAuth
 - Redirect to intended page or profile
+
+**Password Reset**:
+- **Forgot Password**: Request password reset link via email
+  - Cryptographically secure token generation (SHA-256 hashed)
+  - 1-hour token expiry
+  - Email enumeration protection (always returns success message)
+  - Integrated directly into auth card (no separate page)
+- **Reset Password**: Set new password using reset token
+  - Password strength validation (min 8 chars, 1 number, 1 lowercase, 1 uppercase, 1 special character)
+  - Password strength meter and checklist
+  - Token verification and one-time use enforcement
+  - Animated grid background with centered card design
+
+**Email Service**:
+- **Resend Integration**: Professional email delivery service
+  - OTP login codes via email
+  - Password reset links via email
+  - Customizable from address (supports verified domains)
+  - Development mode fallback (console logging when API key not configured)
+  - HTML email templates matching project design aesthetics
+  - Support email: paperboxd@gmail.com
 
 **Session Management**:
 - JWT tokens in HTTP-only cookies
 - Theme preferences in localStorage (client-side)
 - Avatar images excluded from JWT to prevent cookie size issues
 - Automatic session refresh
+- Enhanced authorization checks (ID and email matching for account recreation scenarios)
 
 ---
 
@@ -654,6 +692,9 @@ paperboxd/
 ├── app/                          # Next.js App Router
 │   ├── api/                      # API Routes (Server-side)
 │   │   ├── auth/                 # NextAuth routes
+│   │   │   ├── forgot-password/  # Password reset request
+│   │   │   ├── reset-password/   # Password reset submission
+│   │   │   └── otp-login/        # OTP login (send-code, verify-code)
 │   │   ├── users/                # User CRUD & social features
 │   │   │   ├── [username]/lists/ # List CRUD, sharing, saving
 │   │   │   ├── [username]/activities/ # Activity feed & following activities
@@ -715,12 +756,17 @@ paperboxd/
 │   │       ├── Event.ts          # Event tracking model
 │   │       ├── RecommendationCache.ts    # Recommendation cache model
 │   │       ├── RecommendationLog.ts      # Recommendation performance tracking
-│   │       └── AccountDeletion.ts        # Account deletion requests
+│   │       ├── AccountDeletion.ts        # Account deletion requests
+│   │       └── OTP.ts            # One-time password model (for OTP login)
 │   ├── services/                 # Business logic services
 │   │   ├── UserProfileBuilder.ts # Builds user preference profiles
 │   │   ├── EventTracker.ts       # Tracks user interactions
 │   │   ├── RecommendationService.ts      # Core recommendation engine
-│   │   └── FriendRecommendations.ts      # Friend-based recommendations
+│   │   ├── FriendRecommendations.ts      # Friend-based recommendations
+│   │   └── OTPService.ts         # OTP generation, hashing, and verification
+│   ├── email/                    # Email service integrations
+│   │   ├── otp-login.ts          # OTP login email templates
+│   │   └── password-reset.ts     # Password reset email templates
 │   ├── config/                   # Configuration files
 │   │   └── recommendation.config.ts      # Recommendation algorithm config
 │   ├── auth.ts                   # NextAuth configuration
@@ -812,6 +858,9 @@ paperboxd/
 - **Diary Entry Likes**: ✅ Implemented - Like diary entries with activity notifications
 - **SEO Optimization**: ✅ Implemented - Sitemap, robots.txt, structured data, and comprehensive meta tags
 - **Home Page Caching**: ✅ Implemented - Client-side caching with pull-to-refresh for mobile
+- **OTP Login**: ✅ Implemented - Passwordless authentication via email verification codes
+- **Password Reset**: ✅ Implemented - Secure password reset flow with email links
+- **Email Service**: ✅ Implemented - Resend integration for transactional emails
 - **Social Groups**: Book clubs and reading groups
 - **Reading Challenges**: Annual/yearly reading goals
 - **Export Data**: Export reading history (CSV, JSON)
@@ -825,3 +874,4 @@ paperboxd/
 - **Analytics**: Server-side tracking implemented via EventTracker. Future: Optional privacy-respecting analytics (Plausible, PostHog) with user consent
 - **Testing**: Add unit tests (Vitest) and E2E tests (Playwright)
 - **Newsletter Email Service**: Currently stores emails in database. Future: Integrate with email service provider (SendGrid, Mailchimp, etc.)
+- **Email Delivery**: ✅ Implemented - Resend API integration for OTP codes and password reset emails
