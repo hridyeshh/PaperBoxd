@@ -532,8 +532,51 @@ export async function DELETE(
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const deleteUserId = user._id?.toString();
-    if (!deleteUserId || deleteUserId !== session.user.id) {
+    const currentUserId = user._id?.toString();
+    const sessionUserId = session.user.id;
+    const sessionUsername = session.user.username;
+    const sessionEmail = session.user.email;
+    const userEmail = user.email;
+    
+    // Enhanced logging for debugging
+    console.log('[Diary API] DELETE Authorization check:', {
+      username,
+      currentUserId,
+      sessionUserId,
+      sessionUsername,
+      sessionEmail,
+      userEmail,
+      idsMatch: currentUserId === sessionUserId,
+      emailsMatch: userEmail?.toLowerCase() === sessionEmail?.toLowerCase(),
+      usernamesMatch: username === sessionUsername,
+    });
+
+    // Check authorization: either user ID matches OR email matches (handles account recreation)
+    // Also verify username matches for additional security
+    const idsMatch = currentUserId && currentUserId === sessionUserId;
+    const emailsMatch = userEmail?.toLowerCase() === sessionEmail?.toLowerCase();
+    const usernamesMatch = username === sessionUsername;
+
+    if (!idsMatch && !emailsMatch) {
+      console.log('[Diary API] DELETE Forbidden - neither ID nor email match:', { 
+        userId: currentUserId, 
+        sessionId: sessionUserId,
+        userEmail,
+        sessionEmail,
+        username,
+        sessionUsername,
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Additional check: username should also match session username
+    if (!usernamesMatch) {
+      console.log('[Diary API] DELETE Forbidden - username mismatch:', { 
+        urlUsername: username,
+        sessionUsername,
+        userId: currentUserId,
+        emailMatch: emailsMatch,
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
