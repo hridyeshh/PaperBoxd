@@ -6,12 +6,17 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 import { Header } from "@/components/ui/layout/header-with-search";
+import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
+import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { DiaryEntryDialog } from "@/components/ui/dialogs/diary-entry-dialog";
 import { Button } from "@/components/ui/primitives/button";
 import { toast } from "sonner";
 import { createBookSlug } from "@/lib/utils/book-slug";
 import { DEFAULT_AVATAR } from "@/lib/utils";
+import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
+import { useIsMobile } from "@/hooks/use-media-query";
+import { cn } from "@/lib/utils";
 import {
   Pagination,
   PaginationContent,
@@ -96,6 +101,7 @@ const ACTIVITY_PAGE_SIZE = 10;
 export default function ActivityPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const isMobile = useIsMobile();
   const isAuthenticated = status === "authenticated";
   const [activities, setActivities] = React.useState<ActivityEntry[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -402,45 +408,80 @@ export default function ActivityPage() {
 
   // Removed view switching logic
 
-  // Show loading while checking authentication or loading data
+  // Show loading state
   if (status === "loading" || isLoading) {
     return (
-      <div className="flex min-h-screen flex-col">
-        <Header />
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-4">
+      <main className="relative min-h-screen overflow-hidden bg-background">
+        <AnimatedGridPattern
+          numSquares={120}
+          maxOpacity={0.08}
+          duration={4}
+          repeatDelay={0.75}
+          className="text-slate-500 dark:text-slate-400"
+        />
+        <div className="relative z-10 flex min-h-screen flex-col">
+          {isMobile ? (
+            <Header minimalMobile={isMobile} />
+          ) : (
+            <>
+              <DesktopSidebar />
+              <MinimalDesktopHeader />
+            </>
+          )}
+          <div className={cn(
+            "flex flex-1 items-center justify-center px-4 pb-16 pt-20 md:pb-24 md:pt-24",
+            isMobile ? "mt-16" : "mt-16 ml-16"
+          )}>
             <TetrisLoading size="md" speed="fast" loadingText="Loading updates..." />
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 
-  // Don't render if not authenticated (will redirect)
   if (!isAuthenticated || !session?.user?.username) {
     return null;
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8 mt-16 pb-24 md:pb-8">
-        <div className="space-y-10">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Updates</h1>
-              <p className="text-sm text-muted-foreground">See what your friends are reading and sharing.</p>
-            </div>
-          </div>
-          {activities.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
-              <p className="text-lg font-semibold text-foreground">No updates yet</p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Follow some users to see their reading updates here.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-6">
+    <main className="relative min-h-screen overflow-hidden bg-background">
+      <AnimatedGridPattern
+        numSquares={120}
+        maxOpacity={0.08}
+        duration={4}
+        repeatDelay={0.75}
+        className="text-slate-500 dark:text-slate-400"
+      />
+      <div className="relative z-10 flex min-h-screen flex-col">
+        {isMobile ? (
+          <Header minimalMobile={isMobile} />
+        ) : (
+          <>
+            <DesktopSidebar />
+            <MinimalDesktopHeader />
+          </>
+        )}
+        <div className={cn(
+          "flex-1",
+          isMobile ? "mt-16" : "mt-16 ml-16"
+        )}>
+          <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8 pb-24 md:pb-8">
+            <div className="space-y-10">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Updates</h1>
+                  <p className="text-sm text-muted-foreground">See what your friends are reading and sharing.</p>
+                </div>
+              </div>
+            {activities.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-black p-12 text-center">
+                <p className="text-lg font-semibold text-black dark:text-white">No updates yet</p>
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                  Follow some users to see their reading updates here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
               <div className="space-y-4">
                 {activities.map((entry) => (
                   <article
@@ -643,113 +684,115 @@ export default function ActivityPage() {
                   </PaginationContent>
                 </Pagination>
               )}
+              </div>
+            )}
             </div>
-          )}
-        </div>
-      </main>
-      
-      {/* Diary Entry Dialog */}
-      {selectedDiaryEntry && session?.user?.username && (
-        <DiaryEntryDialog
-          open={!!selectedDiaryEntry}
-          onOpenChange={(open) => {
-            if (!open) {
-              setSelectedDiaryEntry(null);
-              setSelectedDiaryEntryUsername(null);
-            }
-          }}
-          entry={selectedDiaryEntry}
-          username={selectedDiaryEntryUsername || session.user.username}
-          isOwnProfile={false}
-          onLikeChange={async () => {
-            // Refresh activities after like change
-            if (session?.user?.username) {
-              try {
-                const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/activities/following?page=${currentPage}&pageSize=${ACTIVITY_PAGE_SIZE}`);
-                if (response.ok) {
-                  const data = await response.json();
-                  
-                  const transformedActivities: ActivityEntry[] = Array.isArray(data.activities)
-                    ? data.activities.map((activity: ActivityFromAPI, idx: number) => {
-                        const { action, bookTitle } = formatActivity(activity);
-                        
-                        const baseEntry: ActivityEntry = {
-                          id: activity._id?.toString() || `activity-${idx}`,
-                          name: activity.userName || activity.username || "User",
-                          username: activity.username,
-                          userAvatar: activity.userAvatar,
-                          action,
-                          detail: activity.isGeneralEntry 
-                            ? (activity.subject && activity.subject.trim() ? activity.subject : "a diary entry")
-                            : (activity.type === "shared_list" || activity.type === "collaboration_request" ? (activity.listTitle || "") : (bookTitle || "")),
-                          bookTitle: activity.type === "shared_list" || activity.type === "collaboration_request" ? activity.listTitle : bookTitle,
-                          timeAgo: formatTimeAgo(activity.timestamp),
-                          cover: activity.type === "shared_list" || activity.type === "collaboration_request"
-                            ? (activity.listCover || "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80")
-                            : (activity.bookCover || (activity.isGeneralEntry ? null : "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80")),
-                          type: activity.type,
-                        };
-                        
-                        // Add diary entry specific fields if it's a diary entry
-                        if (activity.type === "diary_entry") {
-                          baseEntry.diaryEntryId = activity.diaryEntryId;
-                          baseEntry.bookId = activity.bookId;
-                          baseEntry.bookAuthor = activity.bookAuthor;
-                          baseEntry.content = activity.content;
-                          baseEntry.createdAt = activity.createdAt ? (typeof activity.createdAt === 'string' ? activity.createdAt : activity.createdAt.toISOString()) : undefined;
-                          baseEntry.updatedAt = activity.updatedAt ? (typeof activity.updatedAt === 'string' ? activity.updatedAt : activity.updatedAt.toISOString()) : undefined;
-                          baseEntry.isLiked = activity.isLiked;
-                          baseEntry.likesCount = activity.likesCount;
-                          baseEntry.isGeneralEntry = activity.isGeneralEntry;
+          </div>
+          
+          {/* Diary Entry Dialog */}
+          {selectedDiaryEntry && session?.user?.username && (
+            <DiaryEntryDialog
+              open={!!selectedDiaryEntry}
+              onOpenChange={(open) => {
+                if (!open) {
+                  setSelectedDiaryEntry(null);
+                  setSelectedDiaryEntryUsername(null);
+                }
+              }}
+              entry={selectedDiaryEntry}
+              username={selectedDiaryEntryUsername || session.user.username}
+              isOwnProfile={false}
+              onLikeChange={async () => {
+                // Refresh activities after like change
+                if (session?.user?.username) {
+                  try {
+                    const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/activities/following?page=${currentPage}&pageSize=${ACTIVITY_PAGE_SIZE}`);
+                    if (response.ok) {
+                      const data = await response.json();
+                      
+                      const transformedActivities: ActivityEntry[] = Array.isArray(data.activities)
+                        ? data.activities.map((activity: ActivityFromAPI, idx: number) => {
+                            const { action, bookTitle } = formatActivity(activity);
+                            
+                            const baseEntry: ActivityEntry = {
+                              id: activity._id?.toString() || `activity-${idx}`,
+                              name: activity.userName || activity.username || "User",
+                              username: activity.username,
+                              userAvatar: activity.userAvatar,
+                              action,
+                              detail: activity.isGeneralEntry 
+                                ? (activity.subject && activity.subject.trim() ? activity.subject : "a diary entry")
+                                : (activity.type === "shared_list" || activity.type === "collaboration_request" ? (activity.listTitle || "") : (bookTitle || "")),
+                              bookTitle: activity.type === "shared_list" || activity.type === "collaboration_request" ? activity.listTitle : bookTitle,
+                              timeAgo: formatTimeAgo(activity.timestamp),
+                              cover: activity.type === "shared_list" || activity.type === "collaboration_request"
+                                ? (activity.listCover || "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80")
+                                : (activity.bookCover || (activity.isGeneralEntry ? null : "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80")),
+                              type: activity.type,
+                            };
+                            
+                            // Add diary entry specific fields if it's a diary entry
+                            if (activity.type === "diary_entry") {
+                              baseEntry.diaryEntryId = activity.diaryEntryId;
+                              baseEntry.bookId = activity.bookId;
+                              baseEntry.bookAuthor = activity.bookAuthor;
+                              baseEntry.content = activity.content;
+                              baseEntry.createdAt = activity.createdAt ? (typeof activity.createdAt === 'string' ? activity.createdAt : activity.createdAt.toISOString()) : undefined;
+                              baseEntry.updatedAt = activity.updatedAt ? (typeof activity.updatedAt === 'string' ? activity.updatedAt : activity.updatedAt.toISOString()) : undefined;
+                              baseEntry.isLiked = activity.isLiked;
+                              baseEntry.likesCount = activity.likesCount;
+                              baseEntry.isGeneralEntry = activity.isGeneralEntry;
+                            }
+                            
+                            // Add shared list and collaboration request specific fields
+                            if (activity.type === "shared_list" || activity.type === "collaboration_request") {
+                              baseEntry.listId = activity.listId;
+                              baseEntry.sharedByUsername = activity.sharedByUsername;
+                              baseEntry.listBooksCount = activity.listBooksCount;
+                            }
+                            
+                            if (activity.type === "shared_book") {
+                              baseEntry.bookId = activity.bookId;
+                            }
+                            
+                            return baseEntry;
+                          })
+                        : [];
+                      
+                      setActivities(transformedActivities);
+                      setTotalPages(data.totalPages || 1);
+                      
+                      // Update selected entry
+                      const updatedEntry = transformedActivities.find(a => a.diaryEntryId === selectedDiaryEntry.id);
+                      if (updatedEntry && updatedEntry.type === "diary_entry") {
+                        setSelectedDiaryEntry({
+                          id: updatedEntry.diaryEntryId!,
+                          bookId: updatedEntry.bookId,
+                          bookTitle: updatedEntry.bookTitle,
+                          bookAuthor: updatedEntry.bookAuthor,
+                          bookCover: updatedEntry.cover,
+                          content: updatedEntry.content || "",
+                          createdAt: updatedEntry.createdAt || new Date().toISOString(),
+                          updatedAt: updatedEntry.updatedAt || new Date().toISOString(),
+                          isLiked: updatedEntry.isLiked,
+                          likesCount: updatedEntry.likesCount,
+                        });
+                        // Preserve the username
+                        if (updatedEntry.username) {
+                          setSelectedDiaryEntryUsername(updatedEntry.username);
                         }
-                        
-                        // Add shared list and collaboration request specific fields
-                        if (activity.type === "shared_list" || activity.type === "collaboration_request") {
-                          baseEntry.listId = activity.listId;
-                          baseEntry.sharedByUsername = activity.sharedByUsername;
-                          baseEntry.listBooksCount = activity.listBooksCount;
-                        }
-                        
-                        if (activity.type === "shared_book") {
-                          baseEntry.bookId = activity.bookId;
-                        }
-                        
-                        return baseEntry;
-                      })
-                    : [];
-                  
-                  setActivities(transformedActivities);
-                  setTotalPages(data.totalPages || 1);
-                  
-                  // Update selected entry
-                  const updatedEntry = transformedActivities.find(a => a.diaryEntryId === selectedDiaryEntry.id);
-                  if (updatedEntry && updatedEntry.type === "diary_entry") {
-                    setSelectedDiaryEntry({
-                      id: updatedEntry.diaryEntryId!,
-                      bookId: updatedEntry.bookId,
-                      bookTitle: updatedEntry.bookTitle,
-                      bookAuthor: updatedEntry.bookAuthor,
-                      bookCover: updatedEntry.cover,
-                      content: updatedEntry.content || "",
-                      createdAt: updatedEntry.createdAt || new Date().toISOString(),
-                      updatedAt: updatedEntry.updatedAt || new Date().toISOString(),
-                      isLiked: updatedEntry.isLiked,
-                      likesCount: updatedEntry.likesCount,
-                    });
-                    // Preserve the username
-                    if (updatedEntry.username) {
-                      setSelectedDiaryEntryUsername(updatedEntry.username);
+                      }
                     }
+                  } catch (error) {
+                    console.error("Error refreshing activities:", error);
                   }
                 }
-              } catch (error) {
-                console.error("Error refreshing activities:", error);
-              }
-            }
-          }}
-        />
-      )}
-    </div>
+              }}
+            />
+          )}
+        </div>
+      </div>
+    </main>
   );
 }
 

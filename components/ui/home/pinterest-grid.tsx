@@ -123,7 +123,7 @@ export function PinterestGrid({ books, onLoadMore, hasMore = false, isLoading = 
   return (
     <>
       <div 
-        className="w-full columns-2 sm:columns-3 md:columns-4 lg:columns-5 xl:columns-6"
+        className="w-full columns-2 sm:columns-2 md:columns-2 lg:columns-4 xl:columns-5 2xl:columns-6"
         style={{ 
           columnGap: '1rem',
           columnFill: 'balance'
