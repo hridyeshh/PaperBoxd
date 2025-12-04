@@ -5,7 +5,10 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { BookCarousel, BookCarouselBook } from "@/components/ui/home/book-carousel";
 import { Header } from "@/components/ui/layout/header-with-search";
+import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
+import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
+import { cn } from "@/lib/utils";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 import { useIsMobile } from "@/hooks/use-media-query";
 
@@ -126,8 +129,18 @@ export default function RecommendationsPage() {
           className="text-slate-500 dark:text-slate-400"
         />
         <div className="relative z-10 flex min-h-screen flex-col">
-          <Header minimalMobile={isMobile} />
-          <div className="flex flex-1 items-center justify-center px-4 pb-16 pt-20 md:pb-24 md:pt-24 mt-16">
+          {isMobile ? (
+            <Header minimalMobile={isMobile} />
+          ) : (
+            <>
+              <DesktopSidebar />
+              <MinimalDesktopHeader />
+            </>
+          )}
+          <div className={cn(
+            "flex flex-1 items-center justify-center px-4 pb-16 pt-20 md:pb-24 md:pt-24",
+            isMobile ? "mt-16" : "mt-16 ml-16"
+          )}>
             <TetrisLoading size="md" speed="fast" loadingText="Loading recommendations..." />
           </div>
         </div>
@@ -150,8 +163,18 @@ export default function RecommendationsPage() {
         className="text-slate-500 dark:text-slate-400"
       />
       <div className="relative z-10 flex min-h-screen flex-col">
-        <Header minimalMobile={isMobile} />
-        <div className="flex-1 mt-16">
+        {isMobile ? (
+          <Header minimalMobile={isMobile} />
+        ) : (
+          <>
+            <DesktopSidebar />
+            <MinimalDesktopHeader />
+          </>
+        )}
+        <div className={cn(
+          "flex-1",
+          isMobile ? "mt-16" : "mt-16 ml-16"
+        )}>
           <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8 pb-24 md:pb-8">
             <div className="space-y-10">
               <div>

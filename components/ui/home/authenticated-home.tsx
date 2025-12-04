@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { BookCarouselBook } from "@/components/ui/home/book-carousel";
-import { Hero } from "@/components/ui/home/hero";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { Footerdemo } from "@/components/ui/features/footer-section";
 import { PinterestGrid } from "@/components/ui/home/pinterest-grid";
@@ -545,11 +544,8 @@ export function AuthenticatedHome() {
         </div>
       )}
 
-      {/* Hero Section - Centered (Hero component handles its own centering) */}
-      <Hero showButton={false} />
-
-      {/* Pinterest Grid - Below Hero (Both Desktop and Mobile) */}
-      <div className="w-full px-8 md:px-12 lg:px-16 xl:px-20 pb-16">
+      {/* Pinterest Grid - Endless Feed */}
+      <div className="w-full px-8 md:px-12 lg:px-16 xl:px-20 pb-16 pt-8">
         <PinterestGrid
           books={displayedBooks.map(book => ({
             id: book.id || '',

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 import { Header } from "@/components/ui/layout/header-with-search";
+import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
+import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
 import { PublicHome } from "@/components/ui/home/public-home";
 import { PublicHomeMobile } from "@/components/ui/home/public-home-mobile";
 import { AuthenticatedHome } from "@/components/ui/home/authenticated-home";
@@ -78,8 +80,20 @@ export default function Home() {
           className="text-slate-500 dark:text-slate-400"
         />
       <div className="relative z-10 flex min-h-screen flex-col">
-        <Header minimalMobile={isMobile} />
-        <div className="flex flex-1 items-center justify-center px-4 pb-16 pt-20 md:pb-24 md:pt-24 mt-16">
+        {isMobile ? (
+          <Header minimalMobile={isMobile} />
+        ) : session?.user ? (
+          <>
+            <DesktopSidebar />
+            <MinimalDesktopHeader />
+          </>
+        ) : (
+          <Header minimalMobile={isMobile} />
+        )}
+        <div className={cn(
+          "flex flex-1 items-center justify-center px-4 pb-16 pt-20 md:pb-24 md:pt-24",
+          isMobile ? "mt-16" : session?.user ? "mt-16 ml-16" : "mt-16"
+        )}>
           <TetrisLoading size="md" speed="fast" loadingText="Loading..." />
         </div>
       </div>
@@ -88,7 +102,6 @@ export default function Home() {
   }
 
   // Show personalized carousels for authenticated users, public carousels for others
-  // Hero centered, then carousels below
   return (
     <main className="relative min-h-screen overflow-hidden bg-background">
       <AnimatedGridPattern
@@ -99,9 +112,20 @@ export default function Home() {
         className="text-slate-500 dark:text-slate-400"
       />
       <div className="relative z-10 flex min-h-screen flex-col">
-        <Header minimalMobile={isMobile} />
+        {/* Show sidebar + minimal header on desktop for authenticated users, header otherwise */}
+        {isMobile ? (
+          <Header minimalMobile={isMobile} />
+        ) : session?.user ? (
+          <>
+            <DesktopSidebar />
+            <MinimalDesktopHeader />
+          </>
+        ) : (
+          <Header minimalMobile={isMobile} />
+        )}
         <div className={cn(
-          "flex-1 mt-16",
+          "flex-1",
+          isMobile ? "mt-16" : session?.user ? "mt-16 ml-16" : "mt-16",
           !session?.user && "flex flex-col"
         )}>
           {session?.user ? (

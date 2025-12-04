@@ -17,6 +17,9 @@ import {
   PaginationPrevious,
 } from "@/components/ui/primitives/pagination";
 import { Header } from "@/components/ui/layout/header-with-search";
+import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
+import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
+import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 import { Dropdown } from "@/components/ui/primitives/dropdown";
 import { EditProfileForm, defaultProfile, type EditableProfile } from "@/components/ui/forms/edit-profile-form";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/primitives/sheet";
@@ -4007,27 +4010,62 @@ export default function UserProfilePage() {
 
   if (isLoadingProfile || !profileData) {
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-4">
+      <main className="relative min-h-screen overflow-hidden bg-background">
+        <AnimatedGridPattern
+          numSquares={120}
+          maxOpacity={0.08}
+          duration={4}
+          repeatDelay={0.75}
+          className="text-slate-500 dark:text-slate-400"
+        />
+        <div className="relative z-10 flex min-h-screen flex-col">
+          {isMobile ? (
+            <Header minimalMobile={isMobile} />
+          ) : (
+            <>
+              <DesktopSidebar />
+              <MinimalDesktopHeader />
+            </>
+          )}
+          <div className={cn(
+            "flex flex-1 items-center justify-center px-4 pb-16 pt-20 md:pb-24 md:pt-24",
+            isMobile ? "mt-16" : "mt-16 ml-16"
+          )}>
             <TetrisLoading size="md" speed="fast" loadingText="Loading profile..." />
           </div>
         </div>
+      </main>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col overflow-x-hidden w-full">
-      {(!isMobile || !isEditOpen) && (
+    <main className="relative min-h-screen overflow-hidden bg-background">
+      <AnimatedGridPattern
+        numSquares={120}
+        maxOpacity={0.08}
+        duration={4}
+        repeatDelay={0.75}
+        className="text-slate-500 dark:text-slate-400"
+      />
+      <div className="relative z-10 flex min-h-screen flex-col overflow-x-hidden w-full">
+        {(!isMobile || !isEditOpen) && (
+          isMobile ? (
+            <Header minimalMobile={isMobile} />
+          ) : (
+            <>
+              <DesktopSidebar />
+              <MinimalDesktopHeader />
+            </>
+          )
+        )}
         <div className={cn(
-          isEditOpen && !isMobile && "backdrop-blur-md"
+          "flex-1",
+          isMobile ? "mt-16" : "mt-16 ml-16"
         )}>
-          <Header />
-        </div>
-      )}
-      <main className={cn(
-        "mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8 mt-16 pb-24 md:pb-8 overflow-x-hidden",
-        isEditOpen && !isMobile && "backdrop-blur-md"
-      )}>
+          <div className={cn(
+            "mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8 pb-24 md:pb-8 overflow-x-hidden",
+            isEditOpen && !isMobile && "backdrop-blur-md"
+          )}>
         <div className="space-y-8">
           <div className="grid gap-6 lg:grid-cols-[1fr_2fr] lg:gap-12">
             <div className="hidden md:block">
@@ -4046,7 +4084,10 @@ export default function UserProfilePage() {
               </p>
             </div>
             <div className="flex justify-end w-full items-start">
-              <div className="w-full max-w-lg flex-shrink-0">
+              <div className={cn(
+                "w-full max-w-lg flex-shrink-0",
+                isMobile && "bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg p-4 pl-6"
+              )}>
                 <ProfileSummary
                   profile={profileData}
                   bookshelfCount={bookshelfBooks.length}
@@ -4700,31 +4741,33 @@ export default function UserProfilePage() {
               <AuthRequiredBanner onSignIn={handleAuthPrompt} />
             </>
           )}
+            </div>
+          </div>
         </div>
-      </main>
 
-      <Sheet open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-[50vw]">
-          <SheetHeader>
-            <SheetTitle>Edit Profile</SheetTitle>
-          </SheetHeader>
-          <EditProfileForm
-            profile={profileData || defaultProfile}
-            onProfileChange={setProfileData}
-            onSubmitProfile={handleProfileSave}
-            onCancel={() => {
-              // Restore original profile data on cancel
-              if (originalProfileDataRef.current) {
-                setProfileData(originalProfileDataRef.current);
-              }
-              setIsEditOpen(false);
-            }}
-            isSubmitting={isSavingProfile}
-            submitError={profileSaveError}
-          />
-        </SheetContent>
-      </Sheet>
-    </div>
+        <Sheet open={isEditOpen} onOpenChange={setIsEditOpen}>
+          <SheetContent className="w-full overflow-y-auto sm:max-w-[50vw]">
+            <SheetHeader>
+              <SheetTitle>Edit Profile</SheetTitle>
+            </SheetHeader>
+            <EditProfileForm
+              profile={profileData || defaultProfile}
+              onProfileChange={setProfileData}
+              onSubmitProfile={handleProfileSave}
+              onCancel={() => {
+                // Restore original profile data on cancel
+                if (originalProfileDataRef.current) {
+                  setProfileData(originalProfileDataRef.current);
+                }
+                setIsEditOpen(false);
+              }}
+              isSubmitting={isSavingProfile}
+              submitError={profileSaveError}
+            />
+          </SheetContent>
+        </Sheet>
+      </div>
+    </main>
   );
 }
 

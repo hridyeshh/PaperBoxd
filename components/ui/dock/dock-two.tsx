@@ -65,6 +65,22 @@ DockButton.displayName = "DockButton";
 
 const Dock = React.forwardRef<HTMLDivElement, DockProps>(({ items, className, activeLabel }, ref) => {
   const isMobile = useIsMobile();
+  // For tablet sizes (like iPad Air 820px), use scrollable layout to prevent overflow
+  // Check if screen is between 640px and 1024px (tablet range)
+  const [isTablet, setIsTablet] = React.useState(false);
+  
+  React.useEffect(() => {
+    const checkTablet = () => {
+      setIsTablet(window.innerWidth >= 640 && window.innerWidth < 1024);
+    };
+    
+    checkTablet();
+    window.addEventListener('resize', checkTablet);
+    return () => window.removeEventListener('resize', checkTablet);
+  }, []);
+  
+  const shouldUseScrollable = isMobile || isTablet;
+  
   return (
     <div ref={ref} className={cn("w-full flex items-center justify-center p-1", className)}>
       <motion.div
@@ -73,12 +89,12 @@ const Dock = React.forwardRef<HTMLDivElement, DockProps>(({ items, className, ac
         variants={floatingAnimation}
         className={cn(
           "rounded-full border border-border/60 bg-background text-foreground shadow-sm dark:border-border/40",
-          isMobile 
+          shouldUseScrollable
             ? "w-full max-w-full px-4 py-2" 
             : "w-full max-w-6xl px-8 py-2 md:px-10 flex items-center justify-center gap-3",
         )}
       >
-        {isMobile ? (
+        {shouldUseScrollable ? (
           <div className="w-full overflow-x-auto scrollbar-hide">
             <div className="flex items-center gap-3 min-w-max">
               {items.map((item) => (
@@ -86,7 +102,7 @@ const Dock = React.forwardRef<HTMLDivElement, DockProps>(({ items, className, ac
                   key={item.label} 
                   {...item} 
                   isActive={item.label === activeLabel} 
-                  isMobile={isMobile}
+                  isMobile={shouldUseScrollable}
                   className="text-center flex-shrink-0" 
                 />
               ))}
@@ -99,7 +115,7 @@ const Dock = React.forwardRef<HTMLDivElement, DockProps>(({ items, className, ac
                 key={item.label} 
                 {...item} 
                 isActive={item.label === activeLabel} 
-                isMobile={isMobile}
+                isMobile={false}
                 className="flex-1 text-center" 
               />
             ))}
