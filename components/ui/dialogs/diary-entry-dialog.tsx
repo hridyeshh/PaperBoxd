@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Image from "next/image";
-import { Heart, Trash2 } from "lucide-react";
+import { Heart, Trash2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/primitives/button";
 import {
   Dialog,
@@ -63,6 +63,13 @@ export function DiaryEntryDialog({
     setIsLiked(entry.isLiked || false);
     setLikesCount(entry.likesCount || entry.likes?.length || 0);
   }, [entry.id, entry.isLiked, entry.likesCount, entry.likes]);
+
+  // Reset confirmation state when dialog closes
+  React.useEffect(() => {
+    if (!open) {
+      setShowDeleteConfirm(false);
+    }
+  }, [open]);
 
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -212,6 +219,77 @@ export function DiaryEntryDialog({
         "max-h-[85vh] flex flex-col p-0",
         isMobile ? "max-w-[95vw] w-full" : "max-w-2xl"
       )}>
+        {/* Delete Confirmation Overlay - appears inline to avoid nested Dialog */}
+        <AnimatePresence>
+          {showDeleteConfirm && (
+            <motion.div
+              className="absolute inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm rounded-lg"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <motion.div
+                className={cn(
+                  "bg-background border rounded-lg shadow-lg",
+                  isMobile ? "mx-4 p-4 max-w-sm w-full" : "p-6 max-w-md w-full"
+                )}
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className={cn(
+                  "flex items-center gap-3 mb-4",
+                  isMobile && "gap-2"
+                )}>
+                  <div className={cn(
+                    "flex items-center justify-center rounded-full bg-destructive/10",
+                    isMobile ? "h-10 w-10" : "h-12 w-12"
+                  )}>
+                    <AlertTriangle className={cn(
+                      "text-destructive",
+                      isMobile ? "h-5 w-5" : "h-6 w-6"
+                    )} />
+                  </div>
+                  <div>
+                    <h3 className={cn(
+                      "font-semibold",
+                      isMobile ? "text-lg" : "text-xl"
+                    )}>Delete Diary Entry</h3>
+                  </div>
+                </div>
+                
+                <p className={cn(
+                  "text-muted-foreground mb-6",
+                  isMobile ? "text-sm" : "text-sm"
+                )}>
+                  Are you sure you want to delete this diary entry? This action cannot be undone.
+                </p>
+
+                <div className="flex gap-3 justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={isDeleting}
+                    className={isMobile ? "text-sm" : ""}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteConfirm}
+                    disabled={isDeleting}
+                    className={isMobile ? "text-sm" : ""}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </Button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <DialogHeader className={cn(
           "pb-3",
           isMobile ? "px-3 pt-3" : "px-4 pt-4"
@@ -271,7 +349,7 @@ export function DiaryEntryDialog({
                     variant="ghost"
                     size="sm"
                     onClick={handleDeleteClick}
-                    disabled={isDeleting}
+                    disabled={isDeleting || showDeleteConfirm}
                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
@@ -286,7 +364,7 @@ export function DiaryEntryDialog({
                   variant="ghost"
                   size="sm"
                   onClick={handleLike}
-                  disabled={isLiking}
+                  disabled={isLiking || showDeleteConfirm}
                   className="flex items-center gap-2 relative overflow-visible"
                 >
                   {/* Heart icon with animation */}
@@ -382,34 +460,6 @@ export function DiaryEntryDialog({
           </div>
         </div>
       </DialogContent>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete Diary Entry</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this diary entry? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-3 mt-4">
-            <Button
-              variant="outline"
-              onClick={() => setShowDeleteConfirm(false)}
-              disabled={isDeleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteConfirm}
-              disabled={isDeleting}
-            >
-              {isDeleting ? "Deleting..." : "Delete"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </Dialog>
   );
 }

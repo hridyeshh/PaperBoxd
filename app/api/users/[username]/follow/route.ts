@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
 import { auth } from "@/lib/auth";
+import { EventTracker } from "@/lib/services/EventTracker";
 import mongoose from "mongoose";
 
 /**
@@ -77,6 +78,21 @@ export async function POST(
       await currentUser.save();
       await targetUser.save();
 
+      // Track unfollow event
+      try {
+        const eventTracker = new EventTracker();
+        if (currentUser._id && targetUser._id) {
+          await eventTracker.trackFollow(
+            currentUser._id as mongoose.Types.ObjectId,
+            targetUser._id as mongoose.Types.ObjectId,
+            false
+          );
+        }
+      } catch (error) {
+        console.error("Failed to track unfollow event:", error);
+        // Don't fail the request if tracking fails
+      }
+
       return NextResponse.json({
         message: "Successfully unfollowed",
         isFollowing: false,
@@ -96,6 +112,21 @@ export async function POST(
 
       await currentUser.save();
       await targetUser.save();
+
+      // Track follow event
+      try {
+        const eventTracker = new EventTracker();
+        if (currentUser._id && targetUser._id) {
+          await eventTracker.trackFollow(
+            currentUser._id as mongoose.Types.ObjectId,
+            targetUser._id as mongoose.Types.ObjectId,
+            true
+          );
+        }
+      } catch (error) {
+        console.error("Failed to track follow event:", error);
+        // Don't fail the request if tracking fails
+      }
 
       return NextResponse.json({
         message: "Successfully followed",
