@@ -58,6 +58,7 @@ export interface IInteractions {
 
 export interface IUserPreference extends Document {
   userId: mongoose.Types.ObjectId;
+  username?: string; // Username of the user who completed onboarding
 
   // Onboarding quiz data
   onboarding?: IOnboarding;
@@ -161,6 +162,12 @@ const UserPreferenceSchema = new Schema<IUserPreference>(
       ref: 'User',
       required: true,
       // Index is created explicitly below to avoid duplicate index warning
+    },
+
+    username: {
+      type: String,
+      required: false,
+      index: true,
     },
 
     onboarding: OnboardingSchema,

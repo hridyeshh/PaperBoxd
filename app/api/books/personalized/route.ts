@@ -6,6 +6,7 @@ import User from '@/lib/db/models/User';
 import UserPreference from '@/lib/db/models/UserPreference';
 import { RecommendationService } from '@/lib/services/RecommendationService';
 import { RecommendationConfig } from '@/lib/config/recommendation.config';
+import mongoose from 'mongoose';
 
 // Types for MongoDB lean documents
 type BookLean = {
@@ -54,13 +55,45 @@ type MongoQuery = {
   $or?: Array<Record<string, unknown>>;
 };
 
+type BookWithPagination = BookLean & {
+  __pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    hasMore: boolean;
+  };
+};
+
+/**
+ * Genre relationships for finding related books
+ * Maps each genre to related genres that users might also enjoy
+ */
+const genreRelationships: Record<string, string[]> = {
+  'fiction': ['literary fiction', 'contemporary fiction', 'literature', 'drama'],
+  'mystery': ['thriller', 'crime', 'detective', 'suspense', 'noir'],
+  'thriller': ['mystery', 'suspense', 'crime', 'psychological thriller', 'action'],
+  'romance': ['contemporary romance', 'historical romance', 'women\'s fiction', 'chick lit'],
+  'science-fiction': ['fantasy', 'speculative fiction', 'dystopian', 'space opera', 'cyberpunk'],
+  'fantasy': ['science-fiction', 'urban fantasy', 'epic fantasy', 'magical realism', 'paranormal'],
+  'horror': ['thriller', 'supernatural', 'gothic', 'paranormal', 'dark fantasy'],
+  'historical': ['historical fiction', 'biography', 'war', 'literary fiction'],
+  'biography': ['memoir', 'autobiography', 'history', 'non-fiction'],
+  'self-help': ['psychology', 'philosophy', 'business', 'motivational', 'spirituality'],
+  'business': ['economics', 'management', 'entrepreneurship', 'self-help', 'finance'],
+  'non-fiction': ['biography', 'history', 'science', 'philosophy', 'journalism'],
+  'young-adult': ['fiction', 'fantasy', 'romance', 'coming of age', 'teen'],
+  'classics': ['literary fiction', 'literature', 'historical', 'philosophy'],
+  'poetry': ['literature', 'literary fiction', 'classics'],
+};
+
 /**
  * GET /api/books/personalized
  *
  * Get personalized book carousels for authenticated users.
  * Query params:
- * - type: 'recommended' | 'favorites' | 'authors' | 'genres' | 'continue-reading'
- * - limit: number (default: 20)
+ * - type: 'recommended' | 'favorites' | 'authors' | 'genres' | 'continue-reading' | 'onboarding'
+ * - limit: number (default: 20, max: 200 for onboarding type)
+ * - page: number (default: 1, for pagination)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -77,14 +110,17 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'recommended';
-    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
+    const defaultLimit = type === 'onboarding' ? 50 : 20;
+    const maxLimit = type === 'onboarding' ? 200 : 50;
+    const limit = Math.min(parseInt(searchParams.get('limit') || defaultLimit.toString()), maxLimit);
 
     const userId = session.user.id;
     let books: BookLean[] = [];
 
     switch (type) {
       case 'onboarding': {
-        // Books based on onboarding questionnaire (for new users)
+        // Enhanced endless feed algorithm based on onboarding questionnaire
         const preference = await UserPreference.findOne({ userId }).lean();
         
         if (!preference || !preference.onboarding) {
@@ -96,186 +132,202 @@ export async function GET(request: NextRequest) {
         const genreNames = onboarding.genres?.map(g => g.genre) || [];
         const authorNames = onboarding.favoriteAuthors || [];
 
-        console.log(`[Personalized API] Onboarding query for user ${userId}:`, {
+        console.log(`[Personalized API] Onboarding feed for user ${userId}, page ${page}:`, {
           genres: genreNames,
           authors: authorNames,
         });
 
-        // Build query for books matching onboarding preferences
-        const query: MongoQuery = {
-          'volumeInfo.imageLinks.thumbnail': { $exists: true, $ne: null },
-        };
+        // Multi-tier strategy for endless feed
+        // Tier 1: Exact matches (onboarding genres/authors) - highest priority
+        // Tier 2: Related genres (similar genres) - medium priority  
+        // Tier 3: Popular books (any genre) - lower priority but ensures endless feed
 
-        // Add genre or author filter
+        const skip = (page - 1) * limit;
+        const allBooks: BookLean[] = [];
+        const seenIds = new Set<string>();
+
+        // Tier 1: Exact matches from onboarding preferences
         if (genreNames.length > 0 || authorNames.length > 0) {
-          query.$or = [];
-          
+          const tier1Query: MongoQuery = {
+            'volumeInfo.imageLinks.thumbnail': { $exists: true, $ne: null },
+            $or: [],
+          };
+
+          // Build genre patterns for exact matches
           if (genreNames.length > 0) {
-            // Get all variations for each genre from the genre mapping
             const genrePatterns: string[] = [];
             for (const normalizedGenre of genreNames) {
-              // Add the normalized genre itself
               genrePatterns.push(normalizedGenre);
               
-              // Find all variations from the genre mapping
+              // Add variations from genre mapping
               const genreMapping = RecommendationConfig.genreMapping;
               for (const [standard, variations] of Object.entries(genreMapping)) {
                 if (standard.toLowerCase() === normalizedGenre.toLowerCase()) {
-                  // Add all variations for this genre
-                  variations.forEach(variation => {
-                    genrePatterns.push(variation);
-                  });
+                  variations.forEach(variation => genrePatterns.push(variation));
                 }
-              }
-              
-              // Also try common variations (e.g., "Fiction" -> "Fiction / Literary", "Literary Fiction")
-              const commonVariations: Record<string, string[]> = {
-                'fiction': ['literary fiction', 'contemporary fiction', 'general fiction'],
-                'mystery': ['mystery & thriller', 'detective', 'crime'],
-                'thriller': ['mystery & thriller', 'suspense', 'psychological thriller'],
-                'romance': ['romantic', 'love story', 'romantic fiction'],
-                'science-fiction': ['sci-fi', 'science fiction', 'sf'],
-                'fantasy': ['fantasy fiction', 'epic fantasy', 'urban fantasy'],
-                'horror': ['horror fiction', 'supernatural', 'gothic'],
-                'historical': ['historical fiction', 'history'],
-                'biography': ['biography & autobiography', 'memoir', 'autobiography'],
-                'self-help': ['self improvement', 'personal development', 'motivational'],
-                'business': ['business & economics', 'management', 'entrepreneurship'],
-                'non-fiction': ['nonfiction', 'non fiction', 'general nonfiction'],
-                'young-adult': ['ya', 'young adult', 'teen'],
-                'classics': ['classic literature', 'literary classics'],
-                'poetry': ['poems', 'verse', 'poetic'],
-              };
-              
-              const lowerGenre = normalizedGenre.toLowerCase();
-              if (commonVariations[lowerGenre]) {
-                commonVariations[lowerGenre].forEach(variation => {
-                  genrePatterns.push(variation);
-                });
               }
             }
             
-            // Remove duplicates and create regex patterns
             const uniquePatterns = [...new Set(genrePatterns)];
-            console.log(`[Personalized API] Genre patterns to search:`, uniquePatterns);
-            
-            // Create regex that matches any of the patterns
             for (const pattern of uniquePatterns) {
-              query.$or.push({
+              tier1Query.$or!.push({
                 'volumeInfo.categories': { $regex: pattern, $options: 'i' },
               });
             }
           }
-          
+
+          // Add author matches
           if (authorNames.length > 0) {
-            // Match any of the favorite authors (case-insensitive)
             for (const author of authorNames) {
-              // Split author name and match each part (e.g., "J.K. Rowling" -> match "Rowling")
               const authorParts = author.trim().split(/\s+/).filter(part => part.length > 2);
               for (const part of authorParts) {
-                query.$or.push({
+                tier1Query.$or!.push({
                   'volumeInfo.authors': { $regex: part, $options: 'i' },
                 });
               }
             }
           }
+
+          if (tier1Query.$or!.length > 0) {
+            // Fetch a large batch for tier 1 (exact matches get priority)
+            // Fetch more books for later pages to ensure endless feed
+            const tier1Limit = Math.max(limit * 10, (skip + limit) * 2);
+            const tier1Books = await Book.find(tier1Query)
+              .sort({ 
+                'volumeInfo.averageRating': -1, 
+                'volumeInfo.ratingsCount': -1,
+                'volumeInfo.publishedDate': -1 
+              })
+              .limit(tier1Limit)
+              .lean() as BookLean[];
+            
+            tier1Books.forEach(book => {
+              const id = book._id.toString();
+              if (!seenIds.has(id)) {
+                allBooks.push(book);
+                seenIds.add(id);
+              }
+            });
+            
+            console.log(`[Personalized API] Tier 1 (exact matches): ${tier1Books.length} books`);
+          }
         }
 
-        if (query.$or && query.$or.length > 0) {
-          console.log(`[Personalized API] Executing query with ${query.$or.length} conditions`);
+        // Tier 2: Related genres (always fetch for variety, especially on later pages)
+        // Fetch related genres to ensure we have enough books for pagination
+        if (genreNames.length > 0) {
+          const relatedGenres = new Set<string>();
           
-          // Use userId to create a consistent but unique seed for randomization
-          // This ensures different users get different books even with same genres
-          const userIdHash = userId.toString().split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-          const randomSeed = userIdHash % 1000; // Use modulo to get a seed value
-          
-          // Fetch more books to allow for randomization
-          const fetchLimit = limit * 5;
-          books = await Book.find(query)
-            .sort({ 
-              'volumeInfo.averageRating': -1, 
-              'volumeInfo.ratingsCount': -1,
-              'volumeInfo.publishedDate': -1 
-            })
-            .limit(fetchLimit)
-            .lean() as BookLean[];
-          
-          console.log(`[Personalized API] Found ${books.length} books for onboarding user ${userId}`);
-          
-          // If we found very few books, try a more lenient query
-          if (books.length < limit && genreNames.length > 0) {
-            console.log(`[Personalized API] Found only ${books.length} books, trying more lenient query`);
-            const lenientQuery: MongoQuery = {
+          // Collect related genres for each selected genre
+          for (const genre of genreNames) {
+            const lowerGenre = genre.toLowerCase();
+            if (genreRelationships[lowerGenre]) {
+              genreRelationships[lowerGenre].forEach(related => relatedGenres.add(related));
+            }
+          }
+
+          if (relatedGenres.size > 0) {
+            const tier2Query: MongoQuery = {
               'volumeInfo.imageLinks.thumbnail': { $exists: true, $ne: null },
-              $or: genreNames.map(genre => ({
-                'volumeInfo.categories': { $regex: genre.split(' ')[0], $options: 'i' },
+              $or: Array.from(relatedGenres).map(genre => ({
+                'volumeInfo.categories': { $regex: genre, $options: 'i' },
               })),
             };
-            
-            const additionalBooks = await Book.find(lenientQuery)
+
+            // Exclude books we've already seen
+            if (seenIds.size > 0) {
+              tier2Query._id = { $nin: Array.from(seenIds).map(id => new mongoose.Types.ObjectId(id)) };
+            }
+
+            // Fetch more related books for later pages
+            const tier2Limit = Math.max(limit * 5, (skip + limit) * 1.5);
+            const tier2Books = await Book.find(tier2Query)
               .sort({ 
                 'volumeInfo.averageRating': -1, 
                 'volumeInfo.ratingsCount': -1,
               })
-              .limit(limit * 3)
+              .limit(Math.ceil(tier2Limit))
               .lean() as BookLean[];
-            
-            // Merge and deduplicate
-            const existingIds = new Set(books.map((b) => b._id.toString()));
-            const newBooks = additionalBooks.filter((b) => !existingIds.has(b._id.toString()));
-            books = [...books, ...newBooks];
-            console.log(`[Personalized API] After lenient query: ${books.length} total books`);
-          }
-          
-          // Shuffle books using user-specific seed to ensure different users get different books
-          if (books.length > limit) {
-            // Simple seeded shuffle algorithm
-            const shuffled: BookLean[] = [];
-            const remaining = [...books];
-            
-            // Use seed to determine starting position
-            let currentIndex = randomSeed % remaining.length;
-            
-            while (remaining.length > 0 && shuffled.length < limit * 2) {
-              shuffled.push(remaining.splice(currentIndex, 1)[0]);
-              if (remaining.length > 0) {
-                // Move to next position based on seed
-                currentIndex = (currentIndex + randomSeed + 1) % remaining.length;
-              }
-            }
-            
-            // Take top books (highest rated) and mix with shuffled
-            const topBooks = books.slice(0, Math.floor(limit / 2));
-            const shuffledBooks = shuffled.slice(0, Math.ceil(limit / 2));
-            
-            // Merge top books with shuffled books, prioritizing top books
-            const merged: BookLean[] = [];
-            const usedIds = new Set<string>();
-            
-            // Add top books first
-            for (const book of topBooks) {
+
+            tier2Books.forEach(book => {
               const id = book._id.toString();
-              if (!usedIds.has(id)) {
-                merged.push(book);
-                usedIds.add(id);
+              if (!seenIds.has(id)) {
+                allBooks.push(book);
+                seenIds.add(id);
               }
-            }
-            
-            // Add shuffled books
-            for (const book of shuffledBooks) {
-              const id = book._id.toString();
-              if (!usedIds.has(id) && merged.length < limit * 2) {
-                merged.push(book);
-                usedIds.add(id);
-              }
-            }
-            
-            books = merged;
-            console.log(`[Personalized API] After shuffling: ${books.length} books for user ${userId}`);
+            });
+
+            console.log(`[Personalized API] Tier 2 (related genres): ${tier2Books.length} books`);
           }
-        } else {
-          console.log(`[Personalized API] No query conditions, returning empty array`);
         }
+
+        // Tier 3: Popular books (ensures truly endless feed)
+        // Always fetch tier 3 to ensure we have enough books for any page
+        // This guarantees the feed never runs out
+        const tier3Query: MongoQuery = {
+          'volumeInfo.imageLinks.thumbnail': { $exists: true, $ne: null },
+          'volumeInfo.averageRating': { $gte: 3.5 },
+          'volumeInfo.ratingsCount': { $gte: 10 },
+        };
+
+        // Exclude books we've already seen
+        if (seenIds.size > 0) {
+          tier3Query._id = { $nin: Array.from(seenIds).map(id => new mongoose.Types.ObjectId(id)) };
+        }
+
+        // Use user-specific seed for consistent randomization
+        const userIdHash = userId.toString().split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        const randomSeed = (userIdHash + page) % 10000;
+
+        // Fetch popular books with randomization
+        // Fetch enough to cover current page + several more pages
+        const tier3Limit = Math.max(limit * 3, (skip + limit) + limit * 5);
+        const tier3Books = await Book.find(tier3Query)
+          .sort({ 
+            'volumeInfo.averageRating': -1, 
+            'volumeInfo.ratingsCount': -1,
+          })
+          .limit(Math.ceil(tier3Limit))
+          .lean() as BookLean[];
+
+        // Shuffle using seed for consistent but varied results
+        const shuffled = [...tier3Books];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = (randomSeed + i) % (i + 1);
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+
+        shuffled.forEach(book => {
+          const id = book._id.toString();
+          if (!seenIds.has(id)) {
+            allBooks.push(book);
+            seenIds.add(id);
+          }
+        });
+
+        console.log(`[Personalized API] Tier 3 (popular books): ${tier3Books.length} books`);
+
+        // Store total count before pagination for metadata
+        const totalBooksCount = allBooks.length;
+        const hasMore = skip + limit < totalBooksCount;
+        
+        // Apply pagination
+        const paginatedBooks = allBooks.slice(skip, skip + limit);
+        
+        // Store pagination info
+        const booksWithPagination = paginatedBooks as BookWithPagination[];
+        booksWithPagination.forEach(book => {
+          book.__pagination = {
+            page,
+            limit,
+            total: totalBooksCount,
+            hasMore,
+          };
+        });
+        
+        books = paginatedBooks;
+        
+        console.log(`[Personalized API] Total books found: ${totalBooksCount}, returning page ${page}: ${books.length} books`);
         break;
       }
 
@@ -638,10 +690,19 @@ export async function GET(request: NextRequest) {
       })
       .slice(0, limit);
 
+    // Extract pagination metadata if available (for onboarding type)
+    const firstBook = books[0] as BookWithPagination | undefined;
+    const paginationInfo = firstBook?.__pagination;
+    
     return NextResponse.json({
       books: transformedBooks,
       type,
       count: transformedBooks.length,
+      ...(paginationInfo && {
+        page: paginationInfo.page,
+        hasMore: paginationInfo.hasMore,
+        total: paginationInfo.total,
+      }),
     });
   } catch (error: unknown) {
     console.error('Error fetching personalized books:', error);
