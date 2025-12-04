@@ -391,11 +391,17 @@ export class UserProfileBuilder {
   async mergeOnboardingPreferences(
     userId: string | mongoose.Types.ObjectId,
     onboardingGenres: Array<{ genre: string; weight: number }>,
-    onboardingAuthors: string[]
+    onboardingAuthors: string[],
+    username?: string
   ): Promise<IUserPreference> {
     const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
 
     const preference = await UserPreference.findOrCreate(userIdObj);
+
+    // Set username if provided
+    if (username) {
+      preference.username = username;
+    }
 
     // Add onboarding data
     preference.onboarding = {

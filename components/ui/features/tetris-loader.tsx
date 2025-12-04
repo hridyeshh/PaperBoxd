@@ -48,9 +48,9 @@ export default function TetrisLoading({
 }: TetrisLoadingProps) {
   // Size configurations
   const sizeConfig = {
-    sm: { cellSize: 'w-2 h-2', gridWidth: 8, gridHeight: 16, padding: 'p-0.5' },
-    md: { cellSize: 'w-3 h-3', gridWidth: 10, gridHeight: 20, padding: 'p-1' },
-    lg: { cellSize: 'w-4 h-4', gridWidth: 10, gridHeight: 20, padding: 'p-1.5' }
+    sm: { cellSize: 'w-2 h-2', gridWidth: 8, gridHeight: 16, padding: 'p-0.5', containerWidth: 'w-[4rem]' },
+    md: { cellSize: 'w-3 h-3', gridWidth: 10, gridHeight: 20, padding: 'p-1', containerWidth: 'w-[9rem]' },
+    lg: { cellSize: 'w-4 h-4', gridWidth: 10, gridHeight: 20, padding: 'p-1.5', containerWidth: 'w-[11rem]' }
   }
 
   // Speed configurations (in milliseconds)
@@ -292,15 +292,15 @@ export default function TetrisLoading({
   }
 
   return (
-    <div>
+    <div className="flex-col items-center">
       <div className="mb-6">
-        <div className={`border-2 border-gray-800 dark:border-gray-200 bg-white dark:bg-black ${config.padding} transition-colors`}>
+        <div className={`border-2 border-gray-800 dark:border-gray-200 bg-white dark:bg-black ${config.padding} ${config.containerWidth} transition-colors`}>
           {renderGrid()}
         </div>
       </div>
 
       {showLoadingText && (
-        <div className="text-center">
+        <div className="text-center w-full">
           <p className="text-black dark:text-white font-medium transition-colors">{loadingText}</p>
         </div>
       )}

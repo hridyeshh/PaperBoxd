@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import connectDB from '@/lib/db/mongodb';
 import { UserProfileBuilder } from '@/lib/services/UserProfileBuilder';
 import { EventTracker } from '@/lib/services/EventTracker';
+import User from '@/lib/db/models/User';
 
 /**
  * POST /api/onboarding
@@ -47,12 +48,20 @@ export async function POST(request: NextRequest) {
       weight: 5 - (index * 0.5), // Descending weights: 5, 4.5, 4, 3.5, 3
     }));
 
+    // Get username from session or fetch from database
+    let username: string | undefined = session.user.username;
+    if (!username) {
+      const user = await User.findById(session.user.id).select('username').lean();
+      username = user?.username || undefined;
+    }
+
     // Create user preference with onboarding data
     const profileBuilder = new UserProfileBuilder();
     await profileBuilder.mergeOnboardingPreferences(
       session.user.id,
       genresWithWeights,
-      authors
+      authors,
+      username || undefined
     );
 
     // Track onboarding completion event
