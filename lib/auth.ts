@@ -37,7 +37,6 @@ if (process.env.NEXTAUTH_URL && !process.env.NEXTAUTH_URL.match(/^https?:\/\//))
 
 // Extend globalThis type to include our custom property
 declare global {
-  // eslint-disable-next-line no-var
   var __NEXTAUTH_URL_LOGGED__: boolean | undefined;
 }
 

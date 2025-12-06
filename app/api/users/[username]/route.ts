@@ -95,7 +95,7 @@ export async function GET(
                   
                   return {
                     ...list,
-                    books: books.map((b: { _id?: mongoose.Types.ObjectId; volumeInfo?: { title?: string; authors?: string[]; imageLinks?: { thumbnail?: string; smallThumbnail?: string; medium?: string } } }) => ({
+                    books: (books as unknown as Array<{ _id?: mongoose.Types.ObjectId; volumeInfo?: { title?: string; authors?: string[]; imageLinks?: { thumbnail?: string; smallThumbnail?: string; medium?: string } } }>).map((b) => ({
                       _id: b._id,
                       volumeInfo: b.volumeInfo
                     }))
@@ -108,7 +108,7 @@ export async function GET(
               return list;
             })
           );
-          userPlain.readingLists = populatedLists;
+          userPlain.readingLists = populatedLists as typeof userPlain.readingLists;
         } catch (populateError) {
           console.warn("Failed to populate readingLists.books:", populateError);
         }
@@ -151,7 +151,19 @@ export async function GET(
         .filter((id): id is string => Boolean(id));
       
       // Batch fetch all books in one query
-      const booksMap = new Map<string, any>();
+      type BookLean = {
+        _id: mongoose.Types.ObjectId | { toString(): string } | string;
+        volumeInfo?: {
+          title?: string;
+          imageLinks?: {
+            thumbnail?: string;
+            smallThumbnail?: string;
+            medium?: string;
+            large?: string;
+          };
+        };
+      };
+      const booksMap = new Map<string, BookLean>();
       if (bookIds.length > 0) {
         try {
           const books = await Book.find({
@@ -160,9 +172,12 @@ export async function GET(
             .select('volumeInfo.title volumeInfo.imageLinks')
             .lean();
           
-          books.forEach(book => {
+          (books as unknown as BookLean[]).forEach(book => {
             if (book._id) {
-              booksMap.set(book._id.toString(), book);
+              const bookId = typeof book._id === 'string' 
+                ? book._id 
+                : book._id.toString();
+              booksMap.set(bookId, book);
             }
           });
         } catch (error) {
@@ -181,7 +196,9 @@ export async function GET(
         };
         
         if (activity.bookId) {
-          const bookId = activity.bookId?.toString ? activity.bookId.toString() : activity.bookId;
+          const bookId = typeof activity.bookId === 'string' 
+            ? activity.bookId 
+            : activity.bookId.toString();
           const book = booksMap.get(bookId);
           if (book) {
             activityData.bookTitle = book.volumeInfo?.title || undefined;
