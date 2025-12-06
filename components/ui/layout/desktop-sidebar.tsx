@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import React from "react";
-import { Home, Sparkles, List, NotebookPen, Bell, Settings } from "lucide-react";
+import { Home, Sparkles, List, NotebookPen, Bell } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -114,25 +114,6 @@ export function DesktopSidebar() {
               );
             })}
           </nav>
-
-          {/* Settings at bottom */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => {
-                  // Placeholder for settings
-                  console.log("Settings clicked");
-                }}
-                className="flex items-center justify-center w-12 h-12 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors mt-auto"
-              >
-                <Settings className="w-6 h-6" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p>Settings</p>
-            </TooltipContent>
-          </Tooltip>
         </aside>
       </TooltipProvider>
 
