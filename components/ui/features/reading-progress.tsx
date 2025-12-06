@@ -248,7 +248,7 @@ export function ReadingProgress({
       if (isDragging) {
         commitProgressThrottled(newPages);
       } else {
-        commitProgress(newPages);
+      commitProgress(newPages);
       }
     },
     [calculateProgress, updateVisualProgress, commitProgress, commitProgressThrottled, isDragging]

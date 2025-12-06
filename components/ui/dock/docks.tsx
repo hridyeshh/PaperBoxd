@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import { Moon, Settings, Sun } from "lucide-react";
 
 import { GlassToggleButton } from "@/components/ui/buttons";
+import { GlassNoise } from "@/components/ui/shared/glass-noise";
 import { cn } from "@/lib/utils";
 
 export type DockToggleItem = {
@@ -34,11 +35,23 @@ export const Component = ({ items = defaultItems, className, buttonClassName }: 
   return (
     <div
       className={cn(
-        "inline-flex overflow-hidden rounded-lg border border-gray-300 bg-white/20 shadow-lg shadow-black/20 backdrop-blur-md transition-colors duration-500 dark:border-black/60 dark:bg-black/40",
+        "relative inline-flex overflow-hidden rounded-lg",
+        // Double border trick for crisp Apple look
+        "border border-white/20 ring-1 ring-black/5",
+        "dark:border-white/10 dark:ring-white/5",
+        // Enhanced glass effect with progressive blur
+        "bg-white/10 dark:bg-black/20",
+        "backdrop-blur-xl",
+        // Enhanced shadow for depth
+        "shadow-[0_8px_32px_0_rgba(31,38,135,0.37)]",
+        "dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.5)]",
+        "transition-all duration-500",
         shouldSpaceEvenly && "flex",
         className,
       )}
     >
+      {/* Noise texture overlay for tactility */}
+      <GlassNoise />
       {resolvedItems.map((item, index) => {
         const Icon = item.icon;
         const isFirst = index === 0;
