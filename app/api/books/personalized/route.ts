@@ -152,7 +152,7 @@ export async function GET(request: NextRequest) {
             'volumeInfo.imageLinks.thumbnail': { $exists: true, $ne: null },
             $or: [],
           };
-
+          
           // Build genre patterns for exact matches
           if (genreNames.length > 0) {
             const genrePatterns: string[] = [];
@@ -165,9 +165,9 @@ export async function GET(request: NextRequest) {
                 if (standard.toLowerCase() === normalizedGenre.toLowerCase()) {
                   variations.forEach(variation => genrePatterns.push(variation));
                 }
+                }
               }
-            }
-            
+              
             const uniquePatterns = [...new Set(genrePatterns)];
             for (const pattern of uniquePatterns) {
               tier1Query.$or!.push({
@@ -175,7 +175,7 @@ export async function GET(request: NextRequest) {
               });
             }
           }
-
+          
           // Add author matches
           if (authorNames.length > 0) {
             for (const author of authorNames) {
@@ -193,14 +193,14 @@ export async function GET(request: NextRequest) {
             // Fetch more books for later pages to ensure endless feed
             const tier1Limit = Math.max(limit * 10, (skip + limit) * 2);
             const tier1Books = await Book.find(tier1Query)
-              .sort({ 
-                'volumeInfo.averageRating': -1, 
-                'volumeInfo.ratingsCount': -1,
-                'volumeInfo.publishedDate': -1 
-              })
+            .sort({ 
+              'volumeInfo.averageRating': -1, 
+              'volumeInfo.ratingsCount': -1,
+              'volumeInfo.publishedDate': -1 
+            })
               .limit(tier1Limit)
-              .lean() as BookLean[];
-            
+            .lean() as BookLean[];
+          
             tier1Books.forEach(book => {
               const id = book._id.toString();
               if (!seenIds.has(id)) {
@@ -233,7 +233,7 @@ export async function GET(request: NextRequest) {
                 'volumeInfo.categories': { $regex: genre, $options: 'i' },
               })),
             };
-
+            
             // Exclude books we've already seen
             if (seenIds.size > 0) {
               tier2Query._id = { $nin: Array.from(seenIds).map(id => new mongoose.Types.ObjectId(id)) };
@@ -248,7 +248,7 @@ export async function GET(request: NextRequest) {
               })
               .limit(Math.ceil(tier2Limit))
               .lean() as BookLean[];
-
+            
             tier2Books.forEach(book => {
               const id = book._id.toString();
               if (!seenIds.has(id)) {
@@ -693,7 +693,7 @@ export async function GET(request: NextRequest) {
     // Extract pagination metadata if available (for onboarding type)
     const firstBook = books[0] as BookWithPagination | undefined;
     const paginationInfo = firstBook?.__pagination;
-    
+
     return NextResponse.json({
       books: transformedBooks,
       type,

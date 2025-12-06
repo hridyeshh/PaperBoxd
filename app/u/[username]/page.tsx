@@ -31,7 +31,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/primitives/dialog";
-import { Edit, MoreVertical, Trash2, Plus, X, Heart, AlertTriangle } from "lucide-react";
+import { Edit, MoreVertical, Trash2, Plus, X, Heart, AlertTriangle, BookOpen } from "lucide-react";
+import { motion } from "framer-motion";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { createBookSlug } from "@/lib/utils/book-slug";
 import { cn, DEFAULT_AVATAR, formatDiaryDate } from "@/lib/utils";
@@ -531,16 +532,23 @@ function FavoriteBookCard({
   title,
   onRemove,
   isRemoving,
-  onClick
+  onClick,
+  layoutId
 }: {
   cover: string;
   title: string;
   onRemove?: () => void;
   isRemoving?: boolean;
   onClick?: () => void;
+  layoutId?: string;
 }) {
   return (
-    <div className="group relative flex w-[180px] flex-shrink-0">
+    <motion.div 
+      className="group relative flex w-[180px] flex-shrink-0"
+      layoutId={layoutId}
+      layout
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+    >
       <div
         className="relative aspect-[2/3] w-full overflow-visible rounded-3xl bg-muted shadow-sm cursor-pointer"
         onClick={onClick}
@@ -574,7 +582,7 @@ function FavoriteBookCard({
           </button>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -1270,6 +1278,7 @@ function EditableFavoriteBooksCarousel({
                     onClick={() => { }}
                     onRemove={canEdit ? () => handleRemoveBook(book.id) : undefined}
                     isRemoving={canEdit ? isRemoving === book.id : undefined}
+                    layoutId={`favorite-book-${book.id}`}
                   />
                 </div>
                 {isDragOver && canEdit && (
@@ -1278,16 +1287,19 @@ function EditableFavoriteBooksCarousel({
               </div>
             );
           } else {
-            // Empty slot - show plus sign (only if canEdit)
+            // Empty slot - show ghost book outline (only if canEdit)
             if (!canEdit) return null;
             const isDragOver = dragOverIndex === index;
             return (
-              <div
+              <motion.div
                 key={`empty-${index}`}
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, index)}
                 className={`group relative flex w-[180px] flex-shrink-0 ${isDragOver ? "scale-105" : ""}`}
+                initial={{ opacity: 0.6 }}
+                animate={{ opacity: isDragOver ? 1 : 0.6 }}
+                transition={{ duration: 0.2 }}
               >
                 <button
                   type="button"
@@ -1295,14 +1307,25 @@ function EditableFavoriteBooksCarousel({
                     setBookToReplace(null);
                     setIsSearchOpen(true);
                   }}
-                  className="relative aspect-[2/3] w-full overflow-hidden rounded-3xl border-2 border-dashed border-border bg-muted/20 transition-colors hover:bg-muted/40 flex items-center justify-center"
+                  className="relative aspect-[2/3] w-full overflow-hidden rounded-3xl border-2 border-dashed border-border/50 bg-muted/10 transition-all hover:bg-muted/20 hover:border-border flex flex-col items-center justify-center gap-2"
                 >
-                  <Plus className="h-12 w-12 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  {/* Ghost book outline */}
+                  <div className="relative w-16 h-24 flex items-center justify-center">
+                    <BookOpen className="absolute w-12 h-12 text-muted-foreground/40 group-hover:text-muted-foreground/60 transition-colors" strokeWidth={1.5} />
+                    {/* Book spine */}
+                    <div className="absolute left-0 top-0 bottom-0 w-2 bg-muted-foreground/20 rounded-l-sm" />
+                    {/* Book pages */}
+                    <div className="absolute left-2 right-0 top-0 bottom-0 border border-muted-foreground/20 rounded-r-sm" />
+                  </div>
+                  {/* Micro-copy */}
+                  <p className="text-xs text-muted-foreground/60 group-hover:text-muted-foreground/80 transition-colors font-medium px-4 text-center">
+                    This shelf is lonely.
+                  </p>
                 </button>
                 {isDragOver && draggedBookId && (
                   <div className="absolute inset-0 border-2 border-primary rounded-3xl pointer-events-none z-10 bg-primary/10" />
                 )}
-              </div>
+              </motion.div>
             );
           }
         })}

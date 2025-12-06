@@ -2,22 +2,23 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 
-// Tetris pieces - pure black and white
+// Tetris pieces - using brand palette (CSS variables)
+// Each piece gets a unique color from the brand palette for visual interest
 const TETRIS_PIECES = [
-  // I-piece
-  { shape: [[1, 1, 1, 1]], color: 'bg-black dark:bg-white' },
-  // O-piece
-  { shape: [[1, 1], [1, 1]], color: 'bg-black dark:bg-white' },
-  // T-piece
-  { shape: [[0, 1, 0], [1, 1, 1]], color: 'bg-black dark:bg-white' },
-  // L-piece
-  { shape: [[1, 0], [1, 0], [1, 1]], color: 'bg-black dark:bg-white' },
-  // S-piece
-  { shape: [[0, 1, 1], [1, 1, 0]], color: 'bg-black dark:bg-white' },
-  // Z-piece
-  { shape: [[1, 1, 0], [0, 1, 1]], color: 'bg-black dark:bg-white' },
-  // J-piece
-  { shape: [[0, 1], [0, 1], [1, 1]], color: 'bg-black dark:bg-white' },
+  // I-piece - Primary (black/dark)
+  { shape: [[1, 1, 1, 1]], color: 'bg-primary dark:bg-primary-foreground' },
+  // O-piece - Chart 1 (orange/red)
+  { shape: [[1, 1], [1, 1]], color: 'bg-chart-1' },
+  // T-piece - Chart 2 (blue)
+  { shape: [[0, 1, 0], [1, 1, 1]], color: 'bg-chart-2' },
+  // L-piece - Chart 3 (dark blue)
+  { shape: [[1, 0], [1, 0], [1, 1]], color: 'bg-chart-3' },
+  // S-piece - Chart 4 (yellow)
+  { shape: [[0, 1, 1], [1, 1, 0]], color: 'bg-chart-4' },
+  // Z-piece - Chart 5 (yellow/orange)
+  { shape: [[1, 1, 0], [0, 1, 1]], color: 'bg-chart-5' },
+  // J-piece - Destructive (red)
+  { shape: [[0, 1], [0, 1], [1, 1]], color: 'bg-destructive' },
 ]
 
 interface Cell {
@@ -39,6 +40,25 @@ export interface TetrisLoadingProps {
   showLoadingText?: boolean
   loadingText?: string
 }
+
+/**
+ * TetrisLoading Component
+ * 
+ * Usage Strategy:
+ * - Use for "heavy" operations only:
+ *   - First time profile load
+ *   - Importing a library
+ *   - Initial page loads
+ *   - Onboarding setup
+ * 
+ * - DO NOT use for small interactions:
+ *   - Liking a book (use disabled state)
+ *   - Saving a diary entry (use skeleton UI)
+ *   - Quick API calls (< 500ms)
+ * 
+ * Seeing a Tetris game for a 200ms load is jarring.
+ * For small waits, use skeleton UI components instead.
+ */
 
 export default function TetrisLoading({ 
   size = 'md', 
@@ -171,10 +191,10 @@ export default function TetrisLoading({
       if (linesToClear.length > 0) {
         setIsClearing(true)
         
-        // Mark lines for clearing animation
+        // Mark lines for clearing animation - use primary color
         const newGrid = prevGrid.map((row, rowIndex) => {
           if (linesToClear.includes(rowIndex)) {
-            return row.map(cell => ({ ...cell, color: 'bg-black dark:bg-white animate-pulse opacity-50' }))
+            return row.map(cell => ({ ...cell, color: 'bg-primary dark:bg-primary-foreground animate-pulse opacity-50' }))
           }
           return row
         })
@@ -280,10 +300,10 @@ export default function TetrisLoading({
         {row.map((cell, colIndex) => (
           <div
             key={`${rowIndex}-${colIndex}`}
-            className={`${config.cellSize} border border-gray-300 dark:border-gray-600 transition-all duration-100 ${
+            className={`${config.cellSize} border border-border transition-all duration-100 ${
               cell.filled 
                 ? `${cell.color} scale-100` 
-                : 'bg-white dark:bg-black scale-95'
+                : 'bg-background scale-95'
             } ${isClearing && rowIndex < 4 ? 'animate-pulse' : ''}`}
           />
         ))}
@@ -294,14 +314,14 @@ export default function TetrisLoading({
   return (
     <div className={`flex flex-col items-center mx-auto`}>
       <div className="mb-6 flex justify-center w-full">
-        <div className={`border-2 border-gray-800 dark:border-gray-200 bg-white dark:bg-black ${config.padding} transition-colors`}>
+        <div className={`border-2 border-foreground bg-background ${config.padding} transition-colors`}>
           {renderGrid()}
         </div>
       </div>
 
       {showLoadingText && (
         <div className="text-center w-full min-w-0">
-          <p className="text-black dark:text-white font-medium transition-colors truncate">{loadingText}</p>
+          <p className="text-foreground font-medium transition-colors truncate">{loadingText}</p>
         </div>
       )}
     </div>
