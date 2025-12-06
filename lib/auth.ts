@@ -35,9 +35,20 @@ if (process.env.NEXTAUTH_URL && !process.env.NEXTAUTH_URL.match(/^https?:\/\//))
   }
 }
 
-// Log NEXTAUTH_URL in development for debugging
-if (process.env.NODE_ENV === "development" || process.env.VERCEL) {
+// Extend globalThis type to include our custom property
+declare global {
+  // eslint-disable-next-line no-var
+  var __NEXTAUTH_URL_LOGGED__: boolean | undefined;
+}
+
+// Log NEXTAUTH_URL only once on module load, not on every request
+// This prevents spam in console during development
+if (typeof window === "undefined" && (process.env.NODE_ENV === "development" || process.env.VERCEL)) {
+  // Only log once when the module is first loaded
+  if (!globalThis.__NEXTAUTH_URL_LOGGED__) {
   console.log("🔐 NEXTAUTH_URL:", process.env.NEXTAUTH_URL || "(using request origin via trustHost)");
+    globalThis.__NEXTAUTH_URL_LOGGED__ = true;
+  }
 }
 
 // Extend the built-in session types
@@ -256,6 +267,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.picture = undefined;
       } else if (token && token.email) {
         // On subsequent requests, fetch latest user data from database to get updated username
+        // Skip database fetch in edge runtime (Mongoose doesn't work there)
+        // Check if we're in Node.js runtime before attempting database access
+        const isNodeRuntime = typeof process !== "undefined" && 
+                             typeof process.versions === "object" && 
+                             process.versions?.node;
+        
+        if (isNodeRuntime) {
         try {
           await connectDB();
           const dbUser = await User.findOne({ email: token.email }).select("username name avatar");
@@ -273,9 +291,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             }
           }
         } catch (error) {
+            // Silently skip in edge runtime - this is expected behavior
+            // Only log actual errors, not edge runtime compatibility issues
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const isEdgeRuntimeError = errorMessage.includes("not a function") || 
+                                     errorMessage.includes("Edge Runtime") || 
+                                     errorMessage.includes("not available") ||
+                                     errorMessage.includes("connect is not a function");
+            
+            if (!isEdgeRuntimeError) {
           console.error("Error fetching user in JWT callback:", error);
+            }
           // Continue with existing token data if fetch fails
+          }
         }
+        // If not in Node.js runtime, skip database fetch and use existing token data
         
         // On subsequent requests, ensure we're not storing Google image URLs
         if (token.picture && typeof token.picture === "string" && !token.picture.startsWith("data:")) {

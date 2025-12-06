@@ -43,10 +43,15 @@ const cached: MongooseCache = globalForMongoose.mongoose;
  * Handles reconnection automatically
  */
 async function connectDB(): Promise<typeof mongoose> {
+  // Check if we're in Edge Runtime - Mongoose doesn't work there
+  if (typeof mongoose.connect !== "function") {
+    throw new Error("Mongoose is not available in Edge Runtime. This function should only be called in Node.js runtime.");
+  }
+
   // Check if connection is already established and ready
   // Only check readyState if mongoose.connection exists (not in Edge Runtime)
   if (cached.conn && mongoose.connection && mongoose.connection.readyState === 1) {
-    console.log("🔌 Using cached MongoDB connection");
+    // Don't log cached connection usage - it's called too frequently
     return cached.conn;
   }
 
