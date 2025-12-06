@@ -49,6 +49,7 @@ import { Switch } from "@/components/ui/primitives/switch";
 import { Button } from "@/components/ui/primitives/button";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-media-query";
+import { ReadingProgressCompact } from "@/components/ui/features/reading-progress-compact";
 
 const dockLabels = ["Favourites", "Bookshelf", "Diary", "Authors", "Lists", "DNF", "Likes"] as const;
 type DockLabel = (typeof dockLabels)[number] | "Activity";
@@ -112,7 +113,7 @@ function AuthPromptDialog({
   const handleSignIn = React.useCallback(() => {
     onOpenChange(false);
     try {
-    router.push("/auth");
+      router.push("/auth");
     } catch (error) {
       console.error("Error in handleSignIn:", error);
     }
@@ -168,12 +169,12 @@ function FollowersFollowingDialog({
 
   const fetchUsers = React.useCallback(() => {
     if (!isAuthenticated || !username) return;
-    
+
     // Reset state when opening
     setUsers([]);
     setError(null);
     setIsLoading(true);
-    
+
     // Fetch the list
     fetch(`/api/users/${encodeURIComponent(username)}/${type}`)
       .then((res) => {
@@ -273,7 +274,7 @@ function FollowersFollowingDialog({
                       onClick={() => {
                         setOpen(false);
                         try {
-                        router.push(`/u/${encodeURIComponent(user.username)}`);
+                          router.push(`/u/${encodeURIComponent(user.username)}`);
                         } catch (error) {
                           console.error("Error navigating to user profile:", error);
                         }
@@ -353,13 +354,13 @@ function ProfileSummary({
     const timeoutId = setTimeout(() => {
       checkTruncation();
     }, 0);
-    
+
     // Recheck on window resize
     const handleResize = () => {
       setTimeout(checkTruncation, 0);
     };
     window.addEventListener('resize', handleResize);
-    
+
     return () => {
       clearTimeout(timeoutId);
       window.removeEventListener('resize', handleResize);
@@ -422,7 +423,7 @@ function ProfileSummary({
             {profile.bio && profile.bio.length > 0 ? (
               <Dialog>
                 <div className="flex items-start gap-1.5 min-w-0">
-                  <p 
+                  <p
                     ref={bioRef}
                     className="text-sm text-muted-foreground line-clamp-1 flex-1 min-w-0 overflow-hidden"
                   >
@@ -430,7 +431,7 @@ function ProfileSummary({
                   </p>
                   {showReadMore && (
                     <DialogTrigger asChild>
-                      <button 
+                      <button
                         type="button"
                         className="text-xs text-primary hover:text-primary/80 underline flex-shrink-0 cursor-pointer"
                       >
@@ -525,14 +526,14 @@ function BookCard({ title, author, cover, mood }: ProfileBook) {
 }
 
 // Favorite book card - only shows cover, no text, with remove button on hover
-function FavoriteBookCard({ 
-  cover, 
-  title, 
+function FavoriteBookCard({
+  cover,
+  title,
   onRemove,
   isRemoving,
   onClick
-}: { 
-  cover: string; 
+}: {
+  cover: string;
   title: string;
   onRemove?: () => void;
   isRemoving?: boolean;
@@ -540,7 +541,7 @@ function FavoriteBookCard({
 }) {
   return (
     <div className="group relative flex w-[180px] flex-shrink-0">
-      <div 
+      <div
         className="relative aspect-[2/3] w-full overflow-visible rounded-3xl bg-muted shadow-sm cursor-pointer"
         onClick={onClick}
       >
@@ -593,10 +594,10 @@ function BookCarousel({
   return (
     <section className="space-y-4">
       {title && (
-      <div>
-        <h3 className="text-xl font-semibold text-foreground">{title}</h3>
+        <div>
+          <h3 className="text-xl font-semibold text-foreground">{title}</h3>
           {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
-      </div>
+        </div>
       )}
       <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
         {books.map((book) => (
@@ -642,7 +643,7 @@ function FavoriteBookSearchDialog({
   const [query, setQuery] = React.useState("");
   const [bookResults, setBookResults] = React.useState<SearchResultBook[]>([]);
   const [isSearching, setIsSearching] = React.useState(false);
-  
+
   // Ensure currentBooks is always an array
   const safeCurrentBooks: string[] = Array.isArray(currentBooks) ? currentBooks : [];
 
@@ -660,11 +661,11 @@ function FavoriteBookSearchDialog({
         if (response.ok) {
           const data = await response.json();
           console.log("[FavoriteBookSearchDialog] Search response:", data);
-          
+
           // Handle both Google Books format (data.items) and database format (data.books)
           const books = Array.isArray(data.books) ? data.books : (Array.isArray(data.items) ? data.items : []);
           console.log("[FavoriteBookSearchDialog] Extracted books:", books.length, books);
-          
+
           type BookFromAPI = {
             id?: string;
             _id?: string;
@@ -793,8 +794,8 @@ function FavoriteBookSearchDialog({
                     const author = Array.isArray(authors) ? authors.join(", ") : (authors || "Unknown Author");
                     // Extract bookId - API returns id at top level, or _id for database results
                     // Handle empty string IDs by using _id or generating a fallback
-                    const bookId = (book.id && book.id !== '') 
-                      ? book.id 
+                    const bookId = (book.id && book.id !== '')
+                      ? book.id
                       : (book._id?.toString() || book.volumeInfo?.id || `${title}-${index}`);
                     const isAlreadyAdded = bookId && bookId !== `${title}-${index}` ? safeCurrentBooks.some(
                       (id: string) => {
@@ -804,7 +805,7 @@ function FavoriteBookSearchDialog({
                         return idStr === bookIdStr || idStr === book._id?.toString();
                       }
                     ) : false;
-                    
+
                     return (
                       <button
                         key={book._id?.toString() || book.id || `${title}-${index}`}
@@ -814,8 +815,8 @@ function FavoriteBookSearchDialog({
                             // Ensure book has the correct structure for the handler
                             const bookToAdd = {
                               ...book,
-                              id: (book.id && book.id !== '') 
-                                ? book.id 
+                              id: (book.id && book.id !== '')
+                                ? book.id
                                 : (book._id?.toString() || `${title}-${index}`),
                               _id: book._id?.toString() || book._id,
                               volumeInfo: book.volumeInfo || {
@@ -836,48 +837,48 @@ function FavoriteBookSearchDialog({
                         disabled={isAlreadyAdded}
                         className="w-full flex gap-4 rounded-2xl border border-border/60 bg-white/80 dark:bg-background/80 backdrop-blur-sm p-4 text-left transition-all hover:bg-white dark:hover:bg-background hover:border-primary/50 hover:shadow-lg hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-none group"
                       >
-                      {cover ? (
-                        <div className="relative h-24 w-16 flex-shrink-0 overflow-hidden rounded-xl bg-muted shadow-md group-hover:shadow-xl transition-shadow">
-                          <Image
-                            src={cover}
-                            alt={`${title} cover`}
-                            fill
-                            className="object-cover"
-                            sizes="64px"
-                            unoptimized
-                          />
-                        </div>
-                      ) : (
-                        <div className="relative h-24 w-16 flex-shrink-0 overflow-hidden rounded-xl bg-muted shadow-md flex items-center justify-center">
-                          <svg className="w-8 h-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                          </svg>
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0 flex flex-col justify-center">
-                        <h4 className="font-semibold text-foreground line-clamp-2 mb-1 group-hover:text-primary transition-colors">
-                          {title}
-                        </h4>
-                        <p className="text-sm text-muted-foreground line-clamp-1 mb-1">
-                          {author}
-                        </p>
-                        {isAlreadyAdded && (
-                          <div className="flex items-center gap-1.5 mt-1">
-                            <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                            <p className="text-xs font-medium text-green-600 dark:text-green-400">Already in favorites</p>
+                        {cover ? (
+                          <div className="relative h-24 w-16 flex-shrink-0 overflow-hidden rounded-xl bg-muted shadow-md group-hover:shadow-xl transition-shadow">
+                            <Image
+                              src={cover}
+                              alt={`${title} cover`}
+                              fill
+                              className="object-cover"
+                              sizes="64px"
+                              unoptimized
+                            />
+                          </div>
+                        ) : (
+                          <div className="relative h-24 w-16 flex-shrink-0 overflow-hidden rounded-xl bg-muted shadow-md flex items-center justify-center">
+                            <svg className="w-8 h-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                            </svg>
                           </div>
                         )}
-                      </div>
-                      {!isAlreadyAdded && (
-                        <div className="flex items-center">
-                          <div className="rounded-full bg-primary/10 p-2 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                            <Plus className="h-5 w-5" />
-                          </div>
+                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                          <h4 className="font-semibold text-foreground line-clamp-2 mb-1 group-hover:text-primary transition-colors">
+                            {title}
+                          </h4>
+                          <p className="text-sm text-muted-foreground line-clamp-1 mb-1">
+                            {author}
+                          </p>
+                          {isAlreadyAdded && (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                              <p className="text-xs font-medium text-green-600 dark:text-green-400">Already in favorites</p>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </button>
-                  );
-                })}
+                        {!isAlreadyAdded && (
+                          <div className="flex items-center">
+                            <div className="rounded-full bg-primary/10 p-2 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                              <Plus className="h-5 w-5" />
+                            </div>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
               </div>
             )}
           </div>
@@ -916,7 +917,7 @@ function EditableFavoriteBooksCarousel({
     try {
       // Priority: isbndbId > openLibraryId > bookId (MongoDB _id) > create slug from title
       const bookId = book.isbndbId || book.openLibraryId || book.bookId || book.id;
-      
+
       if (bookId) {
         // Check if it's an ISBN (10 or 13 digits)
         const isISBN = /^(\d{10}|\d{13})$/.test(bookId);
@@ -926,7 +927,7 @@ function EditableFavoriteBooksCarousel({
         const isMongoObjectId = /^[0-9a-fA-F]{24}$/.test(bookId);
         // Check if it's a valid ID format (alphanumeric, no spaces, no +)
         const isValidId = /^[a-zA-Z0-9_-]+$/.test(bookId) && !bookId.includes(" ") && !bookId.includes("+");
-        
+
         // Use ID directly if it's a recognized format
         if (isISBN || isOpenLibraryId || isMongoObjectId || isValidId) {
           try {
@@ -1012,25 +1013,25 @@ function EditableFavoriteBooksCarousel({
       // Extract identifiers - book.id from search API might be isbndbId or openLibraryId, not MongoDB _id
       const mongoDbId = book._id?.toString(); // MongoDB _id (if from cache)
       const searchApiId = book.id; // This could be isbndbId, openLibraryId, or MongoDB _id
-      
+
       // Extract isbndbId and openLibraryId
       let isbndbId = book.isbndbId || book.volumeInfo?.isbndbId;
       let openLibraryId = book.openLibraryId || book.volumeInfo?.openLibraryId;
-      
+
       // If searchApiId looks like an ISBN (10 or 13 digits), it's likely an isbndbId
       if (!isbndbId && searchApiId && /^(\d{10}|\d{13})$/.test(searchApiId)) {
         isbndbId = searchApiId;
       }
-      
+
       // If searchApiId looks like an Open Library ID (starts with OL or /works/), it's likely an openLibraryId
       if (!openLibraryId && searchApiId && (searchApiId.startsWith('OL') || searchApiId.startsWith('/works/'))) {
         openLibraryId = searchApiId;
       }
-      
+
       // Check if searchApiId is a MongoDB ObjectId (24 hex characters)
       const isMongoDbId = mongoDbId || (searchApiId && /^[0-9a-fA-F]{24}$/.test(searchApiId));
       const bookId = isMongoDbId ? (mongoDbId || searchApiId) : undefined;
-      
+
       // Must have at least one identifier
       if (!bookId && !isbndbId && !openLibraryId) {
         console.error("Book missing all identifiers:", book);
@@ -1039,7 +1040,7 @@ function EditableFavoriteBooksCarousel({
       }
 
       console.log("[handleAddBook] Adding book with:", { bookId, isbndbId, openLibraryId, apiSource: book.apiSource });
-      
+
       const response = await fetch(`/api/users/${encodeURIComponent(username)}/books`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1145,7 +1146,7 @@ function EditableFavoriteBooksCarousel({
     if (!canEdit || !draggedBookId) return;
     e.preventDefault();
     justDraggedRef.current = true;
-    
+
     const draggedIndex = localBooks.findIndex(b => b.id === draggedBookId);
     if (draggedIndex === -1 || draggedIndex === dropIndex) {
       setDraggedBookId(null);
@@ -1244,19 +1245,18 @@ function EditableFavoriteBooksCarousel({
             // Both owner and non-owner can click to navigate to book page
             const isDragging = draggedBookId === book.id;
             const isDragOver = dragOverIndex === index;
-            
-              return (
+
+            return (
               <div
-                  key={book.id}
+                key={book.id}
                 draggable={canEdit}
                 onDragStart={(e) => handleDragStart(e, book.id)}
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, index)}
                 onDragEnd={handleDragEnd}
-                className={`group relative flex w-[180px] flex-shrink-0 transition-all ${
-                  isDragging ? "opacity-50 scale-95" : ""
-                } ${isDragOver ? "scale-105" : ""} ${canEdit ? "cursor-move" : ""}`}
+                className={`group relative flex w-[180px] flex-shrink-0 transition-all ${isDragging ? "opacity-50 scale-95" : ""
+                  } ${isDragOver ? "scale-105" : ""} ${canEdit ? "cursor-move" : ""}`}
               >
                 <div onClick={() => {
                   // Prevent click if we just finished dragging
@@ -1264,10 +1264,10 @@ function EditableFavoriteBooksCarousel({
                     handleBookClick(book);
                   }
                 }}>
-                  <FavoriteBookCard 
-                    cover={book.cover} 
+                  <FavoriteBookCard
+                    cover={book.cover}
                     title={book.title}
-                    onClick={() => {}}
+                    onClick={() => { }}
                     onRemove={canEdit ? () => handleRemoveBook(book.id) : undefined}
                     isRemoving={canEdit ? isRemoving === book.id : undefined}
                   />
@@ -1275,8 +1275,8 @@ function EditableFavoriteBooksCarousel({
                 {isDragOver && canEdit && (
                   <div className="absolute inset-0 border-2 border-primary rounded-3xl pointer-events-none z-10" />
                 )}
-                </div>
-              );
+              </div>
+            );
           } else {
             // Empty slot - show plus sign (only if canEdit)
             if (!canEdit) return null;
@@ -1290,15 +1290,15 @@ function EditableFavoriteBooksCarousel({
                 className={`group relative flex w-[180px] flex-shrink-0 ${isDragOver ? "scale-105" : ""}`}
               >
                 <button
-                type="button"
-                onClick={() => {
-                  setBookToReplace(null);
-                  setIsSearchOpen(true);
-                }}
+                  type="button"
+                  onClick={() => {
+                    setBookToReplace(null);
+                    setIsSearchOpen(true);
+                  }}
                   className="relative aspect-[2/3] w-full overflow-hidden rounded-3xl border-2 border-dashed border-border bg-muted/20 transition-colors hover:bg-muted/40 flex items-center justify-center"
-              >
+                >
                   <Plus className="h-12 w-12 text-muted-foreground group-hover:text-foreground transition-colors" />
-              </button>
+                </button>
                 {isDragOver && draggedBookId && (
                   <div className="absolute inset-0 border-2 border-primary rounded-3xl pointer-events-none z-10 bg-primary/10" />
                 )}
@@ -1352,7 +1352,7 @@ function BookshelfSection({
       // Priority: isbndbId > openLibraryId > bookId (MongoDB _id) > create slug from title
       const bookWithIds = book as BookshelfBookWithIds;
       const bookId = bookWithIds.isbndbId || bookWithIds.openLibraryId || book.id;
-      
+
       if (bookId) {
         // Check if it's an ISBN (10 or 13 digits)
         const isISBN = /^(\d{10}|\d{13})$/.test(bookId);
@@ -1362,7 +1362,7 @@ function BookshelfSection({
         const isMongoObjectId = /^[0-9a-fA-F]{24}$/.test(bookId);
         // Check if it's a valid ID format (alphanumeric, no spaces, no +)
         const isValidId = /^[a-zA-Z0-9_-]+$/.test(bookId) && !bookId.includes(" ") && !bookId.includes("+");
-        
+
         // Use ID directly if it's a recognized format
         if (isISBN || isOpenLibraryId || isMongoObjectId || isValidId) {
           router.push(`/b/${bookId}`);
@@ -1397,8 +1397,8 @@ function BookshelfSection({
         isMobile ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
       )}>
         {paginatedBooks.map((book) => (
-          <div 
-            key={book.id} 
+          <div
+            key={book.id}
             onClick={() => handleBookClick(book)}
             className={cn(
               "group rounded-lg border border-border/70 bg-card shadow-sm transition-shadow hover:shadow-md cursor-pointer overflow-hidden",
@@ -1431,16 +1431,16 @@ function BookshelfSection({
                 ) : null}
               </div>
             ) : (
-            <div className="flex-1 min-w-0 space-y-1">
-              <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
-              <p className="text-xs text-muted-foreground truncate">{book.author}</p>
-              {book.rating ? (
-                <p className="text-xs text-yellow-500">
-                  {"★".repeat(book.rating)}
-                  {"☆".repeat(5 - book.rating)}
-                </p>
-              ) : null}
-            </div>
+              <div className="flex-1 min-w-0 space-y-1">
+                <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
+                <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+                {book.rating ? (
+                  <p className="text-xs text-yellow-500">
+                    {"★".repeat(book.rating)}
+                    {"☆".repeat(5 - book.rating)}
+                  </p>
+                ) : null}
+              </div>
             )}
           </div>
         ))}
@@ -1516,13 +1516,13 @@ function LikesSection({
       };
       const bookWithIds = book as LikedBookWithIds;
       const bookId = bookWithIds.isbndbId || bookWithIds.openLibraryId || book.id;
-      
+
       if (bookId) {
         const isISBN = /^(\d{10}|\d{13})$/.test(bookId);
         const isOpenLibraryId = bookId.startsWith("OL") || bookId.startsWith("/works/");
         const isMongoObjectId = /^[0-9a-fA-F]{24}$/.test(bookId);
         const isValidId = /^[a-zA-Z0-9_-]+$/.test(bookId) && !bookId.includes(" ") && !bookId.includes("+");
-        
+
         if (isISBN || isOpenLibraryId || isMongoObjectId || isValidId) {
           router.push(`/b/${bookId}`);
         } else {
@@ -1555,8 +1555,8 @@ function LikesSection({
         isMobile ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
       )}>
         {paginatedBooks.map((book) => (
-          <div 
-            key={book.id} 
+          <div
+            key={book.id}
             onClick={() => handleBookClick(book)}
             className={cn(
               "group rounded-lg border border-border/70 bg-card shadow-sm transition-shadow hover:shadow-md cursor-pointer overflow-hidden",
@@ -1582,7 +1582,7 @@ function LikesSection({
                 <h3 className="text-xs font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
                 <p className="text-xs text-muted-foreground truncate">{book.author}</p>
                 {book.reason ? <p className="text-xs text-muted-foreground/80 line-clamp-1">{book.reason}</p> : null}
-            </div>
+              </div>
             ) : (
               <div className="flex-1 min-w-0 space-y-1">
                 <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
@@ -1643,12 +1643,14 @@ function TbrSection({
   pageSize,
   onPageChange,
   isMobile = false,
+  username,
 }: {
   books: TbrBook[];
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
   isMobile?: boolean;
+  username?: string;
 }) {
   const router = useRouter();
   const totalPages = Math.ceil(books.length / pageSize);
@@ -1656,21 +1658,178 @@ function TbrSection({
   const endIndex = startIndex + pageSize;
   const paginatedBooks = books.slice(startIndex, endIndex);
 
+  // Store reading progress for each book
+  const [readingProgress, setReadingProgress] = React.useState<Record<string, { pagesRead: number; totalPages: number }>>({});
+  const [loadingProgress, setLoadingProgress] = React.useState<Record<string, boolean>>({});
+
+  // Generate book IDs string for dependencies
+  const bookIdsKey = paginatedBooks.map((book) => {
+    const bookWithIds = book as TbrBookWithIds;
+    return bookWithIds.bookId || bookWithIds.isbndbId || bookWithIds.openLibraryId || book.id;
+  }).filter(Boolean).sort().join(',');
+
+  // Fetch total pages for books (pagesRead comes from API, we just need totalPages)
+  React.useEffect(() => {
+    if (!username || paginatedBooks.length === 0) return;
+
+    console.log('[DNF] 🔍 Starting fetchTotalPages', {
+      username,
+      bookCount: paginatedBooks.length,
+      currentReadingProgress: Object.keys(readingProgress).length,
+      bookIds: paginatedBooks.map(b => {
+        const bookWithIds = b as TbrBookWithIds;
+        return {
+          id: bookWithIds.bookId || bookWithIds.isbndbId || bookWithIds.openLibraryId || b.id,
+          pagesRead: bookWithIds.pagesRead || 0,
+          title: b.title
+        };
+      })
+    });
+
+    const fetchTotalPages = async () => {
+      const progressMap: Record<string, { pagesRead: number; totalPages: number }> = {};
+      const loadingMap: Record<string, boolean> = {};
+      let hasUpdates = false;
+      let hasFetches = false;
+
+      for (const book of paginatedBooks) {
+        const bookWithIds = book as TbrBookWithIds;
+        // Try bookId first (MongoDB _id), then fallback to other IDs
+        const bookId = bookWithIds.bookId || bookWithIds.isbndbId || bookWithIds.openLibraryId || book.id;
+        if (!bookId) {
+          console.log('[DNF] ⚠️ Skipping book - no ID:', book.title);
+          continue;
+        }
+
+        const pagesRead = bookWithIds.pagesRead || 0;
+        
+        console.log('[DNF] 📖 Processing book:', {
+          bookId,
+          title: book.title,
+          pagesReadFromBook: pagesRead,
+          existingProgress: readingProgress[bookId],
+          hasTotalPages: !!readingProgress[bookId]?.totalPages
+        });
+        
+        // Skip if no pages read or we already have progress for this book
+        if (pagesRead === 0) {
+          console.log('[DNF] ⏭️ Skipping book - no pages read:', book.title);
+          continue;
+        }
+
+        // Only fetch totalPages if we don't have it yet
+        if (!readingProgress[bookId]?.totalPages) {
+          console.log('[DNF] 🔄 Fetching totalPages for:', book.title, 'bookId:', bookId);
+          loadingMap[bookId] = true;
+          hasFetches = true;
+
+          try {
+            // Fetch book details to get total pages - try multiple ID formats
+            let totalPages = 0;
+            const idToTry = bookWithIds.bookId || bookWithIds.isbndbId || bookWithIds.openLibraryId || book.id;
+            if (idToTry) {
+              try {
+                console.log('[DNF] 📡 Fetching book details for ID:', idToTry);
+                const bookResponse = await fetch(`/api/books/${encodeURIComponent(idToTry)}`);
+                if (bookResponse.ok) {
+                  const bookData = await bookResponse.json();
+                  totalPages = bookData.volumeInfo?.pageCount || 0;
+                  console.log('[DNF] ✅ Fetched totalPages:', {
+                    bookId,
+                    title: book.title,
+                    totalPages,
+                    pagesRead,
+                    calculatedProgress: totalPages > 0 ? `${Math.round((pagesRead / totalPages) * 100)}%` : 'N/A'
+                  });
+                } else {
+                  console.log('[DNF] ❌ Failed to fetch book details:', {
+                    bookId: idToTry,
+                    status: bookResponse.status
+                  });
+                }
+              } catch (fetchError) {
+                console.error('[DNF] ❌ Error fetching book:', idToTry, fetchError);
+              }
+            }
+
+            // Update progress map with pagesRead from book data and fetched totalPages
+            progressMap[bookId] = {
+              pagesRead,
+              totalPages,
+            };
+            console.log('[DNF] 📝 Adding to progressMap:', {
+              bookId,
+              progress: progressMap[bookId],
+              calculatedPercentage: totalPages > 0 ? `${Math.round((pagesRead / totalPages) * 100)}%` : 'N/A'
+            });
+            hasUpdates = true;
+          } catch (error) {
+            console.error(`[DNF] ❌ Error fetching total pages for book ${bookId}:`, error);
+          } finally {
+            loadingMap[bookId] = false;
+          }
+        } else {
+          // We have totalPages but need to update pagesRead from book data
+          const existingTotalPages = readingProgress[bookId].totalPages;
+          progressMap[bookId] = {
+            pagesRead,
+            totalPages: existingTotalPages,
+          };
+          console.log('[DNF] 🔄 Updating pagesRead (totalPages already exists):', {
+            bookId,
+            oldPagesRead: readingProgress[bookId].pagesRead,
+            newPagesRead: pagesRead,
+            totalPages: existingTotalPages,
+            oldPercentage: existingTotalPages > 0 ? `${Math.round((readingProgress[bookId].pagesRead / existingTotalPages) * 100)}%` : 'N/A',
+            newPercentage: existingTotalPages > 0 ? `${Math.round((pagesRead / existingTotalPages) * 100)}%` : 'N/A'
+          });
+          hasUpdates = true;
+        }
+      }
+
+      if (hasUpdates) {
+        console.log('[DNF] 💾 Updating readingProgress state:', {
+          updates: progressMap,
+          beforeUpdate: readingProgress,
+          willMerge: true
+        });
+        setReadingProgress(prev => {
+          const merged = { ...prev, ...progressMap };
+          console.log('[DNF] ✅ After merge:', {
+            before: Object.keys(prev).length,
+            after: Object.keys(merged).length,
+            mergedProgress: merged
+          });
+          return merged;
+        });
+      }
+
+      if (hasFetches) {
+        setLoadingProgress(prev => ({ ...prev, ...loadingMap }));
+      }
+    };
+
+    fetchTotalPages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [username, bookIdsKey]);
+
   type TbrBookWithIds = TbrBook & {
     isbndbId?: string;
     openLibraryId?: string;
+    bookId?: string;
+    pagesRead?: number; // Reading progress from API
   };
   const handleBookClick = React.useCallback((book: TbrBook) => {
     try {
       const bookWithIds = book as TbrBookWithIds;
       const bookId = bookWithIds.isbndbId || bookWithIds.openLibraryId || book.id;
-      
+
       if (bookId) {
         const isISBN = /^(\d{10}|\d{13})$/.test(bookId);
         const isOpenLibraryId = bookId.startsWith("OL") || bookId.startsWith("/works/");
         const isMongoObjectId = /^[0-9a-fA-F]{24}$/.test(bookId);
         const isValidId = /^[a-zA-Z0-9_-]+$/.test(bookId) && !bookId.includes(" ") && !bookId.includes("+");
-        
+
         if (isISBN || isOpenLibraryId || isMongoObjectId || isValidId) {
           router.push(`/b/${bookId}`);
         } else {
@@ -1705,50 +1864,124 @@ function TbrSection({
         "grid gap-4",
         isMobile ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
       )}>
-        {paginatedBooks.map((book) => (
-          <div 
-            key={book.id} 
-            onClick={() => handleBookClick(book)}
-            className={cn(
-              "group rounded-lg border border-border/70 bg-card shadow-sm transition-shadow hover:shadow-md cursor-pointer overflow-hidden",
-              isMobile ? "flex flex-col" : "flex gap-3 p-3"
-            )}
-          >
-            <div className={cn(
-              "relative aspect-[2/3] overflow-hidden bg-muted",
-              isMobile ? "w-full" : "h-20 w-14 flex-shrink-0 rounded-lg"
-            )}>
-              <Image
-                src={book.cover}
-                alt={`${book.title} cover`}
-                fill
-                className="object-cover transition-transform duration-500 group-hover:scale-105"
-                sizes={isMobile ? "50vw" : "56px"}
-                quality={100}
-                unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
-              />
-            </div>
-            {isMobile ? (
-              <div className="p-2 space-y-1">
-                <h3 className="text-xs font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
-                <p className="text-xs text-muted-foreground truncate">{book.author}</p>
-              <p className="text-xs text-muted-foreground/80">{book.addedOn}</p>
-              {book.urgency ? (
-                  <p className="text-xs font-semibold text-muted-foreground">{book.urgency}</p>
-              ) : null}
-            </div>
-            ) : (
-              <div className="flex-1 min-w-0 space-y-1">
-                <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
-                <p className="text-xs text-muted-foreground truncate">{book.author}</p>
-                <p className="text-xs text-muted-foreground/80">{book.addedOn}</p>
-                {book.urgency ? (
-                  <p className="text-xs font-semibold text-muted-foreground">{book.urgency}</p>
-                ) : null}
+        {paginatedBooks.map((book) => {
+          const bookWithIds = book as TbrBookWithIds;
+          const bookId = bookWithIds.bookId?.toString() || book.id;
+          // Use pagesRead from book data if available, otherwise from readingProgress state
+          const bookPagesRead = bookWithIds.pagesRead || 0;
+          const progress = readingProgress[bookId] || (bookPagesRead > 0 ? { pagesRead: bookPagesRead, totalPages: 0 } : null);
+          const isLoading = loadingProgress[bookId];
+
+          // Log progress calculation for debugging
+          if (progress && progress.pagesRead > 0) {
+            console.log('[DNF] 🎨 Rendering progress for book:', {
+              bookId,
+              title: book.title,
+              bookPagesRead,
+              progressFromState: readingProgress[bookId],
+              finalProgress: progress,
+              calculatedPercentage: progress.totalPages > 0 ? `${Math.round((progress.pagesRead / progress.totalPages) * 100)}%` : 'N/A (no totalPages)',
+              isLoading
+            });
+          }
+
+          return (
+            <div
+              key={book.id}
+              onClick={() => handleBookClick(book)}
+              className={cn(
+                "group rounded-lg border border-border/70 bg-card shadow-sm transition-shadow hover:shadow-md cursor-pointer overflow-hidden relative",
+                isMobile ? "flex flex-col" : "flex gap-3 p-3 items-center"
+              )}
+            >
+              <div className={cn(
+                "relative aspect-[2/3] overflow-hidden bg-muted",
+                isMobile ? "w-full" : "h-20 w-14 flex-shrink-0 rounded-lg"
+              )}>
+                <Image
+                  src={book.cover}
+                  alt={`${book.title} cover`}
+                  fill
+                  className="object-cover transition-transform duration-500 group-hover:scale-105"
+                  sizes={isMobile ? "50vw" : "56px"}
+                  quality={100}
+                  unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
+                />
               </div>
-            )}
-          </div>
-        ))}
+              {isMobile ? (
+                <div className="p-2 space-y-1 relative">
+                  <h3 className="text-xs font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
+                  <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+                  <p className="text-xs text-muted-foreground/80">{book.addedOn}</p>
+                  {book.urgency ? (
+                    <p className="text-xs font-semibold text-muted-foreground">{book.urgency}</p>
+                  ) : null}
+                  {/* Reading progress for mobile - show at bottom right */}
+                  {progress && progress.pagesRead > 0 && progress.totalPages > 0 && (
+                    <div className="absolute bottom-2 right-2">
+                      <div className="relative">
+                        <ReadingProgressCompact
+                          totalPages={progress.totalPages}
+                          pagesRead={progress.pagesRead}
+                          size={40}
+                          strokeWidth={4}
+                        />
+                        {/* Hover tooltip */}
+                        <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-20">
+                          <div className="bg-background border border-border rounded-lg p-2 shadow-lg whitespace-nowrap">
+                            <div className="text-xs font-semibold text-foreground">
+                              {progress.pagesRead} {progress.totalPages > 0 ? `/ ${progress.totalPages}` : ''} pages
+                            </div>
+                            {progress.totalPages > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                {Math.round((progress.pagesRead / progress.totalPages) * 100)}% complete
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
+                    <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+                    <p className="text-xs text-muted-foreground/80">{book.addedOn}</p>
+                    {book.urgency ? (
+                      <p className="text-xs font-semibold text-muted-foreground">{book.urgency}</p>
+                    ) : null}
+                  </div>
+                  {/* Reading progress for desktop - always visible on right */}
+                  {progress && progress.pagesRead > 0 && progress.totalPages > 0 && (
+                    <div className="flex-shrink-0 relative">
+                      <ReadingProgressCompact
+                        totalPages={progress.totalPages}
+                        pagesRead={progress.pagesRead}
+                        size={50}
+                        strokeWidth={5}
+                      />
+                      {/* Hover tooltip */}
+                      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-20 whitespace-nowrap">
+                        <div className="bg-background border border-border rounded-lg p-2 shadow-lg">
+                          <div className="text-xs font-semibold text-foreground">
+                            {progress.pagesRead} {progress.totalPages > 0 ? `/ ${progress.totalPages}` : ''} pages
+                          </div>
+                          {progress.totalPages > 0 && (
+                            <div className="text-xs text-muted-foreground">
+                              {Math.round((progress.pagesRead / progress.totalPages) * 100)}% complete
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
       {totalPages > 1 && (
         <Pagination>
@@ -1812,7 +2045,7 @@ function AuthorsSection({
   const [selectedAuthor, setSelectedAuthor] = React.useState<AuthorStat | null>(null);
   const [isAuthorDialogOpen, setIsAuthorDialogOpen] = React.useState(false);
   const [authorBooks, setAuthorBooks] = React.useState<BookshelfBook[]>([]);
-  
+
   const totalPages = Math.ceil(authors.length / pageSize);
   const startIndex = (page - 1) * pageSize;
   const endIndex = startIndex + pageSize;
@@ -1821,14 +2054,14 @@ function AuthorsSection({
   const handleAuthorClick = React.useCallback((author: AuthorStat) => {
     try {
       if (!author || !author.name) return;
-      
+
       // Filter bookshelf books by this author
       const booksByAuthor = (Array.isArray(bookshelfBooks) ? bookshelfBooks : []).filter((book) => {
         if (!book || !book.author) return false;
         const bookAuthor = book.author || "";
         return bookAuthor.toLowerCase() === author.name.toLowerCase();
       });
-      
+
       setAuthorBooks(booksByAuthor);
       setSelectedAuthor(author);
       setIsAuthorDialogOpen(true);
@@ -1841,20 +2074,20 @@ function AuthorsSection({
   const handleBookClick = React.useCallback((book: BookshelfBook) => {
     try {
       if (!book) return;
-      
+
       type AuthorBookWithIds = BookshelfBook & {
         isbndbId?: string;
         openLibraryId?: string;
       };
       const bookWithIds = book as AuthorBookWithIds;
       const bookId = bookWithIds.isbndbId || bookWithIds.openLibraryId || book?.id;
-      
+
       if (bookId) {
         const isISBN = /^(\d{10}|\d{13})$/.test(String(bookId));
         const isOpenLibraryId = String(bookId).startsWith("OL") || String(bookId).startsWith("/works/");
         const isMongoObjectId = /^[0-9a-fA-F]{24}$/.test(String(bookId));
         const isValidId = /^[a-zA-Z0-9_-]+$/.test(String(bookId)) && !String(bookId).includes(" ") && !String(bookId).includes("+");
-        
+
         if (isISBN || isOpenLibraryId || isMongoObjectId || isValidId) {
           router.push(`/b/${bookId}`);
         } else {
@@ -1888,10 +2121,10 @@ function AuthorsSection({
         {paginatedAuthors.map((author) => {
           if (!author || !author.name) return null;
           const displayBooks = (author.books && Array.isArray(author.books)) ? author.books.slice(0, 3) : [];
-          
+
           return (
-            <div 
-              key={author.name} 
+            <div
+              key={author.name}
               onClick={() => handleAuthorClick(author)}
               className="group flex flex-col gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md cursor-pointer"
             >
@@ -1900,20 +2133,20 @@ function AuthorsSection({
                 {[0, 1, 2].map((index) => {
                   const book = displayBooks[index];
                   const cover = (book && book.cover) ? book.cover : null;
-                  
+
                   return (
                     <div
                       key={index}
                       className="relative aspect-[2/3] overflow-hidden rounded-sm bg-muted/50"
                     >
                       {cover ? (
-              <Image
+                        <Image
                           src={cover}
                           alt={(book && book.title) ? book.title : `Book ${index + 1}`}
-                fill
+                          fill
                           className="object-cover"
                           sizes="(max-width: 640px) 33vw, 120px"
-                quality={100}
+                          quality={100}
                           unoptimized={cover?.includes('isbndb.com') || cover?.includes('images.isbndb.com') || cover?.includes('covers.isbndb.com') || true}
                           onError={(e) => {
                             // Fallback to gray placeholder on image error
@@ -1926,19 +2159,19 @@ function AuthorsSection({
                       ) : (
                         <div className="w-full h-full bg-muted/50" />
                       )}
-            </div>
+                    </div>
                   );
                 })}
               </div>
-              
+
               {/* Author Info */}
               <div className="flex-1 min-w-0 space-y-1">
                 <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{author.name || "Unknown Author"}</h3>
                 <p className="text-xs text-muted-foreground">
                   {author.read || 0} read • {author.tbr || 0} to-be-read
-              </p>
+                </p>
+              </div>
             </div>
-          </div>
           );
         })}
       </div>
@@ -1982,7 +2215,7 @@ function AuthorsSection({
           </PaginationContent>
         </Pagination>
       )}
-      
+
       {/* Author Books Dialog */}
       <Dialog open={isAuthorDialogOpen} onOpenChange={setIsAuthorDialogOpen}>
         <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto p-0">
@@ -2052,10 +2285,10 @@ function ListCard({
   const [editListName, setEditListName] = React.useState(list.title);
   const [editIsSecret, setEditIsSecret] = React.useState(false);
   const [isUpdating, setIsUpdating] = React.useState(false);
-  
+
   // Check if this is a saved list (has "from @" in description)
   const isSavedList = list.description?.includes("from @") || false;
-  
+
   // User can only edit if they own the list AND it's not a saved list
   const canEditList = canEdit && !isSavedList;
 
@@ -2148,7 +2381,7 @@ function ListCard({
   };
 
   return (
-    <div 
+    <div
       className="group flex flex-col gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md cursor-pointer"
       onClick={() => {
         router.push(`/u/${username}/lists/${list.id}`);
@@ -2159,20 +2392,20 @@ function ListCard({
         {[0, 1, 2].map((index) => {
           const book = displayBooks[index];
           const cover = book ? getBookCover(book) : null;
-          
+
           return (
             <div
               key={index}
               className="relative aspect-[2/3] overflow-hidden rounded-sm bg-muted/50"
             >
               {cover ? (
-        <Image
+                <Image
                   src={cover}
                   alt={(book?.volumeInfo?.title) ? book.volumeInfo.title : `Book ${index + 1}`}
-          fill
+                  fill
                   className="object-cover"
                   sizes="(max-width: 640px) 33vw, 120px"
-          quality={100}
+                  quality={100}
                   unoptimized={cover?.includes('isbndb.com') || cover?.includes('images.isbndb.com') || cover?.includes('covers.isbndb.com') || true}
                   onError={(e) => {
                     // Fallback to gray placeholder on image error
@@ -2185,11 +2418,11 @@ function ListCard({
               ) : (
                 <div className="w-full h-full bg-muted/50" />
               )}
-      </div>
+            </div>
           );
         })}
       </div>
-      
+
       {/* List Info */}
       <div className="flex-1 min-w-0 space-y-1 relative">
         <div className="flex items-start justify-between gap-2">
@@ -2297,8 +2530,8 @@ function ListCard({
       </Dialog>
 
       {/* Edit List Dialog */}
-      <Dialog 
-        open={isEditDialogOpen} 
+      <Dialog
+        open={isEditDialogOpen}
         onOpenChange={(open) => {
           setIsEditDialogOpen(open);
         }}
@@ -2428,12 +2661,12 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, onListDeleted,
       const response = await fetch(`/api/users/${encodeURIComponent(username)}/lists`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: listName.trim(),
-            description: "",
-            isPublic: !isSecret,
-            books: [],
-          }),
+        body: JSON.stringify({
+          title: listName.trim(),
+          description: "",
+          isPublic: !isSecret,
+          books: [],
+        }),
       });
 
       if (!response.ok) {
@@ -2464,28 +2697,28 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, onListDeleted,
   };
 
 
-  
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Lists</h2>
           <p className="text-sm text-muted-foreground">
-            {canEdit ? "Your curated collections" : 
-            <>
-            <span className="italic">{username}</span>&apos;s curated collection
-            </>
+            {canEdit ? "Your curated collections" :
+              <>
+                <span className="italic">{username}</span>&apos;s curated collection
+              </>
             }
           </p>
         </div>
         {canEdit && (
           <>
-          <InteractiveHoverButton
-            text="Create list"
-            showIdleAccent={false}
-            invert
-            className="min-w-[120px]"
-            onClick={() => {
+            <InteractiveHoverButton
+              text="Create list"
+              showIdleAccent={false}
+              invert
+              className="min-w-[120px]"
+              onClick={() => {
                 setIsCreateDialogOpen(true);
               }}
             />
@@ -2495,7 +2728,7 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, onListDeleted,
                   <DialogHeader>
                     <DialogTitle className="text-xl sm:text-2xl font-semibold">Create a list</DialogTitle>
                   </DialogHeader>
-                  
+
                   {/* List Image Placeholder */}
                   <div className="mt-4 sm:mt-6 mb-4 sm:mb-6">
                     <div className="relative w-full rounded-lg bg-muted/40 border border-border/60 overflow-hidden">
@@ -2581,8 +2814,8 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, onListDeleted,
           )}>
             {lists.slice((page - 1) * pageSize, page * pageSize).map((list) => (
               <ListCard key={list.id} list={list} canEdit={canEdit} username={username} onListDeleted={onListDeleted} />
-          ))}
-        </div>
+            ))}
+          </div>
           {Math.ceil(lists.length / pageSize) > 1 && (
             <Pagination>
               <PaginationContent>
@@ -2653,18 +2886,18 @@ type DiaryEntry = {
   likes: string[];
 };
 
-function DiarySection({ 
-  entries, 
-  isOwnProfile, 
-  username, 
-  onEntryClick, 
+function DiarySection({
+  entries,
+  isOwnProfile,
+  username,
+  onEntryClick,
   onRefresh,
   page,
   pageSize,
   onPageChange,
   isMobile = false,
-}: { 
-  entries: DiaryEntry[]; 
+}: {
+  entries: DiaryEntry[];
   isOwnProfile: boolean;
   username: string;
   onEntryClick?: (entry: DiaryEntry) => void;
@@ -2680,13 +2913,13 @@ function DiarySection({
   const selectedEntryId = selectedEntry?.id || null;
   const selectedEntryIsLiked = selectedEntry?.isLiked;
   const selectedEntryLikesCount = selectedEntry?.likesCount;
-  
+
   React.useEffect(() => {
     if (selectedEntryId) {
       const updatedEntry = entries.find(e => e.id === selectedEntryId);
       if (updatedEntry &&
-          (updatedEntry.isLiked !== selectedEntryIsLiked ||
-           updatedEntry.likesCount !== selectedEntryLikesCount)) {
+        (updatedEntry.isLiked !== selectedEntryIsLiked ||
+          updatedEntry.likesCount !== selectedEntryLikesCount)) {
         setSelectedEntry(updatedEntry);
       }
     }
@@ -2702,8 +2935,8 @@ function DiarySection({
       <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
         <p className="text-lg font-semibold text-foreground">No diary entries yet</p>
         <p className="mt-2 text-sm text-muted-foreground">
-          {isOwnProfile 
-            ? "Start writing about books you've read to see your entries here." 
+          {isOwnProfile
+            ? "Start writing about books you've read to see your entries here."
             : "This user hasn't written any diary entries yet."}
         </p>
       </div>
@@ -2765,7 +2998,7 @@ function DiarySection({
                     />
                   </div>
                 )}
-                
+
                 {/* Entry Content */}
                 <div className={cn(
                   "space-y-1",
@@ -2790,31 +3023,31 @@ function DiarySection({
                         "font-semibold text-foreground line-clamp-2 leading-tight",
                         isMobile ? "text-xs" : "text-sm"
                       )}>
-                          {(entry.subject && entry.subject.trim()) ? entry.subject : "Diary Entry"}
-                        </h3>
+                        {(entry.subject && entry.subject.trim()) ? entry.subject : "Diary Entry"}
+                      </h3>
                     )}
                     {entry.updatedAt && (
                       <p className={cn(
                         "text-muted-foreground/80 truncate",
                         isMobile ? "text-xs mt-1" : "text-xs mt-1"
                       )}>
-                        {entry.updatedAt !== entry.createdAt 
-                          ? `Updated ${formatDiaryDate(entry.updatedAt)}` 
+                        {entry.updatedAt !== entry.createdAt
+                          ? `Updated ${formatDiaryDate(entry.updatedAt)}`
                           : formatDiaryDate(entry.createdAt)}
                       </p>
                     )}
                   </div>
                   {!isMobile && (
-                  <div
+                    <div
                       className="prose prose-sm dark:prose-invert max-w-none text-foreground/90 line-clamp-2 overflow-hidden text-xs"
-                    dangerouslySetInnerHTML={{ __html: entry.content || "" }}
-                    style={{
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                    }}
-                  />
+                      dangerouslySetInnerHTML={{ __html: entry.content || "" }}
+                      style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    />
                   )}
                   {likesCount > 0 && (
                     <div className={cn(
@@ -2874,7 +3107,7 @@ function DiarySection({
           </Pagination>
         )}
       </div>
-      
+
       {selectedEntry && (
         <DiaryEntryDialog
           open={!!selectedEntry}
@@ -2986,7 +3219,7 @@ export default function UserProfilePage() {
   const router = useRouter();
   const isMobile = useIsMobile();
   const username = typeof params.username === "string" ? params.username : null;
-  
+
   // Check if tab is specified in URL params
   const tabFromUrl = searchParams.get("tab");
   let initialTab: DockLabel = "Favourites";
@@ -2995,7 +3228,7 @@ export default function UserProfilePage() {
   } else if (tabFromUrl && dockLabels.includes(tabFromUrl as (typeof dockLabels)[number])) {
     initialTab = tabFromUrl as DockLabel;
   }
-  
+
   const [activeTab, setActiveTab] = React.useState<DockLabel>(initialTab);
   const [activityView, setActivityView] = React.useState<ActivityView>("Friends");
   const [profileData, setProfileData] = React.useState<EditableProfile | null>(null);
@@ -3012,7 +3245,7 @@ export default function UserProfilePage() {
   const [isLoadingProfile, setIsLoadingProfile] = React.useState(true);
   // Store original profile data when edit form opens to restore on cancel
   const originalProfileDataRef = React.useRef<EditableProfile | null>(null);
-  
+
   // Book collections from API
   const [topBooks, setTopBooks] = React.useState<ProfileBook[]>([]);
   const [favoriteBooks, setFavoriteBooks] = React.useState<ProfileBook[]>([]);
@@ -3021,7 +3254,7 @@ export default function UserProfilePage() {
   const [tbrBooks, setTbrBooks] = React.useState<TbrBook[]>([]);
   const [readingLists, setReadingLists] = React.useState<ReadingList[]>([]);
   const [diaryEntries, setDiaryEntries] = React.useState<DiaryEntry[]>([]);
-  
+
   // Activities from API
   const [activities, setActivities] = React.useState<ActivityEntry[]>([]);
   type ActivityDiaryEntry = {
@@ -3089,7 +3322,7 @@ export default function UserProfilePage() {
       console.error("Error rejecting collaboration request:", error);
     }
   };
-  
+
   // Function to fetch diary entries
   const fetchDiaryEntries = React.useCallback(async (username: string) => {
     try {
@@ -3113,39 +3346,39 @@ export default function UserProfilePage() {
         };
         const transformedEntries: DiaryEntry[] = Array.isArray(data.entries)
           ? data.entries
-              .map((entry: DiaryEntryFromAPI, idx: number) => {
-                const isGeneralEntry = !entry.bookId && !entry.bookTitle;
-                console.log('[DiarySection] Entry data:', {
-                  idx,
-                  id: entry._id?.toString() || entry.id,
-                  subject: entry.subject,
-                  bookTitle: entry.bookTitle,
-                  bookId: entry.bookId,
-                  isGeneralEntry,
-                  rawEntry: entry,
-                });
-                return {
-                  id: entry._id?.toString() || entry.id || entry.bookId?.toString() || `diary-${idx}`,
-                  bookId: entry.bookId?.toString() || entry.bookId,
-                  bookTitle: entry.bookTitle || null,
-                  bookAuthor: entry.bookAuthor || null,
-                  bookCover: entry.bookCover || null,
-                  subject: entry.subject || null,
-                  isGeneralEntry,
-                  content: entry.content || "",
-                  createdAt: entry.createdAt ? new Date(entry.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
-                  updatedAt: entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
-                  isLiked: entry.isLiked || false,
-                  likesCount: entry.likesCount || 0,
-                  likes: entry.likes || [],
-                };
-              })
-              .sort((a: DiaryEntry, b: DiaryEntry) => {
-                // Sort by updatedAt descending (newest first)
-                const aDate = a.updatedAt ? new Date(a.updatedAt) : (a.createdAt ? new Date(a.createdAt) : new Date(0));
-                const bDate = b.updatedAt ? new Date(b.updatedAt) : (b.createdAt ? new Date(b.createdAt) : new Date(0));
-                return bDate.getTime() - aDate.getTime();
-              })
+            .map((entry: DiaryEntryFromAPI, idx: number) => {
+              const isGeneralEntry = !entry.bookId && !entry.bookTitle;
+              console.log('[DiarySection] Entry data:', {
+                idx,
+                id: entry._id?.toString() || entry.id,
+                subject: entry.subject,
+                bookTitle: entry.bookTitle,
+                bookId: entry.bookId,
+                isGeneralEntry,
+                rawEntry: entry,
+              });
+              return {
+                id: entry._id?.toString() || entry.id || entry.bookId?.toString() || `diary-${idx}`,
+                bookId: entry.bookId?.toString() || entry.bookId,
+                bookTitle: entry.bookTitle || null,
+                bookAuthor: entry.bookAuthor || null,
+                bookCover: entry.bookCover || null,
+                subject: entry.subject || null,
+                isGeneralEntry,
+                content: entry.content || "",
+                createdAt: entry.createdAt ? new Date(entry.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
+                updatedAt: entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
+                isLiked: entry.isLiked || false,
+                likesCount: entry.likesCount || 0,
+                likes: entry.likes || [],
+              };
+            })
+            .sort((a: DiaryEntry, b: DiaryEntry) => {
+              // Sort by updatedAt descending (newest first)
+              const aDate = a.updatedAt ? new Date(a.updatedAt) : (a.createdAt ? new Date(a.createdAt) : new Date(0));
+              const bDate = b.updatedAt ? new Date(b.updatedAt) : (b.createdAt ? new Date(b.createdAt) : new Date(0));
+              return bDate.getTime() - aDate.getTime();
+            })
           : [];
         setDiaryEntries(transformedEntries);
       }
@@ -3153,14 +3386,14 @@ export default function UserProfilePage() {
       console.error("Error fetching diary entries:", error);
     }
   }, []);
-  
+
   // Refresh diary entries when Diary tab is activated
   React.useEffect(() => {
     if (activeTab === "Diary" && activeUsername) {
       fetchDiaryEntries(activeUsername);
     }
   }, [activeTab, activeUsername, fetchDiaryEntries]);
-  
+
   // Social counts from API
   const [followersCount, setFollowersCount] = React.useState(0);
   const [followingCount, setFollowingCount] = React.useState(0);
@@ -3168,13 +3401,13 @@ export default function UserProfilePage() {
   // Follow state
   const [isFollowing, setIsFollowing] = React.useState(false);
   const [isFollowLoading, setIsFollowLoading] = React.useState(false);
-  
+
   // Auth prompt state
   const [authPromptOpen, setAuthPromptOpen] = React.useState(false);
 
   const { data: session, status } = useSession();
   const isAuthenticated = status === "authenticated";
-  
+
   // Update activeTab when URL params change, or handle Activity tab
   React.useEffect(() => {
     const tabFromUrl = searchParams.get("tab");
@@ -3196,17 +3429,17 @@ export default function UserProfilePage() {
       setActiveTab(tabFromUrl as DockLabel);
     }
   }, [searchParams, isAuthenticated, session?.user?.username, activeUsername, router]);
-  
+
   // Track which username we've loaded to prevent duplicate loads
   const loadedUsernameRef = React.useRef<string | null>(null);
-  
+
   // Update activeUsername when URL params change
   React.useEffect(() => {
     if (username) {
       setActiveUsername(username);
     }
   }, [username]);
-  
+
   // Load profile data
   React.useEffect(() => {
     // Wait for session to be loaded (not loading)
@@ -3223,13 +3456,13 @@ export default function UserProfilePage() {
     if (loadedUsernameRef.current !== activeUsername) {
       loadedUsernameRef.current = activeUsername;
       setIsLoadingProfile(true);
-      
+
       console.log(`[Profile] Loading profile for username: ${activeUsername}`);
-      
+
       // Check sessionStorage for cached profile data
       const cacheKey = `profile_${activeUsername}`;
       const cachedData = typeof window !== "undefined" ? sessionStorage.getItem(cacheKey) : null;
-      
+
       if (cachedData) {
         try {
           const parsed = JSON.parse(cachedData);
@@ -3245,7 +3478,7 @@ export default function UserProfilePage() {
           // Invalid cache, continue with fetch
         }
       }
-      
+
       // Load profile data for the requested username
       fetch(`/api/users/${encodeURIComponent(activeUsername)}`)
         .then((res) => {
@@ -3264,12 +3497,12 @@ export default function UserProfilePage() {
             console.log(`[Profile] Received user data for: ${data.user.username}`);
             console.log(`[Profile] Avatar from API:`, data.user.avatar ? `"${data.user.avatar.substring(0, 100)}..."` : 'null/undefined');
             console.log(`[Profile] Default avatar:`, DEFAULT_AVATAR ? `"${DEFAULT_AVATAR.substring(0, 50)}..."` : 'null/undefined');
-            
+
             const avatarValue = data.user.avatar || DEFAULT_AVATAR;
             console.log(`[Profile] Final avatar value:`, avatarValue ? `"${avatarValue.substring(0, 100)}..."` : 'null/undefined');
             console.log(`[Profile] Avatar type:`, typeof avatarValue);
             console.log(`[Profile] Avatar length:`, avatarValue ? avatarValue.length : 0);
-            
+
             const profile = {
               username: data.user.username || defaultProfile.username,
               name: data.user.name || defaultProfile.name,
@@ -3284,7 +3517,7 @@ export default function UserProfilePage() {
             };
             console.log(`[Profile] Setting profile data with avatar:`, profile.avatar ? `"${profile.avatar.substring(0, 100)}..."` : 'missing');
             setProfileData(profile);
-            
+
             type BookFromAPI = {
               bookId?: { toString(): string } | string;
               _id?: { toString(): string } | string;
@@ -3302,81 +3535,86 @@ export default function UserProfilePage() {
               addedOn?: string | Date;
               urgency?: string;
               whyNow?: string;
+              pagesRead?: number; // Reading progress from API
+              progressUpdatedAt?: string | Date;
             };
             // Transform and set book collections from API
             // Top books (Profile tab - "Top 4 books" carousel)
             const transformedTopBooks: ProfileBook[] = Array.isArray(data.user.topBooks)
               ? data.user.topBooks.map((book: BookFromAPI, idx: number) => ({
-                  id: book.bookId?.toString() || book._id?.toString() || `top-${idx}`,
-                  title: book.title || "Unknown Title",
-                  author: book.author || "Unknown Author",
-                  cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
-                  mood: book.mood,
-                }))
+                id: book.bookId?.toString() || book._id?.toString() || `top-${idx}`,
+                title: book.title || "Unknown Title",
+                author: book.author || "Unknown Author",
+                cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                mood: book.mood,
+              }))
               : [];
             setTopBooks(transformedTopBooks);
-            
+
             // Favorite books (Profile tab - "Books that I love" carousel)
             const transformedFavoriteBooks: ProfileBook[] = Array.isArray(data.user.favoriteBooks)
               ? data.user.favoriteBooks.map((book: BookFromAPI, idx: number) => ({
-                  id: book.bookId?.toString() || book._id?.toString() || `fav-${idx}`,
-                  title: book.title || "Unknown Title",
-                  author: book.author || "Unknown Author",
-                  cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
-                  mood: book.mood,
-                  // Store identifiers for navigation
-                  bookId: book.bookId?.toString() || book._id?.toString(),
-                  isbndbId: book.isbndbId,
-                  openLibraryId: book.openLibraryId,
-                }))
+                id: book.bookId?.toString() || book._id?.toString() || `fav-${idx}`,
+                title: book.title || "Unknown Title",
+                author: book.author || "Unknown Author",
+                cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                mood: book.mood,
+                // Store identifiers for navigation
+                bookId: book.bookId?.toString() || book._id?.toString(),
+                isbndbId: book.isbndbId,
+                openLibraryId: book.openLibraryId,
+              }))
               : [];
             setFavoriteBooks(transformedFavoriteBooks);
-            
+
             // Clear cache to force fresh data on next load
             if (typeof window !== "undefined") {
               sessionStorage.removeItem(`profile_${activeUsername}`);
             }
-            
+
             // Bookshelf books - sort by finishedOn date (newest first)
             const transformedBookshelf: BookshelfBook[] = Array.isArray(data.user.bookshelf)
               ? data.user.bookshelf
-                  .map((book: BookFromAPI, idx: number) => ({
-                    id: book.bookId?.toString() || book._id?.toString() || `shelf-${idx}`,
-                    title: book.title || "Unknown Title",
-                    author: book.author || "Unknown Author",
-                    cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
-                    mood: book.mood,
-                    finishedOn: book.finishedOn ? (typeof book.finishedOn === 'string' ? book.finishedOn : new Date(book.finishedOn).toISOString()) : "",
-                    format: book.format,
-                    rating: book.rating,
-                    thoughts: book.thoughts,
-                  }))
-                  .sort((a: BookshelfBook, b: BookshelfBook) => {
-                    // Sort by finishedOn date in descending order (newest first)
-                    const aDate = a.finishedOn ? new Date(a.finishedOn) : new Date(0);
-                    const bDate = b.finishedOn ? new Date(b.finishedOn) : new Date(0);
-                    return bDate.getTime() - aDate.getTime();
-                  })
-              : [];
-            setBookshelfBooks(transformedBookshelf);
-            
-            // Liked books
-            const transformedLiked: LikedBook[] = Array.isArray(data.user.likedBooks)
-              ? data.user.likedBooks.map((book: BookFromAPI, idx: number) => ({
-                  id: book.bookId?.toString() || book._id?.toString() || `liked-${idx}`,
+                .map((book: BookFromAPI, idx: number) => ({
+                  id: book.bookId?.toString() || book._id?.toString() || `shelf-${idx}`,
                   title: book.title || "Unknown Title",
                   author: book.author || "Unknown Author",
                   cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
                   mood: book.mood,
-                  reason: book.reason,
+                  finishedOn: book.finishedOn ? (typeof book.finishedOn === 'string' ? book.finishedOn : new Date(book.finishedOn).toISOString()) : "",
+                  format: book.format,
+                  rating: book.rating,
+                  thoughts: book.thoughts,
                 }))
+                .sort((a: BookshelfBook, b: BookshelfBook) => {
+                  // Sort by finishedOn date in descending order (newest first)
+                  const aDate = a.finishedOn ? new Date(a.finishedOn) : new Date(0);
+                  const bDate = b.finishedOn ? new Date(b.finishedOn) : new Date(0);
+                  return bDate.getTime() - aDate.getTime();
+                })
+              : [];
+            setBookshelfBooks(transformedBookshelf);
+
+            // Liked books
+            const transformedLiked: LikedBook[] = Array.isArray(data.user.likedBooks)
+              ? data.user.likedBooks.map((book: BookFromAPI, idx: number) => ({
+                id: book.bookId?.toString() || book._id?.toString() || `liked-${idx}`,
+                title: book.title || "Unknown Title",
+                author: book.author || "Unknown Author",
+                cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                mood: book.mood,
+                reason: book.reason,
+              }))
               : [];
             setLikedBooks(transformedLiked);
-            
+
             // TBR books
             const transformedTbr: TbrBook[] = Array.isArray(data.user.tbrBooks)
               ? data.user.tbrBooks.map((book: BookFromAPI, idx: number) => ({
                   id: book.bookId?.toString() || book._id?.toString() || `tbr-${idx}`,
+                  bookId: book.bookId?.toString() || book._id?.toString(),
+                  isbndbId: book.isbndbId,
+                  openLibraryId: book.openLibraryId,
                   title: book.title || "Unknown Title",
                   author: book.author || "Unknown Author",
                   cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
@@ -3386,10 +3624,11 @@ export default function UserProfilePage() {
                     : "Added",
                   urgency: book.urgency,
                   whyNow: book.whyNow,
+                  pagesRead: book.pagesRead || 0, // Include reading progress from API
                 }))
               : [];
             setTbrBooks(transformedTbr);
-            
+
             type ReadingListFromAPI = {
               _id?: { toString(): string } | string;
               id?: string;
@@ -3411,45 +3650,45 @@ export default function UserProfilePage() {
             // Reading lists
             const transformedLists: ReadingList[] = Array.isArray(data.user.readingLists)
               ? data.user.readingLists.map((list: ReadingListFromAPI, idx: number) => {
-                  const updatedAt = list.updatedAt ? new Date(list.updatedAt) : new Date(list.createdAt || Date.now());
-                  const now = new Date();
-                  const diffMs = now.getTime() - updatedAt.getTime();
-                  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                  let updatedAgo = "";
-                  if (diffDays === 0) updatedAgo = "Today";
-                  else if (diffDays === 1) updatedAgo = "1d";
-                  else if (diffDays < 7) updatedAgo = `${diffDays}d`;
-                  else if (diffDays < 30) updatedAgo = `${Math.floor(diffDays / 7)}w`;
-                  else if (diffDays < 365) updatedAgo = `${Math.floor(diffDays / 30)}mo`;
-                  else updatedAgo = `${Math.floor(diffDays / 365)}y`;
-                  
-                  // Get cover from first book if available, otherwise use default
-                  let cover = "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80";
-                  if (list.cover) {
-                    cover = list.cover;
-                  } else if (Array.isArray(list.books) && list.books.length > 0) {
-                    // If books are populated, get cover from first book
-                    const firstBook = list.books[0];
-                    if (firstBook?.volumeInfo?.imageLinks?.thumbnail) {
-                      cover = firstBook.volumeInfo.imageLinks.thumbnail;
-                    } else if (firstBook?.volumeInfo?.imageLinks?.smallThumbnail) {
-                      cover = firstBook.volumeInfo.imageLinks.smallThumbnail;
-                    }
+                const updatedAt = list.updatedAt ? new Date(list.updatedAt) : new Date(list.createdAt || Date.now());
+                const now = new Date();
+                const diffMs = now.getTime() - updatedAt.getTime();
+                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                let updatedAgo = "";
+                if (diffDays === 0) updatedAgo = "Today";
+                else if (diffDays === 1) updatedAgo = "1d";
+                else if (diffDays < 7) updatedAgo = `${diffDays}d`;
+                else if (diffDays < 30) updatedAgo = `${Math.floor(diffDays / 7)}w`;
+                else if (diffDays < 365) updatedAgo = `${Math.floor(diffDays / 30)}mo`;
+                else updatedAgo = `${Math.floor(diffDays / 365)}y`;
+
+                // Get cover from first book if available, otherwise use default
+                let cover = "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80";
+                if (list.cover) {
+                  cover = list.cover;
+                } else if (Array.isArray(list.books) && list.books.length > 0) {
+                  // If books are populated, get cover from first book
+                  const firstBook = list.books[0];
+                  if (firstBook?.volumeInfo?.imageLinks?.thumbnail) {
+                    cover = firstBook.volumeInfo.imageLinks.thumbnail;
+                  } else if (firstBook?.volumeInfo?.imageLinks?.smallThumbnail) {
+                    cover = firstBook.volumeInfo.imageLinks.smallThumbnail;
                   }
-                  
-                  return {
-                    id: list._id?.toString() || `list-${idx}`,
-                    title: list.title || "Untitled List",
-                    booksCount: Array.isArray(list.books) ? list.books.length : 0,
-                    updatedAgo,
-                    cover,
-                    description: list.description,
-                    books: Array.isArray(list.books) ? list.books.slice(0, 3) : [], // Store first 3 books for display
-                  };
-                })
+                }
+
+                return {
+                  id: list._id?.toString() || `list-${idx}`,
+                  title: list.title || "Untitled List",
+                  booksCount: Array.isArray(list.books) ? list.books.length : 0,
+                  updatedAgo,
+                  cover,
+                  description: list.description,
+                  books: Array.isArray(list.books) ? list.books.slice(0, 3) : [], // Store first 3 books for display
+                };
+              })
               : [];
             setReadingLists(transformedLists);
-            
+
             type DiaryEntryFromAPIForTransformation = {
               _id?: { toString(): string } | string;
               id?: string;
@@ -3469,39 +3708,39 @@ export default function UserProfilePage() {
             // Diary entries
             const transformedDiaryEntries: DiaryEntry[] = Array.isArray(data.user.diaryEntries)
               ? data.user.diaryEntries.map((entry: DiaryEntryFromAPIForTransformation, idx: number) => {
-                  const isGeneralEntry = !entry.bookId && !entry.bookTitle;
-                  return {
-                    id: entry._id?.toString() || `diary-${idx}`,
-                    bookId: entry.bookId?.toString() || entry.bookId || null,
-                    bookTitle: entry.bookTitle || null,
-                    bookAuthor: entry.bookAuthor || null,
-                    bookCover: entry.bookCover || null,
-                    subject: entry.subject || null,
-                    isGeneralEntry,
-                    content: entry.content || "",
-                    likes: Array.isArray(entry.likes) ? entry.likes.map((id) => {
-                      const likeId = id as LikeId;
-                      return typeof likeId === 'string' ? likeId : likeId.toString();
-                    }) : [],
-                    likesCount: Array.isArray(entry.likes) ? entry.likes.length : 0,
-                    isLiked: session?.user?.id && Array.isArray(entry.likes) && entry.likes.some((id) => {
-                      const likeId = id as LikeId;
-                      const idStr = typeof likeId === 'string' ? likeId : likeId.toString();
-                      return idStr === session.user.id;
-                    }) || false,
-                    createdAt: entry.createdAt ? new Date(entry.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
-                    updatedAt: entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
-                  };
-                })
+                const isGeneralEntry = !entry.bookId && !entry.bookTitle;
+                return {
+                  id: entry._id?.toString() || `diary-${idx}`,
+                  bookId: entry.bookId?.toString() || entry.bookId || null,
+                  bookTitle: entry.bookTitle || null,
+                  bookAuthor: entry.bookAuthor || null,
+                  bookCover: entry.bookCover || null,
+                  subject: entry.subject || null,
+                  isGeneralEntry,
+                  content: entry.content || "",
+                  likes: Array.isArray(entry.likes) ? entry.likes.map((id) => {
+                    const likeId = id as LikeId;
+                    return typeof likeId === 'string' ? likeId : likeId.toString();
+                  }) : [],
+                  likesCount: Array.isArray(entry.likes) ? entry.likes.length : 0,
+                  isLiked: session?.user?.id && Array.isArray(entry.likes) && entry.likes.some((id) => {
+                    const likeId = id as LikeId;
+                    const idStr = typeof likeId === 'string' ? likeId : likeId.toString();
+                    return idStr === session.user.id;
+                  }) || false,
+                  createdAt: entry.createdAt ? new Date(entry.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
+                  updatedAt: entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
+                };
+              })
               : [];
             setDiaryEntries(transformedDiaryEntries);
-            
+
             // Activities
             // Determine if this is the owner's profile before mapping
             const isOwnerProfile = isAuthenticated && session?.user?.username === data.user.username;
-            
+
             console.log("[Profile] Raw recentActivities:", data.user.recentActivities);
-            
+
             type ActivityFromAPI = {
               _id?: { toString(): string } | string;
               type: string;
@@ -3520,65 +3759,65 @@ export default function UserProfilePage() {
             // Transform regular activities
             const transformedActivities: ActivityEntry[] = Array.isArray(data.user.recentActivities)
               ? data.user.recentActivities.map((activity: ActivityFromAPI, idx: number) => {
-                  // Format time ago
-                  const activityDate = activity.timestamp ? new Date(activity.timestamp) : new Date();
-                  const now = new Date();
-                  const diffMs = now.getTime() - activityDate.getTime();
-                  const diffMins = Math.floor(diffMs / (1000 * 60));
-                  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-                  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                  
-                  let timeAgo = "";
-                  if (diffMins < 1) timeAgo = "Just now";
-                  else if (diffMins < 60) timeAgo = `${diffMins}m ago`;
-                  else if (diffHours < 24) timeAgo = `${diffHours}h ago`;
-                  else if (diffDays === 1) timeAgo = "Yesterday";
-                  else if (diffDays < 7) timeAgo = `${diffDays}d ago`;
-                  else if (diffDays < 30) timeAgo = `${Math.floor(diffDays / 7)}w ago`;
-                  else if (diffDays < 365) timeAgo = `${Math.floor(diffDays / 30)}mo ago`;
-                  else timeAgo = `${Math.floor(diffDays / 365)}y ago`;
-                  
-                  // Format action based on type
-                  let action = "";
-                  let detail = "";
-                  if (activity.type === "read") {
-                    action = "finished";
-                    detail = activity.bookTitle || "a book";
-                  } else if (activity.type === "rated") {
-                    action = `rated ${"★".repeat(activity.rating || 0)}`;
-                    detail = activity.bookTitle || "a book";
-                  } else if (activity.type === "liked") {
-                    action = "liked";
-                    detail = activity.bookTitle || "a book";
-                  } else if (activity.type === "added_to_list") {
-                    action = "added to list";
-                    detail = activity.bookTitle || "a book";
-                  } else if (activity.type === "started_reading") {
-                    action = "started reading";
-                    detail = activity.bookTitle || "a book";
-                  } else if (activity.type === "reviewed") {
-                    action = "reviewed";
-                    detail = activity.bookTitle || "a book";
-                  } else if (activity.type === "collaboration_request") {
-                    action = "invited you to collaborate on";
-                    detail = activity.listName || "a list";
-                  }
-                  
-                  return {
-                    id: activity._id?.toString() || `activity-${idx}`,
-                    name: isOwnerProfile ? "You" : activity.userName || "User",
-                    action,
-                    detail,
-                    timeAgo,
-                    cover: activity.bookCover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
-                    type: activity.type,
-                    listId: activity.listId,
-                    listName: activity.listName,
-                    inviter: activity.userName,
-                  };
-                })
+                // Format time ago
+                const activityDate = activity.timestamp ? new Date(activity.timestamp) : new Date();
+                const now = new Date();
+                const diffMs = now.getTime() - activityDate.getTime();
+                const diffMins = Math.floor(diffMs / (1000 * 60));
+                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+                let timeAgo = "";
+                if (diffMins < 1) timeAgo = "Just now";
+                else if (diffMins < 60) timeAgo = `${diffMins}m ago`;
+                else if (diffHours < 24) timeAgo = `${diffHours}h ago`;
+                else if (diffDays === 1) timeAgo = "Yesterday";
+                else if (diffDays < 7) timeAgo = `${diffDays}d ago`;
+                else if (diffDays < 30) timeAgo = `${Math.floor(diffDays / 7)}w ago`;
+                else if (diffDays < 365) timeAgo = `${Math.floor(diffDays / 30)}mo ago`;
+                else timeAgo = `${Math.floor(diffDays / 365)}y ago`;
+
+                // Format action based on type
+                let action = "";
+                let detail = "";
+                if (activity.type === "read") {
+                  action = "finished";
+                  detail = activity.bookTitle || "a book";
+                } else if (activity.type === "rated") {
+                  action = `rated ${"★".repeat(activity.rating || 0)}`;
+                  detail = activity.bookTitle || "a book";
+                } else if (activity.type === "liked") {
+                  action = "liked";
+                  detail = activity.bookTitle || "a book";
+                } else if (activity.type === "added_to_list") {
+                  action = "added to list";
+                  detail = activity.bookTitle || "a book";
+                } else if (activity.type === "started_reading") {
+                  action = "started reading";
+                  detail = activity.bookTitle || "a book";
+                } else if (activity.type === "reviewed") {
+                  action = "reviewed";
+                  detail = activity.bookTitle || "a book";
+                } else if (activity.type === "collaboration_request") {
+                  action = "invited you to collaborate on";
+                  detail = activity.listName || "a list";
+                }
+
+                return {
+                  id: activity._id?.toString() || `activity-${idx}`,
+                  name: isOwnerProfile ? "You" : activity.userName || "User",
+                  action,
+                  detail,
+                  timeAgo,
+                  cover: activity.bookCover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                  type: activity.type,
+                  listId: activity.listId,
+                  listName: activity.listName,
+                  inviter: activity.userName,
+                };
+              })
               : [];
-            
+
             type DiaryEntryFromAPI = {
               _id?: { toString(): string } | string;
               id?: string;
@@ -3595,58 +3834,58 @@ export default function UserProfilePage() {
             // Add diary entries as activities
             const diaryActivities: ActivityEntry[] = Array.isArray(data.user.diaryEntries)
               ? data.user.diaryEntries.map((entry: DiaryEntryFromAPI, idx: number) => {
-                  // Format time ago
-                  const entryDate = entry.updatedAt ? new Date(entry.updatedAt) : (entry.createdAt ? new Date(entry.createdAt) : new Date());
-                  const now = new Date();
-                  const diffMs = now.getTime() - entryDate.getTime();
-                  const diffMins = Math.floor(diffMs / (1000 * 60));
-                  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-                  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                  
-                  let timeAgo = "";
-                  if (diffMins < 1) timeAgo = "Just now";
-                  else if (diffMins < 60) timeAgo = `${diffMins}m ago`;
-                  else if (diffHours < 24) timeAgo = `${diffHours}h ago`;
-                  else if (diffDays === 1) timeAgo = "Yesterday";
-                  else if (diffDays < 7) timeAgo = `${diffDays}d ago`;
-                  else if (diffDays < 30) timeAgo = `${Math.floor(diffDays / 7)}w ago`;
-                  else if (diffDays < 365) timeAgo = `${Math.floor(diffDays / 30)}mo ago`;
-                  else timeAgo = `${Math.floor(diffDays / 365)}y ago`;
-                  
-                  const entryId = entry._id?.toString() || entry.id || `diary-${idx}`;
-                  const bookId = entry.bookId?.toString() || entry.bookId;
-                  type LikeId = { toString(): string } | string;
-                  const isLiked = session?.user?.id && Array.isArray(entry.likes) && entry.likes.some((id) => {
-                    const likeId = id as LikeId;
-                    const idStr = typeof likeId === 'string' ? likeId : likeId.toString();
-                    return idStr === session.user.id;
-                  });
-                  
-                  const isGeneralEntry = !entry.bookId && !entry.bookTitle;
-                  return {
-                    id: `diary-activity-${entryId}`,
-                    name: isOwnerProfile ? "You" : data.user.name || "User",
-                    action: isGeneralEntry ? "wrote" : "wrote about",
-                    detail: entry.bookTitle || (isGeneralEntry 
-                      ? (entry.subject && entry.subject.trim() ? entry.subject : "a diary entry")
-                      : "a book"),
-                    timeAgo,
-                    cover: entry.bookCover || null,
-                    type: "diary_entry",
-                    diaryEntryId: entryId,
-                    bookId: bookId,
-                    bookTitle: entry.bookTitle || null,
-                    bookAuthor: entry.bookAuthor || null,
-                    isGeneralEntry,
-                    content: entry.content || "",
-                    createdAt: entry.createdAt ? new Date(entry.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
-                    updatedAt: entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
-                    isLiked: isLiked || false,
-                    likesCount: Array.isArray(entry.likes) ? entry.likes.length : 0,
-                  };
-                })
+                // Format time ago
+                const entryDate = entry.updatedAt ? new Date(entry.updatedAt) : (entry.createdAt ? new Date(entry.createdAt) : new Date());
+                const now = new Date();
+                const diffMs = now.getTime() - entryDate.getTime();
+                const diffMins = Math.floor(diffMs / (1000 * 60));
+                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+                let timeAgo = "";
+                if (diffMins < 1) timeAgo = "Just now";
+                else if (diffMins < 60) timeAgo = `${diffMins}m ago`;
+                else if (diffHours < 24) timeAgo = `${diffHours}h ago`;
+                else if (diffDays === 1) timeAgo = "Yesterday";
+                else if (diffDays < 7) timeAgo = `${diffDays}d ago`;
+                else if (diffDays < 30) timeAgo = `${Math.floor(diffDays / 7)}w ago`;
+                else if (diffDays < 365) timeAgo = `${Math.floor(diffDays / 30)}mo ago`;
+                else timeAgo = `${Math.floor(diffDays / 365)}y ago`;
+
+                const entryId = entry._id?.toString() || entry.id || `diary-${idx}`;
+                const bookId = entry.bookId?.toString() || entry.bookId;
+                type LikeId = { toString(): string } | string;
+                const isLiked = session?.user?.id && Array.isArray(entry.likes) && entry.likes.some((id) => {
+                  const likeId = id as LikeId;
+                  const idStr = typeof likeId === 'string' ? likeId : likeId.toString();
+                  return idStr === session.user.id;
+                });
+
+                const isGeneralEntry = !entry.bookId && !entry.bookTitle;
+                return {
+                  id: `diary-activity-${entryId}`,
+                  name: isOwnerProfile ? "You" : data.user.name || "User",
+                  action: isGeneralEntry ? "wrote" : "wrote about",
+                  detail: entry.bookTitle || (isGeneralEntry
+                    ? (entry.subject && entry.subject.trim() ? entry.subject : "a diary entry")
+                    : "a book"),
+                  timeAgo,
+                  cover: entry.bookCover || null,
+                  type: "diary_entry",
+                  diaryEntryId: entryId,
+                  bookId: bookId,
+                  bookTitle: entry.bookTitle || null,
+                  bookAuthor: entry.bookAuthor || null,
+                  isGeneralEntry,
+                  content: entry.content || "",
+                  createdAt: entry.createdAt ? new Date(entry.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
+                  updatedAt: entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
+                  isLiked: isLiked || false,
+                  likesCount: Array.isArray(entry.likes) ? entry.likes.length : 0,
+                };
+              })
               : [];
-            
+
             // Combine and sort all activities by time (newest first)
             const allActivities = [...transformedActivities, ...diaryActivities].sort((a, b) => {
               // Parse timeAgo to get approximate timestamp for sorting
@@ -3664,14 +3903,14 @@ export default function UserProfilePage() {
               };
               return getSortValue(a.timeAgo) - getSortValue(b.timeAgo);
             });
-            
+
             console.log("[Profile] Transformed and sorted activities:", allActivities);
             setActivities(allActivities);
-            
+
             // Set follower/following counts
             setFollowersCount(data.user.followersCount || 0);
             setFollowingCount(data.user.followingCount || 0);
-            
+
             // Cache in sessionStorage
             if (typeof window !== "undefined") {
               try {
@@ -3707,13 +3946,13 @@ export default function UserProfilePage() {
         });
     }
   }, [activeUsername, isAuthenticated, status, session?.user?.username, session?.user?.id]);
-  
+
   // Extract username to a stable variable
   const currentUsername = session?.user?.username ?? null;
   const isOwnProfile = React.useMemo(() => {
     return isAuthenticated && currentUsername === activeUsername;
   }, [isAuthenticated, currentUsername, activeUsername]);
-  
+
   const handleAuthPrompt = React.useCallback(() => {
     setAuthPromptOpen(true);
   }, []);
@@ -3812,21 +4051,21 @@ export default function UserProfilePage() {
       return map.get(name)!;
     };
     try {
-    bookshelfBooks.forEach((book) => {
+      bookshelfBooks.forEach((book) => {
         if (!book || !book.author) return;
-      const entry = ensureEntry(book.author, book.cover);
-      entry.read += 1;
+        const entry = ensureEntry(book.author, book.cover);
+        entry.read += 1;
         // Add book to author's books array (only from bookshelf, not TBR)
         if (!entry.books) {
           entry.books = [];
         }
         entry.books.push(book);
-    });
-    tbrBooks.forEach((book) => {
+      });
+      tbrBooks.forEach((book) => {
         if (!book || !book.author) return;
-      const entry = ensureEntry(book.author, book.cover);
-      entry.tbr += 1;
-    });
+        const entry = ensureEntry(book.author, book.cover);
+        entry.tbr += 1;
+      });
       // Sort books for each author (by finishedOn date, newest first)
       map.forEach((entry) => {
         if (entry.books) {
@@ -3841,7 +4080,7 @@ export default function UserProfilePage() {
 
   const handleProfileSave = React.useCallback(async () => {
     if (!profileData || !activeUsername) return;
-    
+
     try {
       setIsSavingProfile(true);
       setProfileSaveError(null);
@@ -3869,9 +4108,9 @@ export default function UserProfilePage() {
           : [],
         links: profileData.links
           ? profileData.links
-              .split(",")
-              .map((link) => link.trim())
-              .filter(Boolean)
+            .split(",")
+            .map((link) => link.trim())
+            .filter(Boolean)
           : [],
         // isPublic is always set to true on the server (all profiles are public)
         avatar: profileData.avatar || "",
@@ -4066,344 +4305,344 @@ export default function UserProfilePage() {
             "mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8 pb-24 md:pb-8 overflow-x-hidden",
             isEditOpen && !isMobile && "backdrop-blur-md"
           )}>
-        <div className="space-y-8">
-          <div className="grid gap-6 lg:grid-cols-[1fr_2fr] lg:gap-12">
-            <div className="hidden md:block">
-              <h1 
-                className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl"
-                style={{ fontFamily: '"CoFo Glassier", sans-serif' }}
-              >
-                {isOwnProfile 
-                  ? "Your Library, organised" 
-                  : `${profileData.username}'s library`}
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                {isOwnProfile 
-                  ? "All your books, lists, and all time favourites in one place."
-                  : `${profileData.username}'s books, lists, and all time favourites in one place.`}
-              </p>
-            </div>
-            <div className="flex justify-end w-full items-start">
-              <div className={cn(
-                "w-full max-w-lg flex-shrink-0",
-                isMobile && "bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg p-4 pl-6"
-              )}>
-                <ProfileSummary
-                  profile={profileData}
-                  bookshelfCount={bookshelfBooks.length}
-                  followersCount={followersCount}
-                  followingCount={followingCount}
-                  onEdit={() => {
-                    setProfileSaveError(null);
-                    setIsEditOpen(true);
-                  }}
-                  onFollow={handleFollow}
-                  authPromptOpen={authPromptOpen}
-                  onAuthPromptChange={setAuthPromptOpen}
-                  canEdit={isOwnProfile}
-                  isFollowing={isFollowing}
-                  isFollowLoading={isFollowLoading}
-                  isAuthenticated={isAuthenticated}
-                  onSignIn={() => setAuthPromptOpen(true)}
-                />
-              </div>
-            </div>
-          </div>
-
-          {isAuthenticated ? (
-            <>
-              <div className={cn(
-                "w-full",
-                isMobile && "flex items-center justify-center"
-              )}>
-                <Dock 
-                  items={dockItems} 
-                  activeLabel={activeTab}
-                  className={isMobile ? "w-full" : ""}
-                />
-              </div>
-
-              {activeTab === "Favourites" ? (
-                <div className="space-y-10">
-                  {topBooks.length > 0 && (
-                    isMobile ? (
-                      <div className="grid grid-cols-2 gap-4">
-                        {topBooks.slice(0, 4).map((book) => (
-                          <div key={book.id} className="flex flex-col gap-2">
-                            <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl bg-muted">
-                              <Image
-                                src={book.cover}
-                                alt={book.title}
-                                fill
-                                className="object-cover"
-                                sizes="50vw"
-                                quality={100}
-                                unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
-                              />
-                            </div>
-                            <div>
-                              <h3 className="text-xs font-semibold text-foreground line-clamp-2">{book.title}</h3>
-                              <p className="text-xs text-muted-foreground truncate">{book.author}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <BookCarousel
-                        title=""
-                        subtitle=""
-                        books={topBooks}
-                      />
-                    )
-                  )}
-                  <EditableFavoriteBooksCarousel
-                    title={isOwnProfile ? "Books that I love" : (
-                      <>
-                        Books that <span className="italic">{profileData?.username || activeUsername}</span> loves
-                      </>
-                    )}
-                    subtitle="Comfort stories and obsessions that always earn a re-read."
-                    books={favoriteBooks}
-                    username={activeUsername}
-                    canEdit={isOwnProfile}
-                    onUpdate={async () => {
-                      // Reload favorite books
-                      if (!activeUsername) return;
-                      try {
-                        const response = await fetch(`/api/users/${encodeURIComponent(activeUsername)}`);
-                        if (response.ok) {
-                          const data = await response.json();
-                          type BookFromAPI = {
-                            bookId?: { toString(): string } | string;
-                            _id?: { toString(): string } | string;
-                            title?: string;
-                            author?: string;
-                            cover?: string;
-                            mood?: string;
-                            isbndbId?: string;
-                            openLibraryId?: string;
-                          };
-                          const transformedFavoriteBooks: ProfileBook[] = Array.isArray(data.user.favoriteBooks)
-                            ? data.user.favoriteBooks.map((book: BookFromAPI, idx: number) => ({
-                                id: book.bookId?.toString() || book._id?.toString() || `fav-${idx}`,
-                                title: book.title || "Unknown Title",
-                                author: book.author || "Unknown Author",
-                                cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
-                                mood: book.mood,
-                                // Store identifiers for navigation
-                                bookId: book.bookId?.toString() || book._id?.toString(),
-                                isbndbId: book.isbndbId,
-                                openLibraryId: book.openLibraryId,
-                              }))
-                            : [];
-                          setFavoriteBooks(transformedFavoriteBooks);
-                          // Clear cache
-                          if (typeof window !== "undefined") {
-                            sessionStorage.removeItem(`profile_${activeUsername}`);
-                          }
-                        }
-                      } catch (error) {
-                        console.error("Failed to reload favorite books:", error);
-                      }
-                    }}
-                  />
+            <div className="space-y-8">
+              <div className="grid gap-6 lg:grid-cols-[1fr_2fr] lg:gap-12">
+                <div className="hidden md:block">
+                  <h1
+                    className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl"
+                    style={{ fontFamily: '"CoFo Glassier", sans-serif' }}
+                  >
+                    {isOwnProfile
+                      ? "Your Library, organised"
+                      : `${profileData.username}'s library`}
+                  </h1>
+                  <p className="text-sm text-muted-foreground">
+                    {isOwnProfile
+                      ? "All your books, lists, and all time favourites in one place."
+                      : `${profileData.username}'s books, lists, and all time favourites in one place.`}
+                  </p>
                 </div>
-              ) : activeTab === "Activity" ? (
-                <div className="space-y-10">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <h2 className="text-xl font-semibold text-foreground">Activity</h2>
-                      <p className="text-sm text-muted-foreground">See what friends are tracking or revisit your own updates.</p>
-                    </div>
-                    <DockToggle
-                      items={[
-                        {
-                          label: "Friends",
-                          icon: Users,
-                          isActive: activityView === "Friends",
-                          onClick: () => {
-                            setActivityView("Friends");
-                            // Update last viewed timestamp to clear red dot in header
-                            if (isAuthenticated && session?.user?.username) {
-                              localStorage.setItem(
-                                `activity_last_viewed_${session.user.username}`,
-                                new Date().toISOString()
-                              );
-                            }
-                          },
-                        },
-                        {
-                          label: "Me",
-                          icon: UserRound,
-                          isActive: activityView === "Me",
-                          onClick: () => setActivityView("Me"),
-                        },
-                      ]}
+                <div className="flex justify-end w-full items-start">
+                  <div className={cn(
+                    "w-full max-w-lg flex-shrink-0",
+                    isMobile && "bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg p-4 pl-6"
+                  )}>
+                    <ProfileSummary
+                      profile={profileData}
+                      bookshelfCount={bookshelfBooks.length}
+                      followersCount={followersCount}
+                      followingCount={followingCount}
+                      onEdit={() => {
+                        setProfileSaveError(null);
+                        setIsEditOpen(true);
+                      }}
+                      onFollow={handleFollow}
+                      authPromptOpen={authPromptOpen}
+                      onAuthPromptChange={setAuthPromptOpen}
+                      canEdit={isOwnProfile}
+                      isFollowing={isFollowing}
+                      isFollowLoading={isFollowLoading}
+                      isAuthenticated={isAuthenticated}
+                      onSignIn={() => setAuthPromptOpen(true)}
                     />
                   </div>
-                  {activities.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
-                      <p className="text-lg font-semibold text-foreground">No activity yet</p>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {activityView === "Me"
-                          ? "Your reading activity will appear here once you start tracking books."
-                          : "No friend activity to show yet."}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid gap-6 md:grid-cols-2">
-                      {activities
-                        .filter((entry) => {
-                          // Filter based on activityView
-                          if (activityView === "Me") {
-                            return entry.name === "You";
-                          } else {
-                            // in "Friends" view, show collaboration requests for the current user
-                            if (entry.type === "collaboration_request") {
-                              return true;
-                            }
-                            return entry.name !== "You";
-                          }
-                        })
-                        .map((entry) => {
-                          console.log("[Activity Tab] Rendering activity:", entry);
-                          if (entry.type === "collaboration_request") {
-                            return (
-                              <CollaborationRequestCard
-                                key={entry.id}
-                                activity={entry}
-                                onAccept={handleAccept}
-                                onReject={handleReject}
-                              />
-                            );
-                          }
-                          return (
-                          <article
-                            key={entry.id}
-                            onClick={() => {
-                              // If it's a diary entry, open the diary entry dialog
-                              if (entry.type === "diary_entry" && entry.diaryEntryId) {
-                                setSelectedActivityDiaryEntry({
-                                  id: entry.diaryEntryId,
-                                  bookId: entry.bookId,
-                                  bookTitle: entry.bookTitle,
-                                  bookAuthor: entry.bookAuthor,
-                                  bookCover: entry.cover,
-                                  content: entry.content,
-                                  createdAt: entry.createdAt,
-                                  updatedAt: entry.updatedAt,
-                                  isLiked: entry.isLiked,
-                                  likesCount: entry.likesCount,
-                                });
-                              }
-                            }}
-                            className={`flex gap-4 rounded-3xl border border-border/70 bg-background/90 p-4 shadow-sm transition hover:-translate-y-1 ${
-                              entry.type === "diary_entry" ? "cursor-pointer" : ""
-                            }`}
-                          >
-                            <div className="relative h-24 w-24 overflow-hidden rounded-2xl bg-muted">
-                              <Image
-                                src={entry.cover}
-                                alt={entry.detail}
-                                fill
-                                className="object-cover"
-                                sizes="96px"
-                                quality={100}
-                                unoptimized={entry.cover?.includes('isbndb.com') || entry.cover?.includes('images.isbndb.com') || entry.cover?.includes('covers.isbndb.com') || true}
-                              />
-                            </div>
-                            <div className="flex flex-1 flex-col justify-between">
-                              <div>
-                                <p className="text-sm text-muted-foreground">{entry.timeAgo}</p>
-                                <p className="text-base font-semibold text-foreground">
-                                  {entry.name} {entry.action}
-                                </p>
-                                <p className="text-sm text-muted-foreground">{entry.detail}</p>
+                </div>
+              </div>
+
+              {isAuthenticated ? (
+                <>
+                  <div className={cn(
+                    "w-full",
+                    isMobile && "flex items-center justify-center"
+                  )}>
+                    <Dock
+                      items={dockItems}
+                      activeLabel={activeTab}
+                      className={isMobile ? "w-full" : ""}
+                    />
+                  </div>
+
+                  {activeTab === "Favourites" ? (
+                    <div className="space-y-10">
+                      {topBooks.length > 0 && (
+                        isMobile ? (
+                          <div className="grid grid-cols-2 gap-4">
+                            {topBooks.slice(0, 4).map((book) => (
+                              <div key={book.id} className="flex flex-col gap-2">
+                                <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl bg-muted">
+                                  <Image
+                                    src={book.cover}
+                                    alt={book.title}
+                                    fill
+                                    className="object-cover"
+                                    sizes="50vw"
+                                    quality={100}
+                                    unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
+                                  />
+                                </div>
+                                <div>
+                                  <h3 className="text-xs font-semibold text-foreground line-clamp-2">{book.title}</h3>
+                                  <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+                                </div>
                               </div>
-                              {entry.type === "diary_entry" ? (
-                                <button className="text-sm font-semibold text-primary transition hover:text-primary/80">
-                                  View diary entry
-                                </button>
-                              ) : (
-                              <button className="text-sm font-semibold text-primary transition hover:text-primary/80">
-                                View details
-                              </button>
-                              )}
-                            </div>
-                          </article>
-                        )})
-}
-                    </div>
-                  )}
-                  
-                  {/* Diary Entry Dialog for Activity */}
-                  {selectedActivityDiaryEntry && (
-                    <DiaryEntryDialog
-                      open={!!selectedActivityDiaryEntry}
-                      onOpenChange={(open) => {
-                        if (!open) setSelectedActivityDiaryEntry(null);
-                      }}
-                      entry={selectedActivityDiaryEntry ? {
-                        id: selectedActivityDiaryEntry.id,
-                        bookId: selectedActivityDiaryEntry.bookId || null,
-                        bookTitle: selectedActivityDiaryEntry.bookTitle || null,
-                        bookAuthor: selectedActivityDiaryEntry.bookAuthor || null,
-                        bookCover: selectedActivityDiaryEntry.bookCover || null,
-                        subject: null,
-                        content: selectedActivityDiaryEntry.content || "",
-                        createdAt: selectedActivityDiaryEntry.createdAt || "",
-                        updatedAt: selectedActivityDiaryEntry.updatedAt || "",
-                        likes: [],
-                        isLiked: selectedActivityDiaryEntry.isLiked || false,
-                        likesCount: selectedActivityDiaryEntry.likesCount || 0,
-                      } : {
-                        id: "",
-                        content: "",
-                        createdAt: "",
-                        updatedAt: "",
-                        likes: [],
-                        isLiked: false,
-                        likesCount: 0,
-                      }}
-                      username={activeUsername}
-                      isOwnProfile={isOwnProfile}
-                      onLikeChange={async () => {
-                        // Refresh activities after like change
-                        if (activeUsername) {
+                            ))}
+                          </div>
+                        ) : (
+                          <BookCarousel
+                            title=""
+                            subtitle=""
+                            books={topBooks}
+                          />
+                        )
+                      )}
+                      <EditableFavoriteBooksCarousel
+                        title={isOwnProfile ? "Books that I love" : (
+                          <>
+                            Books that <span className="italic">{profileData?.username || activeUsername}</span> loves
+                          </>
+                        )}
+                        subtitle="Comfort stories and obsessions that always earn a re-read."
+                        books={favoriteBooks}
+                        username={activeUsername}
+                        canEdit={isOwnProfile}
+                        onUpdate={async () => {
+                          // Reload favorite books
+                          if (!activeUsername) return;
                           try {
                             const response = await fetch(`/api/users/${encodeURIComponent(activeUsername)}`);
-                            if (!response.ok) {
-                              console.error("Failed to refresh activities after like change");
-                              return;
-                            }
+                            if (response.ok) {
                               const data = await response.json();
-                              // Re-transform activities (similar to the main fetch logic)
-                              const isOwnerProfile = isAuthenticated && session?.user?.username === data.user.username;
-                              
-                              type ActivityFromAPI = {
-                                _id?: { toString(): string } | string;
-                                type: string;
-                                timestamp?: string | Date;
+                              type BookFromAPI = {
                                 bookId?: { toString(): string } | string;
-                                bookTitle?: string;
-                                bookCover?: string;
-                                listId?: string;
-                                listName?: string;
-                                sharedBy?: { toString(): string } | string;
-                                sharedByUsername?: string;
-                                userName?: string;
-                                rating?: number;
-                                review?: string;
+                                _id?: { toString(): string } | string;
+                                title?: string;
+                                author?: string;
+                                cover?: string;
+                                mood?: string;
+                                isbndbId?: string;
+                                openLibraryId?: string;
                               };
-                              const transformedActivities: ActivityEntry[] = Array.isArray(data.user.recentActivities)
-                                ? data.user.recentActivities.map((activity: ActivityFromAPI, idx: number) => {
+                              const transformedFavoriteBooks: ProfileBook[] = Array.isArray(data.user.favoriteBooks)
+                                ? data.user.favoriteBooks.map((book: BookFromAPI, idx: number) => ({
+                                  id: book.bookId?.toString() || book._id?.toString() || `fav-${idx}`,
+                                  title: book.title || "Unknown Title",
+                                  author: book.author || "Unknown Author",
+                                  cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                                  mood: book.mood,
+                                  // Store identifiers for navigation
+                                  bookId: book.bookId?.toString() || book._id?.toString(),
+                                  isbndbId: book.isbndbId,
+                                  openLibraryId: book.openLibraryId,
+                                }))
+                                : [];
+                              setFavoriteBooks(transformedFavoriteBooks);
+                              // Clear cache
+                              if (typeof window !== "undefined") {
+                                sessionStorage.removeItem(`profile_${activeUsername}`);
+                              }
+                            }
+                          } catch (error) {
+                            console.error("Failed to reload favorite books:", error);
+                          }
+                        }}
+                      />
+                    </div>
+                  ) : activeTab === "Activity" ? (
+                    <div className="space-y-10">
+                      <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div>
+                          <h2 className="text-xl font-semibold text-foreground">Activity</h2>
+                          <p className="text-sm text-muted-foreground">See what friends are tracking or revisit your own updates.</p>
+                        </div>
+                        <DockToggle
+                          items={[
+                            {
+                              label: "Friends",
+                              icon: Users,
+                              isActive: activityView === "Friends",
+                              onClick: () => {
+                                setActivityView("Friends");
+                                // Update last viewed timestamp to clear red dot in header
+                                if (isAuthenticated && session?.user?.username) {
+                                  localStorage.setItem(
+                                    `activity_last_viewed_${session.user.username}`,
+                                    new Date().toISOString()
+                                  );
+                                }
+                              },
+                            },
+                            {
+                              label: "Me",
+                              icon: UserRound,
+                              isActive: activityView === "Me",
+                              onClick: () => setActivityView("Me"),
+                            },
+                          ]}
+                        />
+                      </div>
+                      {activities.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
+                          <p className="text-lg font-semibold text-foreground">No activity yet</p>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            {activityView === "Me"
+                              ? "Your reading activity will appear here once you start tracking books."
+                              : "No friend activity to show yet."}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="grid gap-6 md:grid-cols-2">
+                          {activities
+                            .filter((entry) => {
+                              // Filter based on activityView
+                              if (activityView === "Me") {
+                                return entry.name === "You";
+                              } else {
+                                // in "Friends" view, show collaboration requests for the current user
+                                if (entry.type === "collaboration_request") {
+                                  return true;
+                                }
+                                return entry.name !== "You";
+                              }
+                            })
+                            .map((entry) => {
+                              console.log("[Activity Tab] Rendering activity:", entry);
+                              if (entry.type === "collaboration_request") {
+                                return (
+                                  <CollaborationRequestCard
+                                    key={entry.id}
+                                    activity={entry}
+                                    onAccept={handleAccept}
+                                    onReject={handleReject}
+                                  />
+                                );
+                              }
+                              return (
+                                <article
+                                  key={entry.id}
+                                  onClick={() => {
+                                    // If it's a diary entry, open the diary entry dialog
+                                    if (entry.type === "diary_entry" && entry.diaryEntryId) {
+                                      setSelectedActivityDiaryEntry({
+                                        id: entry.diaryEntryId,
+                                        bookId: entry.bookId,
+                                        bookTitle: entry.bookTitle,
+                                        bookAuthor: entry.bookAuthor,
+                                        bookCover: entry.cover,
+                                        content: entry.content,
+                                        createdAt: entry.createdAt,
+                                        updatedAt: entry.updatedAt,
+                                        isLiked: entry.isLiked,
+                                        likesCount: entry.likesCount,
+                                      });
+                                    }
+                                  }}
+                                  className={`flex gap-4 rounded-3xl border border-border/70 bg-background/90 p-4 shadow-sm transition hover:-translate-y-1 ${entry.type === "diary_entry" ? "cursor-pointer" : ""
+                                    }`}
+                                >
+                                  <div className="relative h-24 w-24 overflow-hidden rounded-2xl bg-muted">
+                                    <Image
+                                      src={entry.cover}
+                                      alt={entry.detail}
+                                      fill
+                                      className="object-cover"
+                                      sizes="96px"
+                                      quality={100}
+                                      unoptimized={entry.cover?.includes('isbndb.com') || entry.cover?.includes('images.isbndb.com') || entry.cover?.includes('covers.isbndb.com') || true}
+                                    />
+                                  </div>
+                                  <div className="flex flex-1 flex-col justify-between">
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">{entry.timeAgo}</p>
+                                      <p className="text-base font-semibold text-foreground">
+                                        {entry.name} {entry.action}
+                                      </p>
+                                      <p className="text-sm text-muted-foreground">{entry.detail}</p>
+                                    </div>
+                                    {entry.type === "diary_entry" ? (
+                                      <button className="text-sm font-semibold text-primary transition hover:text-primary/80">
+                                        View diary entry
+                                      </button>
+                                    ) : (
+                                      <button className="text-sm font-semibold text-primary transition hover:text-primary/80">
+                                        View details
+                                      </button>
+                                    )}
+                                  </div>
+                                </article>
+                              )
+                            })
+                          }
+                        </div>
+                      )}
+
+                      {/* Diary Entry Dialog for Activity */}
+                      {selectedActivityDiaryEntry && (
+                        <DiaryEntryDialog
+                          open={!!selectedActivityDiaryEntry}
+                          onOpenChange={(open) => {
+                            if (!open) setSelectedActivityDiaryEntry(null);
+                          }}
+                          entry={selectedActivityDiaryEntry ? {
+                            id: selectedActivityDiaryEntry.id,
+                            bookId: selectedActivityDiaryEntry.bookId || null,
+                            bookTitle: selectedActivityDiaryEntry.bookTitle || null,
+                            bookAuthor: selectedActivityDiaryEntry.bookAuthor || null,
+                            bookCover: selectedActivityDiaryEntry.bookCover || null,
+                            subject: null,
+                            content: selectedActivityDiaryEntry.content || "",
+                            createdAt: selectedActivityDiaryEntry.createdAt || "",
+                            updatedAt: selectedActivityDiaryEntry.updatedAt || "",
+                            likes: [],
+                            isLiked: selectedActivityDiaryEntry.isLiked || false,
+                            likesCount: selectedActivityDiaryEntry.likesCount || 0,
+                          } : {
+                            id: "",
+                            content: "",
+                            createdAt: "",
+                            updatedAt: "",
+                            likes: [],
+                            isLiked: false,
+                            likesCount: 0,
+                          }}
+                          username={activeUsername}
+                          isOwnProfile={isOwnProfile}
+                          onLikeChange={async () => {
+                            // Refresh activities after like change
+                            if (activeUsername) {
+                              try {
+                                const response = await fetch(`/api/users/${encodeURIComponent(activeUsername)}`);
+                                if (!response.ok) {
+                                  console.error("Failed to refresh activities after like change");
+                                  return;
+                                }
+                                const data = await response.json();
+                                // Re-transform activities (similar to the main fetch logic)
+                                const isOwnerProfile = isAuthenticated && session?.user?.username === data.user.username;
+
+                                type ActivityFromAPI = {
+                                  _id?: { toString(): string } | string;
+                                  type: string;
+                                  timestamp?: string | Date;
+                                  bookId?: { toString(): string } | string;
+                                  bookTitle?: string;
+                                  bookCover?: string;
+                                  listId?: string;
+                                  listName?: string;
+                                  sharedBy?: { toString(): string } | string;
+                                  sharedByUsername?: string;
+                                  userName?: string;
+                                  rating?: number;
+                                  review?: string;
+                                };
+                                const transformedActivities: ActivityEntry[] = Array.isArray(data.user.recentActivities)
+                                  ? data.user.recentActivities.map((activity: ActivityFromAPI, idx: number) => {
                                     const activityDate = activity.timestamp ? new Date(activity.timestamp) : new Date();
                                     const now = new Date();
                                     const diffMs = now.getTime() - activityDate.getTime();
                                     const diffMins = Math.floor(diffMs / (1000 * 60));
                                     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
                                     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                                    
+
                                     let timeAgo = "";
                                     if (diffMins < 1) timeAgo = "Just now";
                                     else if (diffMins < 60) timeAgo = `${diffMins}m ago`;
@@ -4413,7 +4652,7 @@ export default function UserProfilePage() {
                                     else if (diffDays < 30) timeAgo = `${Math.floor(diffDays / 7)}w ago`;
                                     else if (diffDays < 365) timeAgo = `${Math.floor(diffDays / 30)}mo ago`;
                                     else timeAgo = `${Math.floor(diffDays / 365)}y ago`;
-                                    
+
                                     let action = "";
                                     let detail = "";
                                     if (activity.type === "read") {
@@ -4435,7 +4674,7 @@ export default function UserProfilePage() {
                                       action = "reviewed";
                                       detail = activity.bookTitle || "a book";
                                     }
-                                    
+
                                     return {
                                       id: activity._id?.toString() || `activity-${idx}`,
                                       name: isOwnerProfile ? "You" : data.user.name || "User",
@@ -4446,30 +4685,30 @@ export default function UserProfilePage() {
                                       type: activity.type,
                                     };
                                   })
-                                : [];
-                              
-                              type DiaryEntryFromAPI = {
-                                _id?: { toString(): string } | string;
-                                id?: string;
-                                bookId?: { toString(): string } | string;
-                                bookTitle?: string;
-                                bookAuthor?: string;
-                                bookCover?: string;
-                                subject?: string;
-                                content?: string;
-                                createdAt?: string;
-                                updatedAt?: string;
-                                likes?: unknown[];
-                              };
-                              const diaryActivities: ActivityEntry[] = Array.isArray(data.user.diaryEntries)
-                                ? data.user.diaryEntries.map((entry: DiaryEntryFromAPI, idx: number) => {
+                                  : [];
+
+                                type DiaryEntryFromAPI = {
+                                  _id?: { toString(): string } | string;
+                                  id?: string;
+                                  bookId?: { toString(): string } | string;
+                                  bookTitle?: string;
+                                  bookAuthor?: string;
+                                  bookCover?: string;
+                                  subject?: string;
+                                  content?: string;
+                                  createdAt?: string;
+                                  updatedAt?: string;
+                                  likes?: unknown[];
+                                };
+                                const diaryActivities: ActivityEntry[] = Array.isArray(data.user.diaryEntries)
+                                  ? data.user.diaryEntries.map((entry: DiaryEntryFromAPI, idx: number) => {
                                     const entryDate = entry.updatedAt ? new Date(entry.updatedAt) : (entry.createdAt ? new Date(entry.createdAt) : new Date());
                                     const now = new Date();
                                     const diffMs = now.getTime() - entryDate.getTime();
                                     const diffMins = Math.floor(diffMs / (1000 * 60));
                                     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
                                     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                                    
+
                                     let timeAgo = "";
                                     if (diffMins < 1) timeAgo = "Just now";
                                     else if (diffMins < 60) timeAgo = `${diffMins}m ago`;
@@ -4479,7 +4718,7 @@ export default function UserProfilePage() {
                                     else if (diffDays < 30) timeAgo = `${Math.floor(diffDays / 7)}w ago`;
                                     else if (diffDays < 365) timeAgo = `${Math.floor(diffDays / 30)}mo ago`;
                                     else timeAgo = `${Math.floor(diffDays / 365)}y ago`;
-                                    
+
                                     const entryId = entry._id?.toString() || entry.id || `diary-${idx}`;
                                     const bookId = entry.bookId?.toString() || entry.bookId;
                                     type LikeId = { toString(): string } | string;
@@ -4489,7 +4728,7 @@ export default function UserProfilePage() {
                                       return idStr === session.user.id;
                                     });
                                     const isGeneralEntry = !entry.bookId && !entry.bookTitle;
-                                    
+
                                     return {
                                       id: `diary-activity-${entryId}`,
                                       name: isOwnerProfile ? "You" : data.user.name || "User",
@@ -4510,237 +4749,237 @@ export default function UserProfilePage() {
                                       likesCount: Array.isArray(entry.likes) ? entry.likes.length : 0,
                                     };
                                   })
-                                : [];
-                              
-                              const allActivities = [...transformedActivities, ...diaryActivities].sort((a, b) => {
-                                const getSortValue = (timeAgo: string) => {
-                                  if (timeAgo === "Just now") return 0;
-                                  if (timeAgo.includes("m ago")) return parseInt(timeAgo) || 0;
-                                  if (timeAgo.includes("h ago")) return parseInt(timeAgo) * 60 || 0;
-                                  if (timeAgo === "Yesterday") return 1440;
-                                  if (timeAgo.includes("d ago")) return parseInt(timeAgo) * 1440 || 0;
-                                  if (timeAgo.includes("w ago")) return parseInt(timeAgo) * 10080 || 0;
-                                  if (timeAgo.includes("mo ago")) return parseInt(timeAgo) * 43200 || 0;
-                                  if (timeAgo.includes("y ago")) return parseInt(timeAgo) * 525600 || 0;
-                                  return 999999;
-                                };
-                                return getSortValue(a.timeAgo) - getSortValue(b.timeAgo);
-                              });
-                              
-                              setActivities(allActivities);
-                              
-                              // Update selected entry
-                              const updatedEntry = allActivities.find(a => a.diaryEntryId === selectedActivityDiaryEntry.id);
-                              if (updatedEntry && updatedEntry.type === "diary_entry") {
-                                setSelectedActivityDiaryEntry({
-                                  id: updatedEntry.diaryEntryId!,
-                                  bookId: updatedEntry.bookId,
-                                  bookTitle: updatedEntry.bookTitle,
-                                  bookAuthor: updatedEntry.bookAuthor,
-                                  bookCover: updatedEntry.cover,
-                                  content: updatedEntry.content,
-                                  createdAt: updatedEntry.createdAt,
-                                  updatedAt: updatedEntry.updatedAt,
-                                  isLiked: updatedEntry.isLiked,
-                                  likesCount: updatedEntry.likesCount,
+                                  : [];
+
+                                const allActivities = [...transformedActivities, ...diaryActivities].sort((a, b) => {
+                                  const getSortValue = (timeAgo: string) => {
+                                    if (timeAgo === "Just now") return 0;
+                                    if (timeAgo.includes("m ago")) return parseInt(timeAgo) || 0;
+                                    if (timeAgo.includes("h ago")) return parseInt(timeAgo) * 60 || 0;
+                                    if (timeAgo === "Yesterday") return 1440;
+                                    if (timeAgo.includes("d ago")) return parseInt(timeAgo) * 1440 || 0;
+                                    if (timeAgo.includes("w ago")) return parseInt(timeAgo) * 10080 || 0;
+                                    if (timeAgo.includes("mo ago")) return parseInt(timeAgo) * 43200 || 0;
+                                    if (timeAgo.includes("y ago")) return parseInt(timeAgo) * 525600 || 0;
+                                    return 999999;
+                                  };
+                                  return getSortValue(a.timeAgo) - getSortValue(b.timeAgo);
                                 });
+
+                                setActivities(allActivities);
+
+                                // Update selected entry
+                                const updatedEntry = allActivities.find(a => a.diaryEntryId === selectedActivityDiaryEntry.id);
+                                if (updatedEntry && updatedEntry.type === "diary_entry") {
+                                  setSelectedActivityDiaryEntry({
+                                    id: updatedEntry.diaryEntryId!,
+                                    bookId: updatedEntry.bookId,
+                                    bookTitle: updatedEntry.bookTitle,
+                                    bookAuthor: updatedEntry.bookAuthor,
+                                    bookCover: updatedEntry.cover,
+                                    content: updatedEntry.content,
+                                    createdAt: updatedEntry.createdAt,
+                                    updatedAt: updatedEntry.updatedAt,
+                                    isLiked: updatedEntry.isLiked,
+                                    likesCount: updatedEntry.likesCount,
+                                  });
+                                }
+                              } catch (error) {
+                                console.error("Error refreshing activities:", error);
                               }
-                          } catch (error) {
-                            console.error("Error refreshing activities:", error);
+                            }
+                          }}
+                        />
+                      )}
+                    </div>
+                  ) : activeTab === "Authors" ? (
+                    <AuthorsSection authors={authorStats} page={authorsPage} pageSize={isMobile ? 8 : AUTHORS_PAGE_SIZE} onPageChange={setAuthorsPage} bookshelfBooks={bookshelfBooks} isMobile={isMobile} />
+                  ) : activeTab === "Bookshelf" ? (
+                    <BookshelfSection
+                      books={bookshelfBooks}
+                      page={bookshelfPage}
+                      pageSize={isMobile ? 8 : BOOKSHELF_PAGE_SIZE}
+                      onPageChange={setBookshelfPage}
+                      isMobile={isMobile}
+                    />
+                  ) : activeTab === "Likes" ? (
+                    <LikesSection books={likedBooks} page={likesPage} pageSize={isMobile ? 8 : LIKES_PAGE_SIZE} onPageChange={setLikesPage} isMobile={isMobile} />
+                  ) : activeTab === "Lists" ? (
+                    <ListsCarousel
+                      lists={readingLists}
+                      canEdit={isOwnProfile}
+                      username={activeUsername}
+                      page={listsPage}
+                      pageSize={isMobile ? 8 : LISTS_PAGE_SIZE}
+                      onPageChange={setListsPage}
+                      isMobile={isMobile}
+                      onListCreated={async () => {
+                        // Refresh lists after creation
+                        try {
+                          const response = await fetch(`/api/users/${encodeURIComponent(activeUsername)}/lists`);
+                          if (response.ok) {
+                            const data = await response.json();
+                            type ListBookInList = {
+                              volumeInfo?: {
+                                imageLinks?: {
+                                  thumbnail?: string;
+                                  smallThumbnail?: string;
+                                };
+                              };
+                            };
+                            type ListFromAPI = {
+                              _id?: { toString(): string } | string;
+                              id?: string;
+                              title?: string;
+                              description?: string;
+                              books?: ListBookInList[];
+                              booksCount?: number;
+                              updatedAt?: string | Date;
+                              createdAt?: string | Date;
+                            };
+                            const transformedLists: ReadingList[] = Array.isArray(data.lists)
+                              ? data.lists.map((list: ListFromAPI, idx: number) => {
+                                const updatedAt = list.updatedAt ? new Date(list.updatedAt) : new Date(list.createdAt || Date.now());
+                                const now = new Date();
+                                const diffMs = now.getTime() - updatedAt.getTime();
+                                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                                let updatedAgo = "";
+                                if (diffDays === 0) updatedAgo = "Today";
+                                else if (diffDays === 1) updatedAgo = "1d";
+                                else if (diffDays < 7) updatedAgo = `${diffDays}d`;
+                                else if (diffDays < 30) updatedAgo = `${Math.floor(diffDays / 7)}w`;
+                                else if (diffDays < 365) updatedAgo = `${Math.floor(diffDays / 30)}mo`;
+                                else updatedAgo = `${Math.floor(diffDays / 365)}y`;
+
+                                // Get cover from first book if available
+                                let cover = "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80";
+                                if (Array.isArray(list.books) && list.books.length > 0) {
+                                  const firstBook = list.books[0];
+                                  if (firstBook?.volumeInfo?.imageLinks?.thumbnail) {
+                                    cover = firstBook.volumeInfo.imageLinks.thumbnail;
+                                  } else if (firstBook?.volumeInfo?.imageLinks?.smallThumbnail) {
+                                    cover = firstBook.volumeInfo.imageLinks.smallThumbnail;
+                                  }
+                                }
+
+                                return {
+                                  id: list.id || list._id?.toString() || `list-${idx}`,
+                                  title: list.title || "Untitled List",
+                                  booksCount: (list.booksCount ?? 0) || (Array.isArray(list.books) ? list.books.length : 0),
+                                  updatedAgo,
+                                  cover,
+                                  description: list.description,
+                                  books: Array.isArray(list.books) ? list.books.slice(0, 3) : [], // Store first 3 books for display
+                                };
+                              })
+                              : [];
+                            setReadingLists(transformedLists);
                           }
+                        } catch (error) {
+                          console.error("Failed to refresh lists:", error);
+                        }
+                      }}
+                      onListDeleted={async () => {
+                        // Refresh lists after deletion
+                        try {
+                          const response = await fetch(`/api/users/${encodeURIComponent(activeUsername)}/lists`);
+                          if (response.ok) {
+                            const data = await response.json();
+                            type ListBookInList = {
+                              volumeInfo?: {
+                                imageLinks?: {
+                                  thumbnail?: string;
+                                  smallThumbnail?: string;
+                                };
+                              };
+                            };
+                            type ListFromAPI = {
+                              _id?: { toString(): string } | string;
+                              id?: string;
+                              title?: string;
+                              description?: string;
+                              books?: ListBookInList[];
+                              booksCount?: number;
+                              updatedAt?: string | Date;
+                              createdAt?: string | Date;
+                            };
+                            const transformedLists: ReadingList[] = Array.isArray(data.lists)
+                              ? data.lists.map((list: ListFromAPI, idx: number) => {
+                                const updatedAt = list.updatedAt ? new Date(list.updatedAt) : new Date(list.createdAt || Date.now());
+                                const now = new Date();
+                                const diffMs = now.getTime() - updatedAt.getTime();
+                                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                                let updatedAgo = "";
+                                if (diffDays === 0) updatedAgo = "Today";
+                                else if (diffDays === 1) updatedAgo = "1d";
+                                else if (diffDays < 7) updatedAgo = `${diffDays}d`;
+                                else if (diffDays < 30) updatedAgo = `${Math.floor(diffDays / 7)}w`;
+                                else if (diffDays < 365) updatedAgo = `${Math.floor(diffDays / 30)}mo`;
+                                else updatedAgo = `${Math.floor(diffDays / 365)}y`;
+
+                                // Get cover from first book if available
+                                let cover = "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80";
+                                if (Array.isArray(list.books) && list.books.length > 0) {
+                                  const firstBook = list.books[0];
+                                  if (firstBook?.volumeInfo?.imageLinks?.thumbnail) {
+                                    cover = firstBook.volumeInfo.imageLinks.thumbnail;
+                                  } else if (firstBook?.volumeInfo?.imageLinks?.smallThumbnail) {
+                                    cover = firstBook.volumeInfo.imageLinks.smallThumbnail;
+                                  }
+                                }
+
+                                return {
+                                  id: list.id || list._id?.toString() || `list-${idx}`,
+                                  title: list.title || "Untitled List",
+                                  booksCount: (list.booksCount ?? 0) || (Array.isArray(list.books) ? list.books.length : 0),
+                                  updatedAgo,
+                                  cover,
+                                  description: list.description,
+                                  books: Array.isArray(list.books) ? list.books.slice(0, 3) : [], // Store first 3 books for display
+                                };
+                              })
+                              : [];
+                            setReadingLists(transformedLists);
+                          }
+                        } catch (error) {
+                          console.error("Failed to refresh lists:", error);
                         }
                       }}
                     />
+                  ) : activeTab === "DNF" ? (
+                    <TbrSection books={tbrBooks} page={tbrPage} pageSize={isMobile ? 8 : TBR_PAGE_SIZE} onPageChange={setTbrPage} isMobile={isMobile} username={activeUsername} />
+                  ) : activeTab === "Diary" ? (
+                    <DiarySection
+                      entries={diaryEntries}
+                      isOwnProfile={isOwnProfile}
+                      username={activeUsername}
+                      page={diaryPage}
+                      pageSize={isMobile ? 8 : DIARY_PAGE_SIZE}
+                      onPageChange={setDiaryPage}
+                      isMobile={isMobile}
+                      onEntryClick={() => {
+                        // Refresh diary entries after interaction
+                        if (activeUsername) {
+                          fetchDiaryEntries(activeUsername);
+                        }
+                      }}
+                      onRefresh={async () => {
+                        // Refresh diary entries after deletion
+                        if (activeUsername) {
+                          await fetchDiaryEntries(activeUsername);
+                        }
+                      }}
+                    />
+                  ) : (
+                    <TabPlaceholder label={activeTab} />
                   )}
-                </div>
-              ) : activeTab === "Authors" ? (
-                <AuthorsSection authors={authorStats} page={authorsPage} pageSize={isMobile ? 8 : AUTHORS_PAGE_SIZE} onPageChange={setAuthorsPage} bookshelfBooks={bookshelfBooks} isMobile={isMobile} />
-              ) : activeTab === "Bookshelf" ? (
-                <BookshelfSection
-                  books={bookshelfBooks}
-                  page={bookshelfPage}
-                  pageSize={isMobile ? 8 : BOOKSHELF_PAGE_SIZE}
-                  onPageChange={setBookshelfPage}
-                  isMobile={isMobile}
-                />
-              ) : activeTab === "Likes" ? (
-                <LikesSection books={likedBooks} page={likesPage} pageSize={isMobile ? 8 : LIKES_PAGE_SIZE} onPageChange={setLikesPage} isMobile={isMobile} />
-              ) : activeTab === "Lists" ? (
-                <ListsCarousel 
-                  lists={readingLists} 
-                  canEdit={isOwnProfile} 
-                  username={activeUsername}
-                  page={listsPage}
-                  pageSize={isMobile ? 8 : LISTS_PAGE_SIZE}
-                  onPageChange={setListsPage}
-                  isMobile={isMobile}
-                  onListCreated={async () => {
-                    // Refresh lists after creation
-                    try {
-                      const response = await fetch(`/api/users/${encodeURIComponent(activeUsername)}/lists`);
-                      if (response.ok) {
-                        const data = await response.json();
-                        type ListBookInList = {
-                          volumeInfo?: {
-                            imageLinks?: {
-                              thumbnail?: string;
-                              smallThumbnail?: string;
-                            };
-                          };
-                        };
-                        type ListFromAPI = {
-                          _id?: { toString(): string } | string;
-                          id?: string;
-                          title?: string;
-                          description?: string;
-                          books?: ListBookInList[];
-                          booksCount?: number;
-                          updatedAt?: string | Date;
-                          createdAt?: string | Date;
-                        };
-                        const transformedLists: ReadingList[] = Array.isArray(data.lists)
-                          ? data.lists.map((list: ListFromAPI, idx: number) => {
-                              const updatedAt = list.updatedAt ? new Date(list.updatedAt) : new Date(list.createdAt || Date.now());
-                              const now = new Date();
-                              const diffMs = now.getTime() - updatedAt.getTime();
-                              const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                              let updatedAgo = "";
-                              if (diffDays === 0) updatedAgo = "Today";
-                              else if (diffDays === 1) updatedAgo = "1d";
-                              else if (diffDays < 7) updatedAgo = `${diffDays}d`;
-                              else if (diffDays < 30) updatedAgo = `${Math.floor(diffDays / 7)}w`;
-                              else if (diffDays < 365) updatedAgo = `${Math.floor(diffDays / 30)}mo`;
-                              else updatedAgo = `${Math.floor(diffDays / 365)}y`;
-                              
-                              // Get cover from first book if available
-                              let cover = "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80";
-                              if (Array.isArray(list.books) && list.books.length > 0) {
-                                const firstBook = list.books[0];
-                                if (firstBook?.volumeInfo?.imageLinks?.thumbnail) {
-                                  cover = firstBook.volumeInfo.imageLinks.thumbnail;
-                                } else if (firstBook?.volumeInfo?.imageLinks?.smallThumbnail) {
-                                  cover = firstBook.volumeInfo.imageLinks.smallThumbnail;
-                                }
-                              }
-                              
-                              return {
-                                id: list.id || list._id?.toString() || `list-${idx}`,
-                                title: list.title || "Untitled List",
-                                booksCount: (list.booksCount ?? 0) || (Array.isArray(list.books) ? list.books.length : 0),
-                                updatedAgo,
-                                cover,
-                                description: list.description,
-                                books: Array.isArray(list.books) ? list.books.slice(0, 3) : [], // Store first 3 books for display
-                              };
-                            })
-                          : [];
-                        setReadingLists(transformedLists);
-                      }
-                    } catch (error) {
-                      console.error("Failed to refresh lists:", error);
-                    }
-                  }}
-                  onListDeleted={async () => {
-                    // Refresh lists after deletion
-                    try {
-                      const response = await fetch(`/api/users/${encodeURIComponent(activeUsername)}/lists`);
-                      if (response.ok) {
-                        const data = await response.json();
-                        type ListBookInList = {
-                          volumeInfo?: {
-                            imageLinks?: {
-                              thumbnail?: string;
-                              smallThumbnail?: string;
-                            };
-                          };
-                        };
-                        type ListFromAPI = {
-                          _id?: { toString(): string } | string;
-                          id?: string;
-                          title?: string;
-                          description?: string;
-                          books?: ListBookInList[];
-                          booksCount?: number;
-                          updatedAt?: string | Date;
-                          createdAt?: string | Date;
-                        };
-                        const transformedLists: ReadingList[] = Array.isArray(data.lists)
-                          ? data.lists.map((list: ListFromAPI, idx: number) => {
-                              const updatedAt = list.updatedAt ? new Date(list.updatedAt) : new Date(list.createdAt || Date.now());
-                              const now = new Date();
-                              const diffMs = now.getTime() - updatedAt.getTime();
-                              const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                              let updatedAgo = "";
-                              if (diffDays === 0) updatedAgo = "Today";
-                              else if (diffDays === 1) updatedAgo = "1d";
-                              else if (diffDays < 7) updatedAgo = `${diffDays}d`;
-                              else if (diffDays < 30) updatedAgo = `${Math.floor(diffDays / 7)}w`;
-                              else if (diffDays < 365) updatedAgo = `${Math.floor(diffDays / 30)}mo`;
-                              else updatedAgo = `${Math.floor(diffDays / 365)}y`;
-                              
-                              // Get cover from first book if available
-                              let cover = "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80";
-                              if (Array.isArray(list.books) && list.books.length > 0) {
-                                const firstBook = list.books[0];
-                                if (firstBook?.volumeInfo?.imageLinks?.thumbnail) {
-                                  cover = firstBook.volumeInfo.imageLinks.thumbnail;
-                                } else if (firstBook?.volumeInfo?.imageLinks?.smallThumbnail) {
-                                  cover = firstBook.volumeInfo.imageLinks.smallThumbnail;
-                                }
-                              }
-                              
-                              return {
-                                id: list.id || list._id?.toString() || `list-${idx}`,
-                                title: list.title || "Untitled List",
-                                booksCount: (list.booksCount ?? 0) || (Array.isArray(list.books) ? list.books.length : 0),
-                                updatedAgo,
-                                cover,
-                                description: list.description,
-                                books: Array.isArray(list.books) ? list.books.slice(0, 3) : [], // Store first 3 books for display
-                              };
-                            })
-                          : [];
-                        setReadingLists(transformedLists);
-                      }
-                    } catch (error) {
-                      console.error("Failed to refresh lists:", error);
-                    }
-                  }}
-                />
-              ) : activeTab === "DNF" ? (
-                <TbrSection books={tbrBooks} page={tbrPage} pageSize={isMobile ? 8 : TBR_PAGE_SIZE} onPageChange={setTbrPage} isMobile={isMobile} />
-              ) : activeTab === "Diary" ? (
-                <DiarySection
-                  entries={diaryEntries}
-                  isOwnProfile={isOwnProfile}
-                  username={activeUsername}
-                  page={diaryPage}
-                  pageSize={isMobile ? 8 : DIARY_PAGE_SIZE}
-                  onPageChange={setDiaryPage}
-                  isMobile={isMobile}
-                  onEntryClick={() => {
-                    // Refresh diary entries after interaction
-                    if (activeUsername) {
-                      fetchDiaryEntries(activeUsername);
-                    }
-                  }}
-                  onRefresh={async () => {
-                    // Refresh diary entries after deletion
-                    if (activeUsername) {
-                      await fetchDiaryEntries(activeUsername);
-                    }
-                  }}
-                />
+                </>
               ) : (
-                <TabPlaceholder label={activeTab} />
+                <>
+                  <Dock items={dockItems} activeLabel={activeTab} />
+                  <AuthRequiredBanner onSignIn={handleAuthPrompt} />
+                </>
               )}
-            </>
-          ) : (
-            <>
-              <Dock items={dockItems} activeLabel={activeTab} />
-              <AuthRequiredBanner onSignIn={handleAuthPrompt} />
-            </>
-          )}
             </div>
           </div>
         </div>

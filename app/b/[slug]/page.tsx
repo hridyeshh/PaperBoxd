@@ -18,6 +18,7 @@ import { BookCarousel, BookCarouselBook } from "@/components/ui/home/book-carous
 import { DiaryEditorDialog } from "@/components/ui/dialogs/diary-editor-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/primitives/dialog";
 import { Input } from "@/components/ui/primitives/input";
+import { ReadingProgress } from "@/components/ui/features/reading-progress";
 
 interface BookDetails {
   id: string;
@@ -85,6 +86,10 @@ export default function BookDetailPage() {
   const [isInBookshelf, setIsInBookshelf] = React.useState(false);
   const [isInTBR, setIsInTBR] = React.useState(false);
   const [isUpdating, setIsUpdating] = React.useState(false);
+  
+  // Reading progress
+  const [pagesRead, setPagesRead] = React.useState(0);
+  const [isUpdatingProgress, setIsUpdatingProgress] = React.useState(false);
   
   // Sign-up prompt dialog state
   const [showSignupPrompt, setShowSignupPrompt] = React.useState(false);
@@ -177,18 +182,21 @@ export default function BookDetailPage() {
       setIsInBookshelf(false);
       setIsInTBR(false);
       setExistingDiaryContent("");
+      setPagesRead(0);
       return;
     }
 
     const checkBookStatus = async () => {
       try {
         const username = session.user.username;
+        const bookId = book._id || book.bookId;
         
-        // Check all collections in parallel
-        const [likedRes, bookshelfRes, tbrRes] = await Promise.all([
+        // Check all collections in parallel, including reading progress
+        const [likedRes, bookshelfRes, tbrRes, progressRes] = await Promise.all([
           fetch(`/api/users/${encodeURIComponent(username)}/books?type=liked`),
           fetch(`/api/users/${encodeURIComponent(username)}/books?type=bookshelf`),
           fetch(`/api/users/${encodeURIComponent(username)}/books?type=tbr`),
+          bookId ? fetch(`/api/users/${encodeURIComponent(username)}/reading-progress?bookId=${encodeURIComponent(bookId as string)}`) : null,
         ]);
 
         type UserBook = {
@@ -224,8 +232,9 @@ export default function BookDetailPage() {
           setIsInBookshelf(isInShelf || false);
         }
 
+        let tbrData: { books?: UserBook[] } = { books: [] };
         if (tbrRes.ok) {
-          const tbrData = await tbrRes.json();
+          tbrData = await tbrRes.json();
           const isInTbr = tbrData.books?.some((b: UserBook) => {
             const bookId = book._id || book.bookId;
             return (
@@ -235,6 +244,33 @@ export default function BookDetailPage() {
             );
           });
           setIsInTBR(isInTbr || false);
+        }
+
+        // Get reading progress
+        if (progressRes && progressRes.ok) {
+          const progressData = await progressRes.json();
+          const fetchedPagesRead = progressData.pagesRead || 0;
+          setPagesRead(fetchedPagesRead);
+          
+          // Sync DNF state: if pages > 0, book should be in DNF
+          // The API automatically adds to DNF when progress is set,
+          // so we need to ensure UI state matches
+          if (fetchedPagesRead > 0) {
+            // Book should be in DNF if pages > 0
+            // Check if it's actually in TBR (it should be if API added it)
+            const isInTbr = tbrData.books?.some((b: UserBook) => {
+              const bookId = book._id || book.bookId;
+              return (
+                (bookId && (b.bookId?.toString() === bookId.toString() || b.bookId === bookId)) ||
+                (book.id && (b.isbndbId === book.id || b.openLibraryId === book.id)) ||
+                b.title?.toLowerCase() === book.volumeInfo.title?.toLowerCase()
+              );
+            });
+            setIsInTBR(isInTbr || false);
+          } else if (fetchedPagesRead === 0) {
+            // If pages = 0, book should not be in DNF
+            setIsInTBR(false);
+          }
         }
       } catch (err) {
         console.error("Error checking book status:", err);
@@ -736,6 +772,67 @@ export default function BookDetailPage() {
               >
                 {isAuthenticated && isInTBR ? "In DNF" : "Add to DNF"}
               </Button>
+
+              {/* Reading Progress */}
+              {isAuthenticated && book.volumeInfo.pageCount && (
+                <div className="flex justify-center mt-4">
+                  <ReadingProgress
+                    totalPages={book.volumeInfo.pageCount}
+                    pagesRead={pagesRead}
+                    onProgressChange={async (newPagesRead) => {
+                      if (!session?.user?.username || !book || isUpdatingProgress) return;
+                      
+                      setIsUpdatingProgress(true);
+                      try {
+                        const bookId = book._id || book.bookId;
+                        if (!bookId) return;
+
+                        const response = await fetch(
+                          `/api/users/${encodeURIComponent(session.user.username)}/reading-progress`,
+                          {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              bookId: bookId,
+                              pagesRead: newPagesRead,
+                            }),
+                          }
+                        );
+
+                        if (response.ok) {
+                          setPagesRead(newPagesRead);
+                          const data = await response.json();
+                          
+                          // Update DNF state based on pages read
+                          // API automatically adds/removes from DNF, so we just need to sync UI state
+                          if (newPagesRead > 0) {
+                            // Book should be in DNF when pages > 0
+                            if (!isInTBR) {
+                              setIsInTBR(true);
+                            }
+                          } else if (newPagesRead === 0) {
+                            // Book should not be in DNF when pages = 0
+                            if (isInTBR) {
+                              setIsInTBR(false);
+                            }
+                          }
+                          
+                          if (data.isComplete) {
+                            toast.success("Book completed! 🎉");
+                          }
+                        }
+                      } catch (err) {
+                        console.error("Error updating reading progress:", err);
+                        toast.error("Failed to update reading progress");
+                      } finally {
+                        setIsUpdatingProgress(false);
+                      }
+                    }}
+                    size={100}
+                    strokeWidth={6}
+                  />
+                </div>
+              )}
             </div>
             
             {/* Sign-up Prompt Dialog */}

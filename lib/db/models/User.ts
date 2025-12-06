@@ -87,6 +87,12 @@ export interface IAuthorStats {
   favoriteBook?: mongoose.Types.ObjectId;
 }
 
+export interface IReadingProgress {
+  bookId: mongoose.Types.ObjectId;
+  pagesRead: number;
+  updatedAt: Date;
+}
+
 export interface IUser extends Document {
   // Authentication & Basic Profile
   email: string;
@@ -114,6 +120,7 @@ export interface IUser extends Document {
   likedBooks: ILikedBook[]; // Starred/saved books
   tbrBooks: ITbrBook[]; // To be read
   currentlyReading: IBookReference[];
+  readingProgress: IReadingProgress[]; // Track reading progress (pages read) for each book
 
   // Reading Lists
   readingLists: IReadingList[];
@@ -255,6 +262,12 @@ const AuthorStatsSchema = new Schema({
   favoriteBook: { type: Schema.Types.ObjectId, ref: "Book" },
 });
 
+const ReadingProgressSchema = new Schema({
+  bookId: { type: Schema.Types.ObjectId, ref: "Book", required: true },
+  pagesRead: { type: Number, required: true, min: 0 },
+  updatedAt: { type: Date, default: Date.now },
+});
+
 const UserSchema = new Schema<IUser>(
   {
     // Authentication & Basic Profile
@@ -304,6 +317,7 @@ const UserSchema = new Schema<IUser>(
     likedBooks: [LikedBookSchema],
     tbrBooks: [TbrBookSchema],
     currentlyReading: [BookReferenceSchema],
+    readingProgress: [ReadingProgressSchema],
 
     // Reading Lists
     readingLists: [ReadingListSchema],

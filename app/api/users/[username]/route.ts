@@ -6,6 +6,9 @@ import Book from "@/lib/db/models/Book"; // Import Book model to register it wit
 import { auth } from "@/lib/auth";
 import mongoose from "mongoose";
 
+// Enable caching for this route
+export const revalidate = 30; // Revalidate every 30 seconds
+
 // Type for activity from MongoDB (includes _id and createdAt)
 type ActivityFromDB = IActivity & {
   _id?: mongoose.Types.ObjectId | string;
@@ -60,55 +63,76 @@ export async function GET(
     const currentUser = session?.user?.email ? await User.findOne({ email: session.user.email }).select("username").lean() : null;
     const isOwner = currentUser?.username === username;
 
-    // Find user by username with optional populate
-    // IMPORTANT: Don't use .lean() yet - we need to check the raw Mongoose document first
-    let user;
+    // Find user by username - optimized query with lean() and selective field projection
+    let userPlain;
     try {
-      user = await User.findOne({ username })
-        .select("-password"); // Exclude password
+      // Use lean() for better performance and select only needed fields
+      userPlain = await User.findOne({ username })
+        .select("-password -__v") // Exclude password and version
+        .lean();
       
-      // Try to populate readingLists.books if user exists
-      if (user) {
+      // Populate readingLists.books if needed (only if user has reading lists)
+      if (userPlain?.readingLists && Array.isArray(userPlain.readingLists) && userPlain.readingLists.length > 0) {
         try {
-          await user.populate({
-          path: "readingLists.books",
-          select: "volumeInfo.title volumeInfo.authors volumeInfo.imageLinks",
-          model: "Book",
-        });
-    } catch (populateError) {
+          // Populate reading lists books in batch
+          const populatedLists = await Promise.all(
+            userPlain.readingLists.map(async (list: ReadingListWithAccess) => {
+              if (list.books && Array.isArray(list.books) && list.books.length > 0) {
+                try {
+                  // Convert book IDs to ObjectIds
+                  const bookIds = list.books.map((id: mongoose.Types.ObjectId | string) => {
+                    if (typeof id === 'string') {
+                      return new mongoose.Types.ObjectId(id);
+                    }
+                    return id;
+                  });
+                  
+                  const books = await Book.find({
+                    _id: { $in: bookIds }
+                  })
+                    .select("volumeInfo.title volumeInfo.authors volumeInfo.imageLinks")
+                    .lean();
+                  
+                  return {
+                    ...list,
+                    books: books.map((b: { _id?: mongoose.Types.ObjectId; volumeInfo?: { title?: string; authors?: string[]; imageLinks?: { thumbnail?: string; smallThumbnail?: string; medium?: string } } }) => ({
+                      _id: b._id,
+                      volumeInfo: b.volumeInfo
+                    }))
+                  };
+                } catch (bookError) {
+                  console.warn("Failed to populate books for list:", bookError);
+                  return list; // Return original list if population fails
+                }
+              }
+              return list;
+            })
+          );
+          userPlain.readingLists = populatedLists;
+        } catch (populateError) {
           console.warn("Failed to populate readingLists.books:", populateError);
         }
       }
     } catch (error) {
       console.error("Error finding user:", error);
-      user = null;
+      userPlain = null;
     }
-    
-    // Convert to plain object AFTER all operations
-    const userPlain = user ? user.toObject() : null;
 
-    if (!user || !userPlain) {
+    if (!userPlain) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Debug: Log raw user data from database BEFORE processing
-    console.log(`[User API] ✅ Found user: ${userPlain.username || userPlain.email}`);
-    console.log(`[User API] Raw user._id:`, userPlain._id?.toString());
-    console.log(`[User API] Raw followers (type: ${typeof userPlain.followers}, isArray: ${Array.isArray(userPlain.followers)}, length: ${Array.isArray(userPlain.followers) ? userPlain.followers.length : 'N/A'}):`, JSON.stringify(userPlain.followers));
-    console.log(`[User API] Raw following (type: ${typeof userPlain.following}, isArray: ${Array.isArray(userPlain.following)}, length: ${Array.isArray(userPlain.following) ? userPlain.following.length : 'N/A'}):`, JSON.stringify(userPlain.following));
-    console.log(`[User API] Raw bookshelf (type: ${typeof userPlain.bookshelf}, isArray: ${Array.isArray(userPlain.bookshelf)}, length: ${Array.isArray(userPlain.bookshelf) ? userPlain.bookshelf.length : 'N/A'}):`, Array.isArray(userPlain.bookshelf) ? `${userPlain.bookshelf.length} items` : 'not an array');
-    console.log(`[User API] Raw avatar:`, userPlain.avatar ? `${userPlain.avatar.substring(0, 50)}...` : 'null/undefined');
-    console.log(`[User API] User object keys:`, Object.keys(userPlain).slice(0, 20));
+    // Removed excessive logging for performance
 
-    // Update lastActive separately using updateOne
-    try {
-      await User.updateOne(
-        { _id: user._id },
+    // Update lastActive separately using updateOne (non-blocking)
+    if (userPlain?._id) {
+      User.updateOne(
+        { _id: userPlain._id },
         { $set: { lastActive: new Date() } }
-      );
-    } catch (saveError) {
-      console.warn("Failed to update lastActive:", saveError);
-      // Continue even if save fails - this is not critical
+      ).catch((saveError) => {
+        console.warn("Failed to update lastActive:", saveError);
+        // Continue even if save fails - this is not critical
+      });
     }
 
     // Use userPlain (plain object) instead of user (Mongoose document)
@@ -116,13 +140,38 @@ export async function GET(
     const activities = (Array.isArray(userPlain.activities) ? userPlain.activities : []) as ActivityFromDB[];
     const followers = Array.isArray(userPlain.followers) ? userPlain.followers : [];
     const following = Array.isArray(userPlain.following) ? userPlain.following : [];
-    
-    console.log(`[User API] After extraction - followers: ${followers.length}, following: ${following.length}, bookshelf: ${Array.isArray(userPlain.bookshelf) ? userPlain.bookshelf.length : 0}`);
 
-    // Populate activities with book information
-    const activitiesWithBooks = await Promise.all(
-      activities.slice(-20).reverse().map(async (activity): Promise<ActivityWithBook> => {
-        // Ensure timestamp is preserved (don't default to new Date() as it creates "Just now")
+    // Populate activities with book information - optimized batch query
+    const activitiesWithBooks = await (async () => {
+      const recentActivities = activities.slice(-20).reverse();
+      
+      // Extract all unique book IDs
+      const bookIds = recentActivities
+        .map(a => a.bookId?.toString())
+        .filter((id): id is string => Boolean(id));
+      
+      // Batch fetch all books in one query
+      const booksMap = new Map<string, any>();
+      if (bookIds.length > 0) {
+        try {
+          const books = await Book.find({
+            _id: { $in: bookIds.map(id => new mongoose.Types.ObjectId(id)) }
+          })
+            .select('volumeInfo.title volumeInfo.imageLinks')
+            .lean();
+          
+          books.forEach(book => {
+            if (book._id) {
+              booksMap.set(book._id.toString(), book);
+            }
+          });
+        } catch (error) {
+          console.warn('Failed to batch fetch books for activities:', error);
+        }
+      }
+      
+      // Map activities to include book data
+      return recentActivities.map((activity): ActivityWithBook => {
         const activityData: ActivityWithBook = {
           _id: activity._id,
           type: activity.type,
@@ -132,26 +181,35 @@ export async function GET(
         };
         
         if (activity.bookId) {
-          try {
-            // Convert bookId to ObjectId if it's a string
-            const bookId = activity.bookId?.toString ? activity.bookId.toString() : activity.bookId;
-            const book = await Book.findById(bookId).lean();
-            if (book) {
-              activityData.bookTitle = book.volumeInfo?.title || undefined;
-              activityData.bookCover = book.volumeInfo?.imageLinks?.thumbnail || 
-                        book.volumeInfo?.imageLinks?.smallThumbnail ||
-                        book.volumeInfo?.imageLinks?.medium ||
-                        undefined;
-            }
-          } catch (error) {
-            console.warn(`Failed to fetch book for activity ${activity._id}:`, error);
+          const bookId = activity.bookId?.toString ? activity.bookId.toString() : activity.bookId;
+          const book = booksMap.get(bookId);
+          if (book) {
+            activityData.bookTitle = book.volumeInfo?.title || undefined;
+            activityData.bookCover = book.volumeInfo?.imageLinks?.thumbnail || 
+                      book.volumeInfo?.imageLinks?.smallThumbnail ||
+                      book.volumeInfo?.imageLinks?.medium ||
+                      undefined;
           }
         }
         return activityData;
-      })
-    );
+      });
+    })();
 
-    return NextResponse.json({
+    // Create a map for reading progress lookup (O(1) instead of O(n))
+    const readingProgressMap = new Map<string, { pagesRead: number; updatedAt: Date | null }>();
+    if (Array.isArray(userPlain.readingProgress)) {
+      userPlain.readingProgress.forEach((p: { bookId?: mongoose.Types.ObjectId | string; pagesRead?: number; updatedAt?: Date }) => {
+        const bookId = p.bookId?.toString() || (typeof p.bookId === 'string' ? p.bookId : null);
+        if (bookId) {
+          readingProgressMap.set(bookId, {
+            pagesRead: p.pagesRead || 0,
+            updatedAt: p.updatedAt || null,
+          });
+        }
+      });
+    }
+
+    const response = NextResponse.json({
       user: {
         id: userPlain._id?.toString() || userPlain._id,
         username: userPlain.username,
@@ -170,7 +228,19 @@ export async function GET(
         favoriteBooks: Array.isArray(userPlain.favoriteBooks) ? userPlain.favoriteBooks : [],
         bookshelf: Array.isArray(userPlain.bookshelf) ? userPlain.bookshelf : [],
         likedBooks: Array.isArray(userPlain.likedBooks) ? userPlain.likedBooks : [],
-        tbrBooks: Array.isArray(userPlain.tbrBooks) ? userPlain.tbrBooks : [],
+        // Enrich tbrBooks with reading progress data (optimized with Map lookup)
+        tbrBooks: Array.isArray(userPlain.tbrBooks) 
+          ? userPlain.tbrBooks.map((tbrBook: { bookId?: mongoose.Types.ObjectId | string; [key: string]: unknown }) => {
+              const tbrBookId = tbrBook.bookId?.toString() || (typeof tbrBook.bookId === 'string' ? tbrBook.bookId : null);
+              const progress = tbrBookId ? readingProgressMap.get(tbrBookId) : null;
+              
+              return {
+                ...tbrBook,
+                pagesRead: progress?.pagesRead || 0,
+                progressUpdatedAt: progress?.updatedAt || null,
+              };
+            })
+          : [],
         currentlyReading: Array.isArray(userPlain.currentlyReading) ? userPlain.currentlyReading : [],
         // Filter reading lists: if not owner, return public lists OR private lists the user has access to
         readingLists: Array.isArray(userPlain.readingLists) 
@@ -212,6 +282,12 @@ export async function GET(
         lastActive: userPlain.lastActive,
       },
     });
+
+    // Add caching headers for better performance
+    // Cache for 30 seconds, revalidate in background
+    response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+    
+    return response;
   } catch (error) {
     console.error("User fetch error:", error);
     if (error instanceof Error) {
