@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Share2, Download, Loader2 } from "lucide-react";
+import { Share2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { toBlob } from "html-to-image";
 import { Button } from "@/components/ui/primitives/button";
