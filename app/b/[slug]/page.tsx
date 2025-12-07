@@ -16,8 +16,9 @@ import { stripHtmlTags, cn, DEFAULT_AVATAR } from "@/lib/utils";
 import { SignupPromptDialog } from "@/components/ui/dialogs/signup-prompt-dialog";
 import { BookCarousel, BookCarouselBook } from "@/components/ui/home/book-carousel";
 import { DiaryEditorDialog } from "@/components/ui/dialogs/diary-editor-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/primitives/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/primitives/dialog";
 import { Input } from "@/components/ui/primitives/input";
+import { BookShareButton } from "@/components/ui/features/book-share-button";
 import { ReadingProgress } from "@/components/ui/features/reading-progress";
 
 interface BookDetails {
@@ -76,29 +77,29 @@ export default function BookDetailPage() {
   const slug = params?.slug as string;
   const { data: session, status } = useSession();
   const isAuthenticated = status === "authenticated";
-  
+
   const [book, setBook] = React.useState<BookDetails | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  
+
   // Track if book is in user's collections
   const [isLiked, setIsLiked] = React.useState(false);
   const [isInBookshelf, setIsInBookshelf] = React.useState(false);
   const [isInTBR, setIsInTBR] = React.useState(false);
   const [isUpdating, setIsUpdating] = React.useState(false);
-  
+
   // Reading progress
   const [pagesRead, setPagesRead] = React.useState(0);
   const [isUpdatingProgress, setIsUpdatingProgress] = React.useState(false);
-  
+
   // Sign-up prompt dialog state
   const [showSignupPrompt, setShowSignupPrompt] = React.useState(false);
   const [signupAction, setSignupAction] = React.useState<"bookshelf" | "like" | "tbr" | "general">("general");
-  
+
   // Diary editor dialog state
   const [showDiaryEditor, setShowDiaryEditor] = React.useState(false);
   const [existingDiaryContent, setExistingDiaryContent] = React.useState<string>("");
-  
+
   // Share dialog state
   type UserForShare = {
     id: string;
@@ -112,7 +113,7 @@ export default function BookDetailPage() {
   const [shareSearchQuery, setShareSearchQuery] = React.useState("");
   const [searchResults, setSearchResults] = React.useState<UserForShare[]>([]);
   const [isSearchingUsers, setIsSearchingUsers] = React.useState(false);
-  
+
   // Carousel data
   const [similarBooks, setSimilarBooks] = React.useState<BookCarouselBook[]>([]);
   const [authorBooks, setAuthorBooks] = React.useState<BookCarouselBook[]>([]);
@@ -124,7 +125,7 @@ export default function BookDetailPage() {
       try {
         setLoading(true);
         setError(null);
-        
+
         // Check if slug is actually an ID (ISBN or Open Library ID)
         // ISBN format: 10 or 13 digits
         // Open Library ID: starts with "OL" or "/works/"
@@ -134,15 +135,15 @@ export default function BookDetailPage() {
         const isOpenLibraryId = slug.startsWith("OL") || slug.startsWith("/works/");
         // If it doesn't have spaces or +, it could be another ID format
         const looksLikeId = !hasSpaces && !hasPlus && /^[a-zA-Z0-9_-]+$/.test(slug);
-        
+
         // If it looks like an ID (not a slug with + or spaces), try the ID endpoint first
         // Otherwise, use the slug endpoint (which handles title+hex-id format)
         let endpoint = looksLikeId || isISBN || isOpenLibraryId
           ? `/api/books/${encodeURIComponent(slug)}`
           : `/api/books/by-slug/${encodeURIComponent(slug)}`;
-        
+
         let response = await fetch(endpoint);
-        
+
         // If ID endpoint returns 404, try slug endpoint as fallback
         // This handles cases where the ID format check might have been wrong
         if (!response.ok && response.status === 404 && (isISBN || isOpenLibraryId || looksLikeId) && !hasPlus) {
@@ -150,7 +151,7 @@ export default function BookDetailPage() {
           endpoint = `/api/books/by-slug/${encodeURIComponent(slug)}`;
           response = await fetch(endpoint);
         }
-        
+
         if (!response.ok) {
           if (response.status === 404) {
             setError("Book not found");
@@ -190,7 +191,7 @@ export default function BookDetailPage() {
       try {
         const username = session.user.username;
         const bookId = book._id || book.bookId;
-        
+
         // Check all collections in parallel, including reading progress
         const [likedRes, bookshelfRes, tbrRes, progressRes] = await Promise.all([
           fetch(`/api/users/${encodeURIComponent(username)}/books?type=liked`),
@@ -251,7 +252,7 @@ export default function BookDetailPage() {
           const progressData = await progressRes.json();
           const fetchedPagesRead = progressData.pagesRead || 0;
           setPagesRead(fetchedPagesRead);
-          
+
           // Sync DNF state: if pages > 0, book should be in DNF
           // The API automatically adds to DNF when progress is set,
           // so we need to ensure UI state matches
@@ -286,7 +287,7 @@ export default function BookDetailPage() {
   React.useEffect(() => {
     if (isShareOpen && session?.user?.username) {
       let isMounted = true;
-      
+
       setIsLoadingFollowing(true);
       fetch(`/api/users/${encodeURIComponent(session.user.username)}/following`)
         .then((res) => {
@@ -336,7 +337,7 @@ export default function BookDetailPage() {
         const response = await fetch(
           `/api/users/search?q=${encodeURIComponent(shareSearchQuery)}&limit=20`
         );
-        
+
         if (response.ok) {
           const data = await response.json();
           setSearchResults(Array.isArray(data.users) ? data.users : []);
@@ -528,16 +529,16 @@ export default function BookDetailPage() {
   // Prioritize larger images for detail page to ensure clarity
   // All book cover images should be displayed at maximum quality without optimization
   const coverImage = volumeInfo.imageLinks?.extraLarge ||
-                     volumeInfo.imageLinks?.large ||
-                     volumeInfo.imageLinks?.medium ||
-                     volumeInfo.imageLinks?.thumbnail ||
-                     volumeInfo.imageLinks?.smallThumbnail ||
-                     "";
+    volumeInfo.imageLinks?.large ||
+    volumeInfo.imageLinks?.medium ||
+    volumeInfo.imageLinks?.thumbnail ||
+    volumeInfo.imageLinks?.smallThumbnail ||
+    "";
 
   // Format published date
   const formatPublishedDate = (dateStr?: string) => {
     if (!dateStr) return null;
-    
+
     // Published dates can be in formats: "2023", "2023-01", "2023-01-15"
     try {
       const parts = dateStr.split("-");
@@ -605,439 +606,439 @@ export default function BookDetailPage() {
       <div className="relative z-10">
         <Header />
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 mt-16 pb-24 md:pb-8">
-        <div className="flex flex-col gap-8 lg:flex-row lg:gap-12">
-          {/* Left: Large Book Cover */}
-          <div className="flex-shrink-0 w-full sm:w-48 lg:w-56">
-            <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg border border-border bg-muted shadow-lg">
-              {coverImage ? (
-                <Image
-                  src={coverImage}
-                  alt={volumeInfo.title}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 256px, 320px"
-                  priority
-                  quality={100}
-                  unoptimized={true}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center bg-muted">
-                  <BookOpen className="size-24 text-muted-foreground" />
-                </div>
-              )}
-            </div>
-            
-            {/* Action Buttons Below Cover */}
-            <div className="flex flex-col gap-3 mt-4">
-              {/* Icon Buttons Row */}
-              <div className="flex gap-2">
-                {/* Like Icon Button */}
-                <Button
-                  variant="outline"
-                  size="icon"
-                onClick={async () => {
-                  if (!isAuthenticated) {
-                      setSignupAction("like");
-                    setShowSignupPrompt(true);
-                    return;
-                  }
-                  if (isUpdating || !session?.user?.username || !book) return;
-                  setIsUpdating(true);
-                  try {
-                    const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
-                    const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
-                    
-                    const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                          type: "liked",
-                        bookId: book._id || book.bookId,
-                        isbndbId: isISBN ? book.id : undefined,
-                        openLibraryId: isOpenLibraryId ? book.id : undefined,
-                      }),
-                    });
-                    
-                    if (response.ok) {
-                      const data = await response.json();
-                      const wasRemoved = data.removed || false;
-                        setIsLiked(!wasRemoved);
-                    }
-                  } catch {
-                      // Silent fail - no toast
-                  } finally {
-                    setIsUpdating(false);
-                  }
-                }}
-                disabled={isUpdating}
-                  className={cn(
-                    "flex-1 h-10",
-                    isAuthenticated && isLiked && "bg-red-500 text-white hover:bg-red-600"
-                  )}
-                >
-                  <Heart className={cn("h-5 w-5", isAuthenticated && isLiked && "fill-current")} />
-                </Button>
-                
-                {/* Bookshelf Icon Button */}
-                <Button
-                  variant="outline"
-                  size="icon"
-                onClick={async () => {
-                  if (!isAuthenticated) {
-                      setSignupAction("bookshelf");
-                    setShowSignupPrompt(true);
-                    return;
-                  }
-                  if (isUpdating || !session?.user?.username || !book) return;
-                  setIsUpdating(true);
-                  try {
-                    const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
-                    const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
-                    
-                    const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                          type: "bookshelf",
-                        bookId: book._id || book.bookId,
-                        isbndbId: isISBN ? book.id : undefined,
-                        openLibraryId: isOpenLibraryId ? book.id : undefined,
-                          finishedOn: new Date().toISOString(),
-                      }),
-                    });
-                    
-                    if (response.ok) {
-                      const data = await response.json();
-                      const wasRemoved = data.removed || false;
-                        setIsInBookshelf(!wasRemoved);
-                    }
-                  } catch {
-                      // Silent fail - no toast
-                  } finally {
-                    setIsUpdating(false);
-                  }
-                }}
-                disabled={isUpdating}
-                  className={cn(
-                    "flex-1 h-10",
-                    isAuthenticated && isInBookshelf && "bg-amber-500 text-white hover:bg-amber-600"
-                  )}
-                >
-                  <BookMarked className={cn("h-5 w-5", isAuthenticated && isInBookshelf && "fill-current")} />
-                </Button>
-              </div>
-              
-              {/* TBR Button */}
-              <Button
-                variant={isAuthenticated && isInTBR ? "default" : "outline"}
-                onClick={async () => {
-                  if (!isAuthenticated) {
-                    setSignupAction("tbr");
-                    setShowSignupPrompt(true);
-                    return;
-                  }
-                  if (isUpdating || !session?.user?.username || !book) return;
-                  setIsUpdating(true);
-                  try {
-                    const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
-                    const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
-                    
-                    const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        type: "tbr",
-                        bookId: book._id || book.bookId,
-                        isbndbId: isISBN ? book.id : undefined,
-                        openLibraryId: isOpenLibraryId ? book.id : undefined,
-                      }),
-                    });
-                    
-                    if (response.ok) {
-                      const data = await response.json();
-                      const wasRemoved = data.removed || false;
-                      setIsInTBR(!wasRemoved);
-                    }
-                  } catch {
-                    // Silent fail - no toast
-                  } finally {
-                    setIsUpdating(false);
-                  }
-                }}
-                disabled={isUpdating}
-                className={cn(
-                  "w-full h-10",
-                  isAuthenticated && isInTBR && "bg-green-600 text-white hover:bg-green-700"
+          <div className="flex flex-col gap-8 lg:flex-row lg:gap-12">
+            {/* Left: Large Book Cover */}
+            <div className="flex-shrink-0 w-full sm:w-48 lg:w-56">
+              <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg border border-border bg-muted shadow-lg">
+                {coverImage ? (
+                  <Image
+                    src={coverImage}
+                    alt={volumeInfo.title}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 256px, 320px"
+                    priority
+                    quality={100}
+                    unoptimized={true}
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center bg-muted">
+                    <BookOpen className="size-24 text-muted-foreground" />
+                  </div>
                 )}
-              >
-                {isAuthenticated && isInTBR ? "In DNF" : "Add to DNF"}
-              </Button>
+              </div>
 
-              {/* Reading Progress */}
-              {isAuthenticated && book.volumeInfo.pageCount && (
-                <div className="flex justify-center mt-4">
-                  <ReadingProgress
-                    totalPages={book.volumeInfo.pageCount}
-                    pagesRead={pagesRead}
-                    onProgressChange={async (newPagesRead) => {
-                      if (!session?.user?.username || !book || isUpdatingProgress) return;
-                      
-                      setIsUpdatingProgress(true);
+              {/* Action Buttons Below Cover */}
+              <div className="flex flex-col gap-3 mt-4">
+                {/* Icon Buttons Row */}
+                <div className="flex gap-2">
+                  {/* Like Icon Button */}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={async () => {
+                      if (!isAuthenticated) {
+                        setSignupAction("like");
+                        setShowSignupPrompt(true);
+                        return;
+                      }
+                      if (isUpdating || !session?.user?.username || !book) return;
+                      setIsUpdating(true);
                       try {
-                        const bookId = book._id || book.bookId;
-                        if (!bookId) return;
+                        const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
+                        const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
 
-                        const response = await fetch(
-                          `/api/users/${encodeURIComponent(session.user.username)}/reading-progress`,
-                          {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              bookId: bookId,
-                              pagesRead: newPagesRead,
-                            }),
-                          }
-                        );
+                        const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            type: "liked",
+                            bookId: book._id || book.bookId,
+                            isbndbId: isISBN ? book.id : undefined,
+                            openLibraryId: isOpenLibraryId ? book.id : undefined,
+                          }),
+                        });
 
                         if (response.ok) {
-                          setPagesRead(newPagesRead);
                           const data = await response.json();
-                          
-                          // Update DNF state based on pages read
-                          // API automatically adds/removes from DNF, so we just need to sync UI state
-                          if (newPagesRead > 0) {
-                            // Book should be in DNF when pages > 0
-                            if (!isInTBR) {
-                              setIsInTBR(true);
-                            }
-                          } else if (newPagesRead === 0) {
-                            // Book should not be in DNF when pages = 0
-                            if (isInTBR) {
-                              setIsInTBR(false);
-                            }
-                          }
-                          
-                          if (data.isComplete) {
-                            toast.success("Book completed! 🎉");
-                          }
+                          const wasRemoved = data.removed || false;
+                          setIsLiked(!wasRemoved);
                         }
-                      } catch (err) {
-                        console.error("Error updating reading progress:", err);
-                        toast.error("Failed to update reading progress");
+                      } catch {
+                        // Silent fail - no toast
                       } finally {
-                        setIsUpdatingProgress(false);
+                        setIsUpdating(false);
                       }
                     }}
-                    size={100}
-                    strokeWidth={6}
-                  />
-                </div>
-              )}
-            </div>
-            
-            {/* Sign-up Prompt Dialog */}
-            <SignupPromptDialog
-              open={showSignupPrompt}
-              onOpenChange={setShowSignupPrompt}
-              action={signupAction}
-            />
-            {book && session?.user?.username && (
-              <DiaryEditorDialog
-                open={showDiaryEditor}
-                onOpenChange={setShowDiaryEditor}
-                bookId={(book._id || book.bookId || book.id) as string}
-                bookTitle={book.volumeInfo.title}
-                bookAuthor={book.volumeInfo.authors?.[0] || "Unknown Author"}
-                bookCover={
-                  book.volumeInfo.imageLinks?.thumbnail ||
-                  book.volumeInfo.imageLinks?.smallThumbnail ||
-                  book.volumeInfo.imageLinks?.medium
-                }
-                initialContent={existingDiaryContent}
-                username={session.user.username}
-                onSave={() => {
-                  // Refresh diary content after save
-                  if (session?.user?.username) {
-                    fetch(`/api/users/${encodeURIComponent(session.user.username)}/diary`)
-                      .then((res) => res.json())
-                      .then((data) => {
-                        type DiaryEntry = {
-                          bookId?: { toString(): string } | string;
-                          content?: string;
-                        };
-                        const bookId = book._id || book.bookId || book.id;
-                        const existingEntry = data.entries?.find((entry: DiaryEntry) => {
-                          return (
-                            entry.bookId?.toString() === bookId?.toString() ||
-                            (book.id && entry.bookId === book.id)
-                          );
+                    disabled={isUpdating}
+                    className={cn(
+                      "flex-1 h-10",
+                      isAuthenticated && isLiked && "bg-red-500 text-white hover:bg-red-600"
+                    )}
+                  >
+                    <Heart className={cn("h-5 w-5", isAuthenticated && isLiked && "fill-current")} />
+                  </Button>
+
+                  {/* Bookshelf Icon Button */}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={async () => {
+                      if (!isAuthenticated) {
+                        setSignupAction("bookshelf");
+                        setShowSignupPrompt(true);
+                        return;
+                      }
+                      if (isUpdating || !session?.user?.username || !book) return;
+                      setIsUpdating(true);
+                      try {
+                        const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
+                        const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
+
+                        const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            type: "bookshelf",
+                            bookId: book._id || book.bookId,
+                            isbndbId: isISBN ? book.id : undefined,
+                            openLibraryId: isOpenLibraryId ? book.id : undefined,
+                            finishedOn: new Date().toISOString(),
+                          }),
                         });
-                        if (existingEntry) {
-                          setExistingDiaryContent(existingEntry.content || "");
+
+                        if (response.ok) {
+                          const data = await response.json();
+                          const wasRemoved = data.removed || false;
+                          setIsInBookshelf(!wasRemoved);
                         }
-                      })
-                      .catch(() => {
-                        // Error already logged
+                      } catch {
+                        // Silent fail - no toast
+                      } finally {
+                        setIsUpdating(false);
+                      }
+                    }}
+                    disabled={isUpdating}
+                    className={cn(
+                      "flex-1 h-10",
+                      isAuthenticated && isInBookshelf && "bg-amber-500 text-white hover:bg-amber-600"
+                    )}
+                  >
+                    <BookMarked className={cn("h-5 w-5", isAuthenticated && isInBookshelf && "fill-current")} />
+                  </Button>
+                </div>
+
+                {/* TBR Button */}
+                <Button
+                  variant={isAuthenticated && isInTBR ? "default" : "outline"}
+                  onClick={async () => {
+                    if (!isAuthenticated) {
+                      setSignupAction("tbr");
+                      setShowSignupPrompt(true);
+                      return;
+                    }
+                    if (isUpdating || !session?.user?.username || !book) return;
+                    setIsUpdating(true);
+                    try {
+                      const isISBN = book.id && /^(\d{10}|\d{13})$/.test(book.id);
+                      const isOpenLibraryId = book.id?.startsWith("OL") || book.id?.startsWith("/works/");
+
+                      const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/books`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          type: "tbr",
+                          bookId: book._id || book.bookId,
+                          isbndbId: isISBN ? book.id : undefined,
+                          openLibraryId: isOpenLibraryId ? book.id : undefined,
+                        }),
                       });
-                  }
-                }}
+
+                      if (response.ok) {
+                        const data = await response.json();
+                        const wasRemoved = data.removed || false;
+                        setIsInTBR(!wasRemoved);
+                      }
+                    } catch {
+                      // Silent fail - no toast
+                    } finally {
+                      setIsUpdating(false);
+                    }
+                  }}
+                  disabled={isUpdating}
+                  className={cn(
+                    "w-full h-10",
+                    isAuthenticated && isInTBR && "bg-green-600 text-white hover:bg-green-700"
+                  )}
+                >
+                  {isAuthenticated && isInTBR ? "In DNF" : "Add to DNF"}
+                </Button>
+
+                {/* Reading Progress */}
+                {isAuthenticated && book.volumeInfo.pageCount && (
+                  <div className="flex justify-center mt-4">
+                    <ReadingProgress
+                      totalPages={book.volumeInfo.pageCount}
+                      pagesRead={pagesRead}
+                      onProgressChange={async (newPagesRead) => {
+                        if (!session?.user?.username || !book || isUpdatingProgress) return;
+
+                        setIsUpdatingProgress(true);
+                        try {
+                          const bookId = book._id || book.bookId;
+                          if (!bookId) return;
+
+                          const response = await fetch(
+                            `/api/users/${encodeURIComponent(session.user.username)}/reading-progress`,
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                bookId: bookId,
+                                pagesRead: newPagesRead,
+                              }),
+                            }
+                          );
+
+                          if (response.ok) {
+                            setPagesRead(newPagesRead);
+                            const data = await response.json();
+
+                            // Update DNF state based on pages read
+                            // API automatically adds/removes from DNF, so we just need to sync UI state
+                            if (newPagesRead > 0) {
+                              // Book should be in DNF when pages > 0
+                              if (!isInTBR) {
+                                setIsInTBR(true);
+                              }
+                            } else if (newPagesRead === 0) {
+                              // Book should not be in DNF when pages = 0
+                              if (isInTBR) {
+                                setIsInTBR(false);
+                              }
+                            }
+
+                            if (data.isComplete) {
+                              toast.success("Book completed! 🎉");
+                            }
+                          }
+                        } catch (err) {
+                          console.error("Error updating reading progress:", err);
+                          toast.error("Failed to update reading progress");
+                        } finally {
+                          setIsUpdatingProgress(false);
+                        }
+                      }}
+                      size={100}
+                      strokeWidth={6}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Sign-up Prompt Dialog */}
+              <SignupPromptDialog
+                open={showSignupPrompt}
+                onOpenChange={setShowSignupPrompt}
+                action={signupAction}
               />
-            )}
-          </div>
-
-          {/* Right: Book Details */}
-          <div className="flex-1 space-y-6">
-            {/* Title and Subtitle */}
-            <div className="space-y-2">
-              <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                {volumeInfo.title}
-              </h1>
-              {volumeInfo.subtitle && (
-                <p className="text-xl text-muted-foreground">
-                  {volumeInfo.subtitle}
-                </p>
+              {book && session?.user?.username && (
+                <DiaryEditorDialog
+                  open={showDiaryEditor}
+                  onOpenChange={setShowDiaryEditor}
+                  bookId={(book._id || book.bookId || book.id) as string}
+                  bookTitle={book.volumeInfo.title}
+                  bookAuthor={book.volumeInfo.authors?.[0] || "Unknown Author"}
+                  bookCover={
+                    book.volumeInfo.imageLinks?.thumbnail ||
+                    book.volumeInfo.imageLinks?.smallThumbnail ||
+                    book.volumeInfo.imageLinks?.medium
+                  }
+                  initialContent={existingDiaryContent}
+                  username={session.user.username}
+                  onSave={() => {
+                    // Refresh diary content after save
+                    if (session?.user?.username) {
+                      fetch(`/api/users/${encodeURIComponent(session.user.username)}/diary`)
+                        .then((res) => res.json())
+                        .then((data) => {
+                          type DiaryEntry = {
+                            bookId?: { toString(): string } | string;
+                            content?: string;
+                          };
+                          const bookId = book._id || book.bookId || book.id;
+                          const existingEntry = data.entries?.find((entry: DiaryEntry) => {
+                            return (
+                              entry.bookId?.toString() === bookId?.toString() ||
+                              (book.id && entry.bookId === book.id)
+                            );
+                          });
+                          if (existingEntry) {
+                            setExistingDiaryContent(existingEntry.content || "");
+                          }
+                        })
+                        .catch(() => {
+                          // Error already logged
+                        });
+                    }
+                  }}
+                />
               )}
             </div>
 
-            {/* Authors */}
-            {volumeInfo.authors && volumeInfo.authors.length > 0 && (
-              <div className="flex items-center gap-2 text-lg text-foreground">
-                <span className="text-muted-foreground">by</span>
-                <span className="font-medium">
-                  {volumeInfo.authors.join(", ")}
-                </span>
+            {/* Right: Book Details */}
+            <div className="flex-1 space-y-6">
+              {/* Title and Subtitle */}
+              <div className="space-y-2">
+                <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                  {volumeInfo.title}
+                </h1>
+                {volumeInfo.subtitle && (
+                  <p className="text-xl text-muted-foreground">
+                    {volumeInfo.subtitle}
+                  </p>
+                )}
               </div>
-            )}
 
-            {/* Published Date */}
-            {publishedDate && (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Calendar className="size-4" />
-                <span>{publishedDate}</span>
+              {/* Authors */}
+              {volumeInfo.authors && volumeInfo.authors.length > 0 && (
+                <div className="flex items-center gap-2 text-lg text-foreground">
+                  <span className="text-muted-foreground">by</span>
+                  <span className="font-medium">
+                    {volumeInfo.authors.join(", ")}
+                  </span>
+                </div>
+              )}
+
+              {/* Published Date */}
+              {publishedDate && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Calendar className="size-4" />
+                  <span>{publishedDate}</span>
+                </div>
+              )}
+
+              {/* PaperBoxd Rating */}
+              {paperboxdStats?.rating !== undefined && paperboxdStats.ratingsCount !== undefined && paperboxdStats.ratingsCount > 0 && (
+                <div className="flex items-center gap-2">
+                  <Star className="size-4 fill-yellow-400 text-yellow-400" />
+                  <span className="text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">{paperboxdStats.rating.toFixed(1)}</span> ({paperboxdStats.ratingsCount} ratings)
+                  </span>
+                </div>
+              )}
+
+              {/* Book Metadata */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {volumeInfo.publisher && (
+                  <div className="flex items-start gap-2">
+                    <BookOpen className="mt-0.5 size-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Publisher</p>
+                      <p className="text-sm font-medium">{volumeInfo.publisher}</p>
+                    </div>
+                  </div>
+                )}
+
+                {volumeInfo.pageCount && (
+                  <div className="flex items-start gap-2">
+                    <FileText className="mt-0.5 size-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Pages</p>
+                      <p className="text-sm font-medium">{volumeInfo.pageCount}</p>
+                    </div>
+                  </div>
+                )}
+
+                {volumeInfo.language && (
+                  <div className="flex items-start gap-2">
+                    <Globe className="mt-0.5 size-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Language</p>
+                      <p className="text-sm font-medium uppercase">{volumeInfo.language}</p>
+                    </div>
+                  </div>
+                )}
+
+                {volumeInfo.categories && volumeInfo.categories.length > 0 && (
+                  <div className="flex items-start gap-2">
+                    <MapPin className="mt-0.5 size-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Categories</p>
+                      <p className="text-sm font-medium">{volumeInfo.categories.join(", ")}</p>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
 
-            {/* PaperBoxd Rating */}
-            {paperboxdStats?.rating !== undefined && paperboxdStats.ratingsCount !== undefined && paperboxdStats.ratingsCount > 0 && (
-              <div className="flex items-center gap-2">
-                <Star className="size-4 fill-yellow-400 text-yellow-400" />
-                <span className="text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">{paperboxdStats.rating.toFixed(1)}</span> ({paperboxdStats.ratingsCount} ratings)
-                </span>
-              </div>
-            )}
+              {/* Average Rating */}
+              {volumeInfo.averageRating && volumeInfo.ratingsCount && (
+                <div className="flex items-center gap-2">
+                  <Star className="size-4 fill-yellow-400 text-yellow-400" />
+                  <span className="text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">{volumeInfo.averageRating.toFixed(1)}</span>
+                    {" "}from <span className="font-medium text-foreground">{volumeInfo.ratingsCount.toLocaleString()}</span> ratings
+                  </span>
+                </div>
+              )}
 
-            {/* Book Metadata */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {volumeInfo.publisher && (
-                <div className="flex items-start gap-2">
-                  <BookOpen className="mt-0.5 size-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Publisher</p>
-                    <p className="text-sm font-medium">{volumeInfo.publisher}</p>
+              {/* Description */}
+              {volumeInfo.description && (
+                <div className="space-y-4">
+                  <h2 className="text-lg font-semibold">Description</h2>
+                  {/* Card with gradient behind - same style as timeline */}
+                  <div className="relative rounded-lg p-6 md:p-8">
+                    {/* Gradient background element */}
+                    <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-primary/30 via-primary/20 to-primary/5 -z-10" />
+                    {/* Card content */}
+                    <div className="relative bg-background/90 backdrop-blur-sm rounded-lg border border-border/50 p-6 md:p-8 -m-6 md:-m-8">
+                      <p
+                        className="text-base md:text-lg leading-relaxed text-muted-foreground whitespace-pre-wrap"
+                        style={{ fontFamily: '"Helvetica", sans-serif' }}
+                      >
+                        {stripHtmlTags(volumeInfo.description)}
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {volumeInfo.pageCount && (
-                <div className="flex items-start gap-2">
-                  <FileText className="mt-0.5 size-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Pages</p>
-                    <p className="text-sm font-medium">{volumeInfo.pageCount}</p>
-                  </div>
-                </div>
-              )}
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => {
+                    if (!isAuthenticated) {
+                      setSignupAction("general");
+                      setShowSignupPrompt(true);
+                      return;
+                    }
+                    setShowDiaryEditor(true);
+                  }}
+                  variant="default"
+                >
+                  <NotebookPen className="mr-2 size-4" />
+                  {existingDiaryContent ? "Edit your notes" : "Write about it"}
+                </Button>
 
-              {volumeInfo.language && (
-                <div className="flex items-start gap-2">
-                  <Globe className="mt-0.5 size-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Language</p>
-                    <p className="text-sm font-medium uppercase">{volumeInfo.language}</p>
-                  </div>
-                </div>
-              )}
-
-              {volumeInfo.categories && volumeInfo.categories.length > 0 && (
-                <div className="flex items-start gap-2">
-                  <MapPin className="mt-0.5 size-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Categories</p>
-                    <p className="text-sm font-medium">{volumeInfo.categories.join(", ")}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Average Rating */}
-            {volumeInfo.averageRating && volumeInfo.ratingsCount && (
-              <div className="flex items-center gap-2">
-                <Star className="size-4 fill-yellow-400 text-yellow-400" />
-                <span className="text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">{volumeInfo.averageRating.toFixed(1)}</span> 
-                  {" "}from <span className="font-medium text-foreground">{volumeInfo.ratingsCount.toLocaleString()}</span> ratings
-                </span>
+                <Button
+                  onClick={() => {
+                    if (!isAuthenticated) {
+                      setSignupAction("general");
+                      setShowSignupPrompt(true);
+                      return;
+                    }
+                    setIsShareOpen(true);
+                  }}
+                  variant="outline"
+                >
+                  <Share2 className="mr-2 size-4" />
+                  Share
+                </Button>
               </div>
-            )}
-
-            {/* Description */}
-            {volumeInfo.description && (
-              <div className="space-y-4">
-                <h2 className="text-lg font-semibold">Description</h2>
-                {/* Card with gradient behind - same style as timeline */}
-                <div className="relative rounded-lg p-6 md:p-8">
-                  {/* Gradient background element */}
-                  <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-primary/30 via-primary/20 to-primary/5 -z-10" />
-                  {/* Card content */}
-                  <div className="relative bg-background/90 backdrop-blur-sm rounded-lg border border-border/50 p-6 md:p-8 -m-6 md:-m-8">
-                    <p 
-                      className="text-base md:text-lg leading-relaxed text-muted-foreground whitespace-pre-wrap"
-                      style={{ fontFamily: '"Helvetica", sans-serif' }}
-                    >
-                  {stripHtmlTags(volumeInfo.description)}
-                </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex gap-3">
-              <Button
-                onClick={() => {
-                  if (!isAuthenticated) {
-                    setSignupAction("general");
-                    setShowSignupPrompt(true);
-                    return;
-                  }
-                  setShowDiaryEditor(true);
-                }}
-                variant="default"
-              >
-                <NotebookPen className="mr-2 size-4" />
-                {existingDiaryContent ? "Edit your notes" : "Write about it"}
-              </Button>
-              
-              <Button
-                onClick={() => {
-                  if (!isAuthenticated) {
-                    setSignupAction("general");
-                    setShowSignupPrompt(true);
-                    return;
-                  }
-                  setIsShareOpen(true);
-                }}
-                variant="outline"
-              >
-                <Share2 className="mr-2 size-4" />
-                Share
-              </Button>
             </div>
           </div>
         </div>
-        </div>
-        
+
         {/* Carousels Section - Full Width */}
         <div className="mt-12 space-y-12 w-full px-8 md:px-12 lg:px-16 xl:px-20 pb-16">
           {/* Similar Books Carousel */}
@@ -1048,7 +1049,7 @@ export default function BookDetailPage() {
               books={similarBooks}
             />
           )}
-          
+
           {/* Books by Same Author Carousel */}
           {authorBooks.length > 0 && volumeInfo.authors?.[0] && (
             <BookCarousel
@@ -1063,65 +1064,84 @@ export default function BookDetailPage() {
         <Dialog open={isShareOpen} onOpenChange={setIsShareOpen}>
           <DialogContent className="max-w-md max-h-[80vh] p-0 flex flex-col">
             <div className="p-6 flex flex-col min-w-0 flex-1 overflow-hidden">
-              <DialogHeader className="flex-shrink-0">
-                <DialogTitle>Share</DialogTitle>
+              <DialogHeader>
+                <DialogTitle>Share this book</DialogTitle>
+                <DialogDescription>
+                  Share this book with your friends or on social media.
+                </DialogDescription>
               </DialogHeader>
 
-              {/* Quick Share Options */}
-              <div className="flex gap-4 mt-6 mb-6 justify-center">
-                <button
-                  onClick={handleCopyLink}
-                  className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
-                >
-                  <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                    <Link2 className="h-6 w-6 text-foreground" />
-                  </div>
-                  <span className="text-xs text-muted-foreground">Copy link</span>
-                </button>
-                <button
-                  onClick={() => handleShareToSocial("whatsapp")}
-                  className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
-                >
-                  <div className="h-12 w-12 rounded-full bg-[#25D366] flex items-center justify-center">
-                    <svg className="h-6 w-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                    </svg>
-                  </div>
-                  <span className="text-xs text-muted-foreground">WhatsApp</span>
-                </button>
-                <button
-                  onClick={() => handleShareToSocial("messenger")}
-                  className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
-                >
-                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[#0084FF] to-[#006AFF] flex items-center justify-center">
-                    <svg className="h-6 w-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.568 8.16l-1.97 9.272c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.12l-6.87 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
-                    </svg>
-                  </div>
-                  <span className="text-xs text-muted-foreground">Messenger</span>
-                </button>
-                <button
-                  onClick={() => handleShareToSocial("facebook")}
-                  className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
-                >
-                  <div className="h-12 w-12 rounded-full bg-[#1877F2] flex items-center justify-center">
-                    <svg className="h-6 w-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                    </svg>
-                  </div>
-                  <span className="text-xs text-muted-foreground">Facebook</span>
-                </button>
-                <button
-                  onClick={() => handleShareToSocial("x")}
-                  className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
-                >
-                  <div className="h-12 w-12 rounded-full bg-black dark:bg-white flex items-center justify-center">
-                    <svg className="h-6 w-6 text-white dark:text-black" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                    </svg>
-                  </div>
-                  <span className="text-xs text-muted-foreground">X</span>
-                </button>
+              <div className="flex flex-col gap-4 py-4">
+                {/* Instagram Story / Share Card - Mobile Only */}
+                <div className="flex justify-center pb-2 md:hidden">
+                  <BookShareButton
+                    title={book.volumeInfo.title || "Untitled"}
+                    author={book.volumeInfo.authors?.join(", ")}
+                    coverUrl={coverImage}
+                    rating={book.volumeInfo.averageRating}
+                    pageCount={book.volumeInfo.pageCount}
+                    buttonVariant="default"
+                    size="lg"
+                    className="w-full bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 hover:opacity-90 text-white border-0"
+                  />
+                </div>
+
+                <div className="grid grid-cols-4 gap-4">
+                  <button
+                    onClick={handleCopyLink}
+                    className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
+                  >
+                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                      <Link2 className="h-6 w-6 text-foreground" />
+                    </div>
+                    <span className="text-xs text-muted-foreground">Copy link</span>
+                  </button>
+                  <button
+                    onClick={() => handleShareToSocial("whatsapp")}
+                    className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
+                  >
+                    <div className="h-12 w-12 rounded-full bg-[#25D366] flex items-center justify-center">
+                      <svg className="h-6 w-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
+                      </svg>
+                    </div>
+                    <span className="text-xs text-muted-foreground">WhatsApp</span>
+                  </button>
+                  <button
+                    onClick={() => handleShareToSocial("messenger")}
+                    className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
+                  >
+                    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[#0084FF] to-[#006AFF] flex items-center justify-center">
+                      <svg className="h-6 w-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.568 8.16l-1.97 9.272c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.12l-6.87 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z" />
+                      </svg>
+                    </div>
+                    <span className="text-xs text-muted-foreground">Messenger</span>
+                  </button>
+                  <button
+                    onClick={() => handleShareToSocial("facebook")}
+                    className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
+                  >
+                    <div className="h-12 w-12 rounded-full bg-[#1877F2] flex items-center justify-center">
+                      <svg className="h-6 w-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                      </svg>
+                    </div>
+                    <span className="text-xs text-muted-foreground">Facebook</span>
+                  </button>
+                  <button
+                    onClick={() => handleShareToSocial("x")}
+                    className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"
+                  >
+                    <div className="h-12 w-12 rounded-full bg-black dark:bg-white flex items-center justify-center">
+                      <svg className="h-6 w-6 text-white dark:text-black" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                      </svg>
+                    </div>
+                    <span className="text-xs text-muted-foreground">X</span>
+                  </button>
+                </div>
+
               </div>
 
               <div className="border-t border-border my-4"></div>

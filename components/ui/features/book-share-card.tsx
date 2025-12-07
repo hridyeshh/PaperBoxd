@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { cn } from "@/lib/utils";
 
 export interface BookShareCardProps {
   title: string;
@@ -20,7 +19,6 @@ export function BookShareCard({
   pageCount,
   variant = "aura",
 }: BookShareCardProps) {
-  const [imageLoaded, setImageLoaded] = React.useState(false);
   const [imageError, setImageError] = React.useState(false);
 
   // Format rating to stars (e.g., 4.5 -> "★★★★½")
@@ -42,12 +40,12 @@ export function BookShareCard({
         {/* Blurry background cover */}
         {coverUrl && !imageError && (
           <div className="absolute inset-0 opacity-20">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={coverUrl}
               alt=""
               crossOrigin="anonymous"
               className="w-full h-full object-cover blur-[120px] scale-150"
-              onLoad={() => setImageLoaded(true)}
               onError={() => setImageError(true)}
             />
           </div>
@@ -59,12 +57,12 @@ export function BookShareCard({
           <div className="flex-shrink-0">
             {coverUrl && !imageError ? (
               <div className="relative aspect-[2/3] w-[400px] overflow-hidden rounded-2xl shadow-2xl bg-muted">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={coverUrl}
                   alt={title}
                   crossOrigin="anonymous"
                   className="w-full h-full object-cover"
-                  onLoad={() => setImageLoaded(true)}
                   onError={() => setImageError(true)}
                 />
               </div>
@@ -132,12 +130,12 @@ export function BookShareCard({
         <div className="flex-shrink-0">
           {coverUrl && !imageError ? (
             <div className="relative aspect-[2/3] w-[350px] overflow-hidden rounded-2xl shadow-2xl bg-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={coverUrl}
                 alt={title}
                 crossOrigin="anonymous"
                 className="w-full h-full object-cover"
-                onLoad={() => setImageLoaded(true)}
                 onError={() => setImageError(true)}
               />
             </div>
@@ -212,12 +210,12 @@ export function BookShareCard({
             {/* Cover image inside polaroid */}
             {coverUrl && !imageError ? (
               <div className="relative aspect-[2/3] w-[350px] mb-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={coverUrl}
                   alt={title}
                   crossOrigin="anonymous"
                   className="w-full h-full object-cover"
-                  onLoad={() => setImageLoaded(true)}
                   onError={() => setImageError(true)}
                 />
               </div>
