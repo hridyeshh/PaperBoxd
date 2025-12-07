@@ -6,8 +6,9 @@ import Book from "@/lib/db/models/Book"; // Import Book model to register it wit
 import { auth } from "@/lib/auth";
 import mongoose from "mongoose";
 
-// Enable caching for this route
-export const revalidate = 30; // Revalidate every 30 seconds
+// Disable caching for this route
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 // Type for activity from MongoDB (includes _id and createdAt)
 type ActivityFromDB = IActivity & {
@@ -70,7 +71,7 @@ export async function GET(
       userPlain = await User.findOne({ username })
         .select("-password -__v") // Exclude password and version
         .lean();
-      
+
       // Populate readingLists.books if needed (only if user has reading lists)
       if (userPlain?.readingLists && Array.isArray(userPlain.readingLists) && userPlain.readingLists.length > 0) {
         try {
@@ -86,13 +87,13 @@ export async function GET(
                     }
                     return id;
                   });
-                  
+
                   const books = await Book.find({
                     _id: { $in: bookIds }
                   })
                     .select("volumeInfo.title volumeInfo.authors volumeInfo.imageLinks")
                     .lean();
-                  
+
                   return {
                     ...list,
                     books: (books as unknown as Array<{ _id?: mongoose.Types.ObjectId; volumeInfo?: { title?: string; authors?: string[]; imageLinks?: { thumbnail?: string; smallThumbnail?: string; medium?: string } } }>).map((b) => ({
@@ -144,12 +145,12 @@ export async function GET(
     // Populate activities with book information - optimized batch query
     const activitiesWithBooks = await (async () => {
       const recentActivities = activities.slice(-20).reverse();
-      
+
       // Extract all unique book IDs
       const bookIds = recentActivities
         .map(a => a.bookId?.toString())
         .filter((id): id is string => Boolean(id));
-      
+
       // Batch fetch all books in one query
       type BookLean = {
         _id: mongoose.Types.ObjectId | { toString(): string } | string;
@@ -171,11 +172,11 @@ export async function GET(
           })
             .select('volumeInfo.title volumeInfo.imageLinks')
             .lean();
-          
+
           (books as unknown as BookLean[]).forEach(book => {
             if (book._id) {
-              const bookId = typeof book._id === 'string' 
-                ? book._id 
+              const bookId = typeof book._id === 'string'
+                ? book._id
                 : book._id.toString();
               booksMap.set(bookId, book);
             }
@@ -184,7 +185,7 @@ export async function GET(
           console.warn('Failed to batch fetch books for activities:', error);
         }
       }
-      
+
       // Map activities to include book data
       return recentActivities.map((activity): ActivityWithBook => {
         const activityData: ActivityWithBook = {
@@ -194,18 +195,18 @@ export async function GET(
           timestamp: activity.timestamp || activity.createdAt || undefined,
           rating: activity.rating,
         };
-        
+
         if (activity.bookId) {
-          const bookId = typeof activity.bookId === 'string' 
-            ? activity.bookId 
+          const bookId = typeof activity.bookId === 'string'
+            ? activity.bookId
             : activity.bookId.toString();
           const book = booksMap.get(bookId);
           if (book) {
             activityData.bookTitle = book.volumeInfo?.title || undefined;
-            activityData.bookCover = book.volumeInfo?.imageLinks?.thumbnail || 
-                      book.volumeInfo?.imageLinks?.smallThumbnail ||
-                      book.volumeInfo?.imageLinks?.medium ||
-                      undefined;
+            activityData.bookCover = book.volumeInfo?.imageLinks?.thumbnail ||
+              book.volumeInfo?.imageLinks?.smallThumbnail ||
+              book.volumeInfo?.imageLinks?.medium ||
+              undefined;
           }
         }
         return activityData;
@@ -246,36 +247,36 @@ export async function GET(
         bookshelf: Array.isArray(userPlain.bookshelf) ? userPlain.bookshelf : [],
         likedBooks: Array.isArray(userPlain.likedBooks) ? userPlain.likedBooks : [],
         // Enrich tbrBooks with reading progress data (optimized with Map lookup)
-        tbrBooks: Array.isArray(userPlain.tbrBooks) 
-          ? userPlain.tbrBooks.map((tbrBook: { bookId?: mongoose.Types.ObjectId | string; [key: string]: unknown }) => {
-              const tbrBookId = tbrBook.bookId?.toString() || (typeof tbrBook.bookId === 'string' ? tbrBook.bookId : null);
-              const progress = tbrBookId ? readingProgressMap.get(tbrBookId) : null;
-              
-              return {
-                ...tbrBook,
-                pagesRead: progress?.pagesRead || 0,
-                progressUpdatedAt: progress?.updatedAt || null,
-              };
-            })
+        tbrBooks: Array.isArray(userPlain.tbrBooks)
+          ? userPlain.tbrBooks.map((tbrBook: { bookId?: mongoose.Types.ObjectId | string;[key: string]: unknown }) => {
+            const tbrBookId = tbrBook.bookId?.toString() || (typeof tbrBook.bookId === 'string' ? tbrBook.bookId : null);
+            const progress = tbrBookId ? readingProgressMap.get(tbrBookId) : null;
+
+            return {
+              ...tbrBook,
+              pagesRead: progress?.pagesRead || 0,
+              progressUpdatedAt: progress?.updatedAt || null,
+            };
+          })
           : [],
         currentlyReading: Array.isArray(userPlain.currentlyReading) ? userPlain.currentlyReading : [],
         // Filter reading lists: if not owner, return public lists OR private lists the user has access to
-        readingLists: Array.isArray(userPlain.readingLists) 
-          ? (isOwner 
-              ? userPlain.readingLists 
-              : (() => {
-                  const currentUsername = currentUser?.username;
-                  return userPlain.readingLists.filter((list) => {
-                    const listWithAccess = list as unknown as ReadingListWithAccess;
-                    // Include public lists
-                    if (listWithAccess.isPublic !== false) return true;
-                    // Include private lists if user has been granted access
-                    if (currentUsername && Array.isArray(listWithAccess.allowedUsers) && listWithAccess.allowedUsers.includes(currentUsername)) {
-                      return true;
-                    }
-                    return false;
-                  });
-                })())
+        readingLists: Array.isArray(userPlain.readingLists)
+          ? (isOwner
+            ? userPlain.readingLists
+            : (() => {
+              const currentUsername = currentUser?.username;
+              return userPlain.readingLists.filter((list) => {
+                const listWithAccess = list as unknown as ReadingListWithAccess;
+                // Include public lists
+                if (listWithAccess.isPublic !== false) return true;
+                // Include private lists if user has been granted access
+                if (currentUsername && Array.isArray(listWithAccess.allowedUsers) && listWithAccess.allowedUsers.includes(currentUsername)) {
+                  return true;
+                }
+                return false;
+              });
+            })())
           : [],
         diaryEntries: Array.isArray(userPlain.diaryEntries) ? userPlain.diaryEntries : [],
 
@@ -301,9 +302,11 @@ export async function GET(
     });
 
     // Add caching headers for better performance
-    // Cache for 30 seconds, revalidate in background
-    response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
-    
+    // No caching for immediate updates
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+
     return response;
   } catch (error) {
     console.error("User fetch error:", error);
@@ -384,7 +387,7 @@ export async function PATCH(
         body.pronouns = body.pronouns.filter((p: string) => p && typeof p === "string" && p.trim().length > 0);
       }
     }
-    
+
     // Normalize links
     if (body.links !== undefined) {
       if (typeof body.links === "string") {
@@ -430,14 +433,14 @@ export async function PATCH(
       pronouns?: string[];
       links?: string[];
     };
-    
+
     const updateFields: UserUpdateFields = {};
     otherAllowedFields.forEach((field) => {
       if (body[field] !== undefined) {
         updateFields[field as keyof UserUpdateFields] = body[field];
       }
     });
-    
+
     // Apply updates
     if (updateFields.name !== undefined) user.name = updateFields.name;
     if (updateFields.bio !== undefined) user.bio = updateFields.bio;
