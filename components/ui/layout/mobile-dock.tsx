@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import DockMorph from "@/components/ui/dock-morph";
-import { Home, PenTool, Search } from "lucide-react";
+import { Home, NotebookPen, Search } from "lucide-react";
 import { GeneralDiaryEditorDialog } from "@/components/ui/dialogs/general-diary-editor-dialog";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { DEFAULT_AVATAR } from "@/lib/utils";
@@ -115,7 +115,7 @@ export function MobileDock() {
             onClick: () => router.push("/search"),
           },
           {
-            icon: PenTool,
+            icon: NotebookPen,
             label: "Write",
             onClick: () => setWriteDialogOpen(true),
           },
