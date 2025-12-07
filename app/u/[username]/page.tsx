@@ -2916,7 +2916,7 @@ function DiarySection({
 
   React.useEffect(() => {
     if (selectedEntryId) {
-      const updatedEntry = entries.find(e => e.id === selectedEntryId);
+      const updatedEntry = entries.find((entry) => entry.id === selectedEntryId);
       if (updatedEntry &&
         (updatedEntry.isLiked !== selectedEntryIsLiked ||
           updatedEntry.likesCount !== selectedEntryLikesCount)) {
