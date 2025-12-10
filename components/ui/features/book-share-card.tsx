@@ -60,8 +60,8 @@ export function BookShareCard({
 
         {/* Footer */}
         <div className="mt-auto pt-10 border-t border-gray-100 w-full text-center opacity-30">
-          <p className="text-3xl font-bold text-black tracking-[0.3em] uppercase">
-            PAPERBOXD
+          <p className="text-3xl font-bold text-black tracking-[0.3em] text-bold">
+            paperboxd.in
           </p>
         </div>
 

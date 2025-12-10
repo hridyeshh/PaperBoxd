@@ -165,7 +165,7 @@ export function BookShareButton({
           )}
         </DialogTrigger>
 
-        <DialogContent className="max-w-[95vw] h-[90vh] overflow-hidden p-0 flex flex-col bg-zinc-950 border-zinc-800">
+        <DialogContent className="max-w-[95vw] h-[90vh] overflow-hidden p-0 flex flex-col bg-zinc-950 border-zinc-800 [&>button]:text-white [&>button]:hover:text-white [&>button]:opacity-100 [&>button]:hover:opacity-80">
           <DialogHeader className="px-6 py-4 border-b border-white/10 bg-zinc-900/50">
             <DialogTitle className="text-white">Preview Story</DialogTitle>
           </DialogHeader>
@@ -173,26 +173,35 @@ export function BookShareButton({
           <div className="flex-1 flex flex-col items-center justify-center p-4 gap-6 bg-black">
 
             {/* PREVIEW CONTAINER */}
-            <div className="relative w-full flex-1 flex items-center justify-center overflow-hidden">
+            <div className="relative w-full flex-1 flex items-center justify-center min-h-0">
+              {/* Wrapper that establishes the "physical" size of the scaled element 
+                  1080 * 0.2 = 216px
+                  1920 * 0.2 = 384px
+              */}
               <div
-                className="origin-center shadow-2xl border border-white/10 rounded-lg overflow-hidden"
-                style={{
-                  transform: "scale(0.20)",
-                  width: "1080px",
-                  height: "1920px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}
+                className="relative"
+                style={{ width: '216px', height: '384px' }}
               >
-                {/* Visual Preview (Visible to user) */}
-                <BookShareCard
-                  title={title}
-                  author={author}
-                  // Pass the fetched base64 if ready, otherwise fallback
-                  coverUrl={imgDataUrl || coverUrl}
-                  username={username}
-                />
+                <div
+                  className="origin-top-left shadow-2xl border border-white/10 rounded-lg overflow-hidden"
+                  style={{
+                    transform: "scale(0.20)",
+                    width: "1080px",
+                    height: "1920px",
+                    display: "flex", // Keep this to ensure internal layout works
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }}
+                >
+                  {/* Visual Preview (Visible to user) */}
+                  <BookShareCard
+                    title={title}
+                    author={author}
+                    // Pass the fetched base64 if ready, otherwise fallback
+                    coverUrl={imgDataUrl || coverUrl}
+                    username={username}
+                  />
+                </div>
               </div>
             </div>
 
@@ -202,7 +211,7 @@ export function BookShareButton({
                 // Disable button until the Base64 image is actually ready
                 disabled={isSharing || isPreparing}
                 size="lg"
-                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold h-14 rounded-full text-lg shadow-lg shadow-purple-900/20 disabled:opacity-50"
+                className="w-full bg-white hover:bg-white/90 text-black font-bold h-14 rounded-full text-lg border border-black/20 disabled:opacity-50"
               >
                 {isSharing ? (
                   <>
