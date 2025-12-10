@@ -6,6 +6,9 @@ import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-patter
 import { stripHtmlTags } from "@/lib/utils";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { BookShareButton } from "@/components/ui/features/book-share-button";
+import { BookShareCard } from "@/components/ui/features/book-share-card";
+import { Input } from "@/components/ui/primitives/input";
+import { Label } from "@/components/ui/primitives/label";
 
 interface Book {
   id: string;
@@ -32,6 +35,12 @@ export default function DemoPage() {
   const [book, setBook] = React.useState<Book | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  
+  // Editable fields for preview
+  const [previewTitle, setPreviewTitle] = React.useState("");
+  const [previewAuthor, setPreviewAuthor] = React.useState("");
+  const [previewUsername, setPreviewUsername] = React.useState("username");
+  const [previewCoverUrl, setPreviewCoverUrl] = React.useState("");
 
   React.useEffect(() => {
     const fetchBook = async () => {
@@ -93,7 +102,21 @@ export default function DemoPage() {
           },
         };
 
+        // Calculate cover image for preview
+        const bookCoverImage = bookData.volumeInfo?.imageLinks?.extraLarge ||
+                              bookData.volumeInfo?.imageLinks?.large ||
+                              bookData.volumeInfo?.imageLinks?.medium ||
+                              bookData.volumeInfo?.imageLinks?.thumbnail ||
+                              bookData.volumeInfo?.imageLinks?.smallThumbnail ||
+                              bookData.cover ||
+                              "";
+
         setBook(bookData);
+        
+        // Set preview values from fetched book
+        setPreviewTitle(bookData.title || "Untitled");
+        setPreviewAuthor(bookData.authors?.join(", ") || "");
+        setPreviewCoverUrl(bookCoverImage || "");
       } catch (err) {
         console.error("Error fetching book:", err);
         setError(err instanceof Error ? err.message : "Failed to load book");
@@ -205,10 +228,10 @@ export default function DemoPage() {
             {/* Share Button */}
             <div className="pt-2">
               <BookShareButton
-                title={book.title}
-                author={book.authors?.join(", ")}
-                coverUrl={coverImage}
-                pageCount={undefined}
+                title={previewTitle || book.title}
+                author={previewAuthor || book.authors?.join(", ")}
+                coverUrl={previewCoverUrl || coverImage}
+                username={previewUsername}
                 buttonVariant="outline"
                 size="lg"
               />
@@ -234,6 +257,86 @@ export default function DemoPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Share Card Preview Section */}
+        <div className="mt-16 space-y-6">
+          <div className="border-t border-border pt-8">
+            <h2 className="text-3xl font-bold text-foreground mb-6">Share Card Preview</h2>
+            
+            {/* Editable Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 p-6 bg-muted/30 rounded-lg border border-border">
+              <div className="space-y-2">
+                <Label htmlFor="preview-title">Book Title</Label>
+                <Input
+                  id="preview-title"
+                  value={previewTitle}
+                  onChange={(e) => setPreviewTitle(e.target.value)}
+                  placeholder="Enter book title"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="preview-author">Author</Label>
+                <Input
+                  id="preview-author"
+                  value={previewAuthor}
+                  onChange={(e) => setPreviewAuthor(e.target.value)}
+                  placeholder="Enter author name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="preview-username">Username</Label>
+                <Input
+                  id="preview-username"
+                  value={previewUsername}
+                  onChange={(e) => setPreviewUsername(e.target.value)}
+                  placeholder="Enter username"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="preview-cover">Cover Image URL</Label>
+                <Input
+                  id="preview-cover"
+                  value={previewCoverUrl}
+                  onChange={(e) => setPreviewCoverUrl(e.target.value)}
+                  placeholder="Enter cover image URL"
+                />
+              </div>
+            </div>
+
+            {/* Card Preview */}
+            <div className="flex justify-center items-start gap-8 flex-wrap">
+              {/* Scaled Preview */}
+              <div className="space-y-4">
+                <h3 className="text-xl font-semibold text-foreground">Scaled Preview</h3>
+                <div className="border-4 border-border rounded-lg p-4 bg-black overflow-auto max-h-[600px]">
+                  <div className="scale-[0.3] origin-top-left" style={{ transformOrigin: "top left" }}>
+                    <BookShareCard
+                      title={previewTitle || "Book Title"}
+                      author={previewAuthor || "Author Name"}
+                      coverUrl={previewCoverUrl || coverImage}
+                      username={previewUsername || "username"}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Full Size Preview (scrollable) */}
+              <div className="space-y-4">
+                <h3 className="text-xl font-semibold text-foreground">Full Size Preview</h3>
+                <div className="border-4 border-border rounded-lg p-4 bg-black overflow-auto max-h-[600px] max-w-[800px]">
+                  <div className="scale-[0.4] origin-top-left" style={{ transformOrigin: "top left" }}>
+                    <BookShareCard
+                      title={previewTitle || "Book Title"}
+                      author={previewAuthor || "Author Name"}
+                      coverUrl={previewCoverUrl || coverImage}
+                      username={previewUsername || "username"}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
