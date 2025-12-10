@@ -15,16 +15,14 @@ export function BookShareCard({
   coverUrl,
   username,
 }: BookShareCardProps) {
-  const [imageError, setImageError] = React.useState(false);
-
-  // CRITICAL: Use the proxy URL to bypass CORS issues
-  // This forces the image to come from YOUR domain, bypassing mobile CORS blocks
+  // PROXY FIX: Forces image to load via your server to bypass Mobile CORS
   const proxyUrl = coverUrl 
     ? `/api/image-proxy?url=${encodeURIComponent(coverUrl)}`
     : null;
 
   return (
     <div
+      // Landscape dimensions with pure black background
       className="relative w-[1600px] h-[1200px] bg-black flex items-center justify-center p-20"
       style={{ fontFamily: "system-ui, -apple-system, sans-serif" }}
     >
@@ -37,7 +35,7 @@ export function BookShareCard({
           </div>
         )}
 
-        {/* Main content area */}
+        {/* Main content area - Landscape layout */}
         <div className="flex-1 flex items-center justify-between px-20 py-16">
           {/* Left side: Book title and author */}
           <div className="flex-1 flex flex-col justify-center space-y-8 pr-16">
@@ -51,7 +49,7 @@ export function BookShareCard({
 
           {/* Right side: Book cover with elegant shadow */}
           <div className="flex-shrink-0">
-            {proxyUrl && !imageError ? (
+            {proxyUrl ? (
               <div className="relative aspect-[2/3] w-[520px] overflow-hidden rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.3)] bg-muted">
                 {/* CRITICAL: 
                     1. Use standard <img> tag for html-to-image compatibility
@@ -64,7 +62,6 @@ export function BookShareCard({
                   crossOrigin="anonymous"
                   className="w-full h-full object-cover"
                   style={{ display: 'block' }}
-                  onError={() => setImageError(true)}
                 />
               </div>
             ) : (
