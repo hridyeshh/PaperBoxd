@@ -32,6 +32,12 @@ const eslintConfig = [
       "@next/next/no-img-element": "off",
     },
   },
+  {
+    files: ["app/api/og/**/*.tsx"],
+    rules: {
+      "@next/next/no-img-element": "off",
+    },
+  },
 ];
 
 export default eslintConfig;

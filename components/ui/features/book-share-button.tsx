@@ -3,7 +3,6 @@
 import * as React from "react";
 import { Share2, Loader2, Instagram } from "lucide-react";
 import { toast } from "sonner";
-import { toBlob } from "html-to-image";
 import { Button } from "@/components/ui/primitives/button";
 import { BookShareCard, BookShareCardProps } from "./book-share-card";
 import {
@@ -35,13 +34,12 @@ export function BookShareButton({
 }: BookShareButtonProps) {
   const [isSharing, setIsSharing] = React.useState(false);
   const [showDialog, setShowDialog] = React.useState(false);
-  const cardRef = React.useRef<HTMLDivElement>(null);
 
-  // State to hold the final Base64 string
+  // State to hold the final Base64 string for preview
   const [imgDataUrl, setImgDataUrl] = React.useState<string | null>(null);
   const [isPreparing, setIsPreparing] = React.useState(true);
 
-  // 1. Pre-load the image as Base64 immediately
+  // Pre-load the image as Base64 for preview only
   React.useEffect(() => {
     if (!coverUrl) {
       setIsPreparing(false);
@@ -56,16 +54,15 @@ export function BookShareButton({
     }
 
     setIsPreparing(true);
-    // Fetch via our proxy
+    // Fetch via our proxy for preview
     fetch(`/api/image-proxy?url=${encodeURIComponent(coverUrl)}`)
       .then(async (res) => {
         if (!res.ok) throw new Error("Proxy failed");
         const text = await res.text();
-        setImgDataUrl(text); // This is the massive Base64 string
+        setImgDataUrl(text);
       })
       .catch((err) => {
         console.error("Image load failed", err);
-        // Fallback to original URL so at least something shows (might have CORS issues)
         setImgDataUrl(coverUrl);
       })
       .finally(() => {
@@ -74,43 +71,28 @@ export function BookShareButton({
   }, [coverUrl]);
 
   const handleShare = async () => {
-    if (!cardRef.current) {
-      toast.error("Capture element missing");
-      return;
-    }
-
     setIsSharing(true);
-    // Longer timeout toast because mobile capture can be slow
-    const toastId = toast.loading("Generating Story...");
+    const toastId = toast.loading("Generating high-quality image...");
 
     try {
-      const cardElement = cardRef.current.querySelector(
-        '[data-variant="instagram"]'
-      ) as HTMLElement;
-
-      if (!cardElement) throw new Error("Element not found");
-
-      // 2. WAIT for the image to be fully rendered in the hidden DOM
-      // Even though we have the base64 string, the <img> tag needs a split second to paint it
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // 3. Generate Image with SAFARI-SAFE settings
-      const blob = await toBlob(cardElement, {
-        width: 1080,
-        height: 1920,
-        // CRITICAL FIXES FOR MOBILE:
-        skipFonts: true, // Prevents CORS errors on custom fonts
-        skipAutoScale: true, // Prevents weird scaling on retina screens
-        pixelRatio: 1, // Keep it at 1.0. 1080p is already high res enough. High ratio crashes mobile memory.
-        cacheBust: true,
+      // 1. Construct the API URL
+      const params = new URLSearchParams({
+        title: title,
+        author: author || '',
+        cover: coverUrl || '', // Pass the ORIGINAL url, the server will fetch it
+        username: username || '',
       });
+      
+      // 2. Fetch the generated PNG from Vercel
+      const response = await fetch(`/api/og/share?${params.toString()}`);
+      if (!response.ok) throw new Error("Generation failed");
+      
+      const blob = await response.blob();
 
-      if (!blob) throw new Error("Failed to generate image blob");
+      // 3. Create File for Sharing
+      const file = new File([blob], "story.png", { type: "image/png" });
 
-      // 4. Create File
-      const file = new File([blob], "paperboxd-story.png", { type: "image/png" });
-
-      // 5. Share
+      // 4. Share
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
         await navigator.share({
           files: [file],
@@ -119,22 +101,21 @@ export function BookShareButton({
         toast.success("Opened Instagram!", { id: toastId });
         setShowDialog(false);
       } else {
-        // Desktop Fallback
+        // Fallback Download
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `paperboxd-${title.slice(0, 10)}.png`;
+        a.download = `paperboxd-story.png`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        toast.success("Image downloaded!", { id: toastId });
+        toast.success("Downloaded!", { id: toastId });
         setShowDialog(false);
       }
-
     } catch (error) {
       console.error("Share error:", error);
-      toast.error("Could not generate image. Try screenshotting instead.", { id: toastId });
+      toast.error("Failed to generate image", { id: toastId });
     } finally {
       setIsSharing(false);
     }
@@ -235,26 +216,6 @@ export function BookShareButton({
         </DialogContent>
       </Dialog>
 
-      {/* HIDDEN CAPTURE CONTAINER 
-          This is what html-to-image actually photographs.
-          We conditionally render it ONLY when we have data to prevent capturing blank/loading states.
-      */}
-      {showDialog && (
-        <div
-          ref={cardRef}
-          className="fixed top-0 left-[-2000px] z-[-1]"
-          style={{ width: '1080px', height: '1920px' }}
-        >
-          <div data-variant="instagram">
-            <BookShareCard
-              title={title}
-              author={author}
-              coverUrl={imgDataUrl || coverUrl}
-              username={username}
-            />
-          </div>
-        </div>
-      )}
     </>
   );
 }
