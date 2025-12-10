@@ -22,11 +22,11 @@ const GlassToggleButton = React.forwardRef<HTMLButtonElement, GlassToggleButtonP
         aria-label={label}
         aria-pressed={isActive}
         className={cn(
-          "group flex items-center gap-2 px-4 py-2 text-sm font-medium text-black transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:text-white",
+          "relative z-10 group flex items-center gap-2 px-4 py-2 text-sm font-medium text-black transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:text-white",
           "bg-transparent hover:bg-black/10 dark:hover:bg-white/10",
           rounded === "left" && "rounded-l-lg",
           rounded === "right" && "rounded-r-lg",
-          withDivider && "border-r border-gray-300 dark:border-black/60",
+          withDivider && "border-r border-white/20 dark:border-white/10",
           isActive && "bg-black/15 text-black dark:bg-white/10 dark:text-white",
           className,
         )}

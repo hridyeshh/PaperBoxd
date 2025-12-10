@@ -35,21 +35,17 @@ interface PinterestGridProps {
 
 export function PinterestGrid({ books, onLoadMore, hasMore = false, isLoading = false }: PinterestGridProps) {
   const router = useRouter();
-  const [cardHeights, setCardHeights] = React.useState<Record<string, number>>({});
+  const [hoveredCardId, setHoveredCardId] = React.useState<string | null>(null);
   const observerRef = React.useRef<IntersectionObserver | null>(null);
   const loadMoreRef = React.useRef<HTMLDivElement>(null);
 
-  // Calculate card heights for Pinterest effect
-  React.useEffect(() => {
-    const heights: Record<string, number> = {};
-    books.forEach((book, index) => {
-      // Create varying heights: short (280px), medium (340px), tall (400px)
-      // Pattern: short, medium, tall, medium, short, tall, medium, short, tall, medium
-      const heightPattern = [280, 340, 400, 340, 280, 400, 340, 280, 400, 340];
-      heights[book.id] = heightPattern[index % heightPattern.length];
-    });
-    setCardHeights(heights);
-  }, [books]);
+  // Calculate scale variations for visual interest (vary scale, not crop)
+  // This creates visual variety while respecting the book cover's aspect ratio
+  const getScaleVariation = React.useCallback((index: number) => {
+    // Pattern: 1.0, 1.05, 0.95, 1.08, 0.92, 1.03, 0.97, 1.06, 0.94, 1.02
+    const scalePattern = [1.0, 1.05, 0.95, 1.08, 0.92, 1.03, 0.97, 1.06, 0.94, 1.02];
+    return scalePattern[index % scalePattern.length];
+  }, []);
 
   // Infinite scroll with Intersection Observer
   React.useEffect(() => {
@@ -123,38 +119,48 @@ export function PinterestGrid({ books, onLoadMore, hasMore = false, isLoading = 
   return (
     <>
       <div className="w-full masonry-grid">
-        {books.map((book) => {
-          const height = cardHeights[book.id] || 320;
+        {books.map((book, index) => {
           const formattedDate = formatDate(book.publishedDate);
+          const isHovered = hoveredCardId === book.id;
+          const isDimmed = hoveredCardId !== null && hoveredCardId !== book.id;
+          const baseScale = getScaleVariation(index);
 
           return (
             <motion.div
               key={book.id}
               layout
               initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
+              animate={{ 
+                opacity: isDimmed ? 0.4 : 1,
+                scale: isHovered ? 1.02 : 1,
+              }}
               exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
               className="cursor-pointer group"
               onClick={() => handleCardClick(book)}
+              onMouseEnter={() => setHoveredCardId(book.id)}
+              onMouseLeave={() => setHoveredCardId(null)}
             >
-              <div className="relative rounded-2xl overflow-hidden bg-background border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-                {/* Book Cover Image */}
-                <div 
-                  className="relative w-full overflow-hidden bg-muted"
-                  style={{ height: `${height}px` }}
-                >
+              <div className="relative rounded-2xl overflow-hidden bg-background border border-border/50 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
+                {/* Book Cover Image - Respects intrinsic 2:3 aspect ratio */}
+                <div className="relative w-full aspect-[2/3] overflow-hidden bg-muted">
                   <Image
                     src={book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80"}
                     alt={book.title}
                     fill
-                    className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
+                    className="object-cover object-center transition-transform duration-500"
+                    style={{
+                      transform: isHovered 
+                        ? `scale(${baseScale * 1.1})` 
+                        : `scale(${baseScale})`,
+                    }}
                     sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, (max-width: 1536px) 20vw, 200px"
                     unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || book.cover?.includes('unsplash.com')}
                     priority={false}
                   />
                   
                   {/* Overlay on hover */}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
                 </div>
 
                 {/* Book Info */}

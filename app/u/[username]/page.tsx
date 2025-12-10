@@ -31,7 +31,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/primitives/dialog";
-import { Edit, MoreVertical, Trash2, Plus, X, Heart, AlertTriangle } from "lucide-react";
+import { Edit, MoreVertical, Trash2, Plus, X, Heart, AlertTriangle, BookOpen } from "lucide-react";
+import { motion } from "framer-motion";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { createBookSlug } from "@/lib/utils/book-slug";
 import { cn, DEFAULT_AVATAR, formatDiaryDate } from "@/lib/utils";
@@ -531,16 +532,23 @@ function FavoriteBookCard({
   title,
   onRemove,
   isRemoving,
-  onClick
+  onClick,
+  layoutId
 }: {
   cover: string;
   title: string;
   onRemove?: () => void;
   isRemoving?: boolean;
   onClick?: () => void;
+  layoutId?: string;
 }) {
   return (
-    <div className="group relative flex w-[180px] flex-shrink-0">
+    <motion.div
+      className="group relative flex w-[180px] flex-shrink-0"
+      layoutId={layoutId}
+      layout
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+    >
       <div
         className="relative aspect-[2/3] w-full overflow-visible rounded-3xl bg-muted shadow-sm cursor-pointer"
         onClick={onClick}
@@ -574,7 +582,7 @@ function FavoriteBookCard({
           </button>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -1270,6 +1278,7 @@ function EditableFavoriteBooksCarousel({
                     onClick={() => { }}
                     onRemove={canEdit ? () => handleRemoveBook(book.id) : undefined}
                     isRemoving={canEdit ? isRemoving === book.id : undefined}
+                    layoutId={`favorite-book-${book.id}`}
                   />
                 </div>
                 {isDragOver && canEdit && (
@@ -1278,16 +1287,19 @@ function EditableFavoriteBooksCarousel({
               </div>
             );
           } else {
-            // Empty slot - show plus sign (only if canEdit)
+            // Empty slot - show ghost book outline (only if canEdit)
             if (!canEdit) return null;
             const isDragOver = dragOverIndex === index;
             return (
-              <div
+              <motion.div
                 key={`empty-${index}`}
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, index)}
                 className={`group relative flex w-[180px] flex-shrink-0 ${isDragOver ? "scale-105" : ""}`}
+                initial={{ opacity: 0.6 }}
+                animate={{ opacity: isDragOver ? 1 : 0.6 }}
+                transition={{ duration: 0.2 }}
               >
                 <button
                   type="button"
@@ -1295,14 +1307,25 @@ function EditableFavoriteBooksCarousel({
                     setBookToReplace(null);
                     setIsSearchOpen(true);
                   }}
-                  className="relative aspect-[2/3] w-full overflow-hidden rounded-3xl border-2 border-dashed border-border bg-muted/20 transition-colors hover:bg-muted/40 flex items-center justify-center"
+                  className="relative aspect-[2/3] w-full overflow-hidden rounded-3xl border-2 border-dashed border-border/50 bg-muted/10 transition-all hover:bg-muted/20 hover:border-border flex flex-col items-center justify-center gap-2"
                 >
-                  <Plus className="h-12 w-12 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  {/* Ghost book outline */}
+                  <div className="relative w-16 h-24 flex items-center justify-center">
+                    <BookOpen className="absolute w-12 h-12 text-muted-foreground/40 group-hover:text-muted-foreground/60 transition-colors" strokeWidth={1.5} />
+                    {/* Book spine */}
+                    <div className="absolute left-0 top-0 bottom-0 w-2 bg-muted-foreground/20 rounded-l-sm" />
+                    {/* Book pages */}
+                    <div className="absolute left-2 right-0 top-0 bottom-0 border border-muted-foreground/20 rounded-r-sm" />
+                  </div>
+                  {/* Micro-copy */}
+                  <p className="text-xs text-muted-foreground/60 group-hover:text-muted-foreground/80 transition-colors font-medium px-4 text-center">
+                    This shelf is lonely.
+                  </p>
                 </button>
                 {isDragOver && draggedBookId && (
                   <div className="absolute inset-0 border-2 border-primary rounded-3xl pointer-events-none z-10 bg-primary/10" />
                 )}
-              </div>
+              </motion.div>
             );
           }
         })}
@@ -1692,6 +1715,19 @@ function TbrSection({
       let hasUpdates = false;
       let hasFetches = false;
 
+      // Load cache from sessionStorage
+      let pageCache: Record<string, number> = {};
+      try {
+        if (typeof window !== 'undefined') {
+          const cacheStr = sessionStorage.getItem('book_totalPages_cache');
+          if (cacheStr) {
+            pageCache = JSON.parse(cacheStr);
+          }
+        }
+      } catch (e) {
+        console.error('[DNF] Failed to load book cache', e);
+      }
+
       for (const book of paginatedBooks) {
         const bookWithIds = book as TbrBookWithIds;
         // Try bookId first (MongoDB _id), then fallback to other IDs
@@ -1702,110 +1738,98 @@ function TbrSection({
         }
 
         const pagesRead = bookWithIds.pagesRead || 0;
-        
-        console.log('[DNF] 📖 Processing book:', {
-          bookId,
-          title: book.title,
-          pagesReadFromBook: pagesRead,
-          existingProgress: readingProgress[bookId],
-          hasTotalPages: !!readingProgress[bookId]?.totalPages
-        });
-        
-        // Skip if no pages read or we already have progress for this book
+
+        // Skip if no pages read
         if (pagesRead === 0) {
-          console.log('[DNF] ⏭️ Skipping book - no pages read:', book.title);
           continue;
         }
 
-        // Only fetch totalPages if we don't have it yet
-        if (!readingProgress[bookId]?.totalPages) {
-          console.log('[DNF] 🔄 Fetching totalPages for:', book.title, 'bookId:', bookId);
-          loadingMap[bookId] = true;
-          hasFetches = true;
-
-          try {
-            // Fetch book details to get total pages - try multiple ID formats
-            let totalPages = 0;
-            const idToTry = bookWithIds.bookId || bookWithIds.isbndbId || bookWithIds.openLibraryId || book.id;
-            if (idToTry) {
-              try {
-                console.log('[DNF] 📡 Fetching book details for ID:', idToTry);
-                const bookResponse = await fetch(`/api/books/${encodeURIComponent(idToTry)}`);
-                if (bookResponse.ok) {
-                  const bookData = await bookResponse.json();
-                  totalPages = bookData.volumeInfo?.pageCount || 0;
-                  console.log('[DNF] ✅ Fetched totalPages:', {
-                    bookId,
-                    title: book.title,
-                    totalPages,
-                    pagesRead,
-                    calculatedProgress: totalPages > 0 ? `${Math.round((pagesRead / totalPages) * 100)}%` : 'N/A'
-                  });
-                } else {
-                  console.log('[DNF] ❌ Failed to fetch book details:', {
-                    bookId: idToTry,
-                    status: bookResponse.status
-                  });
-                }
-              } catch (fetchError) {
-                console.error('[DNF] ❌ Error fetching book:', idToTry, fetchError);
-              }
-            }
-
-            // Update progress map with pagesRead from book data and fetched totalPages
-            progressMap[bookId] = {
-              pagesRead,
-              totalPages,
-            };
-            console.log('[DNF] 📝 Adding to progressMap:', {
-              bookId,
-              progress: progressMap[bookId],
-              calculatedPercentage: totalPages > 0 ? `${Math.round((pagesRead / totalPages) * 100)}%` : 'N/A'
-            });
-            hasUpdates = true;
-          } catch (error) {
-            console.error(`[DNF] ❌ Error fetching total pages for book ${bookId}:`, error);
-          } finally {
-            loadingMap[bookId] = false;
-          }
-        } else {
-          // We have totalPages but need to update pagesRead from book data
+        // Check if we already have progress in state
+        if (readingProgress[bookId]?.totalPages) {
           const existingTotalPages = readingProgress[bookId].totalPages;
           progressMap[bookId] = {
             pagesRead,
             totalPages: existingTotalPages,
           };
-          console.log('[DNF] 🔄 Updating pagesRead (totalPages already exists):', {
-            bookId,
-            oldPagesRead: readingProgress[bookId].pagesRead,
-            newPagesRead: pagesRead,
-            totalPages: existingTotalPages,
-            oldPercentage: existingTotalPages > 0 ? `${Math.round((readingProgress[bookId].pagesRead / existingTotalPages) * 100)}%` : 'N/A',
-            newPercentage: existingTotalPages > 0 ? `${Math.round((pagesRead / existingTotalPages) * 100)}%` : 'N/A'
-          });
+          if (readingProgress[bookId].pagesRead !== pagesRead) {
+            hasUpdates = true;
+          }
+          continue;
+        }
+
+        // Check cache first
+        if (pageCache[bookId]) {
+          console.log('[DNF] ⚡ Using cached totalPages:', pageCache[bookId], 'for', book.title);
+          progressMap[bookId] = {
+            pagesRead,
+            totalPages: pageCache[bookId],
+          };
           hasUpdates = true;
+          continue;
+        }
+
+        // If not in cache or state, fetch it
+        console.log('[DNF] 🔄 Fetching totalPages for:', book.title, 'bookId:', bookId);
+        loadingMap[bookId] = true;
+        hasFetches = true;
+
+        try {
+          // Fetch book details to get total pages - try multiple ID formats
+          let totalPages = 0;
+          const idToTry = bookWithIds.bookId || bookWithIds.isbndbId || bookWithIds.openLibraryId || book.id;
+          if (idToTry) {
+            try {
+              const bookResponse = await fetch(`/api/books/${encodeURIComponent(idToTry)}`);
+              if (bookResponse.ok) {
+                const bookData = await bookResponse.json();
+                totalPages = bookData.volumeInfo?.pageCount || 0;
+
+                // Update cache if we got a valid page count
+                if (totalPages > 0) {
+                  pageCache[bookId] = totalPages;
+                  // Save updated cache to sessionStorage immediately
+                  try {
+                    sessionStorage.setItem('book_totalPages_cache', JSON.stringify(pageCache));
+                  } catch (e) { }
+                }
+              }
+            } catch (fetchError) {
+              console.error('[DNF] ❌ Error fetching book:', idToTry, fetchError);
+            }
+          }
+
+          // Update progress map with pagesRead from book data and fetched totalPages
+          progressMap[bookId] = {
+            pagesRead,
+            totalPages,
+          };
+          hasUpdates = true;
+        } catch (error) {
+          console.error(`[DNF] ❌ Error fetching total pages for book ${bookId}:`, error);
+        } finally {
+          loadingMap[bookId] = false;
         }
       }
 
-      if (hasUpdates) {
-        console.log('[DNF] 💾 Updating readingProgress state:', {
-          updates: progressMap,
-          beforeUpdate: readingProgress,
-          willMerge: true
-        });
-        setReadingProgress(prev => {
-          const merged = { ...prev, ...progressMap };
-          console.log('[DNF] ✅ After merge:', {
-            before: Object.keys(prev).length,
-            after: Object.keys(merged).length,
-            mergedProgress: merged
-          });
-          return merged;
-        });
-      }
 
       if (hasFetches) {
-        setLoadingProgress(prev => ({ ...prev, ...loadingMap }));
+        setLoadingProgress((prev) => ({ ...prev, ...loadingMap }));
+      }
+
+      if (hasUpdates) {
+        setReadingProgress((prev) => ({ ...prev, ...progressMap }));
+      }
+
+      // Clear loading state after all fetches
+      if (hasFetches) {
+        // Tiny delay to ensure UI updates smoothly
+        setTimeout(() => {
+          setLoadingProgress((prev) => {
+            const newState = { ...prev };
+            Object.keys(loadingMap).forEach(k => delete newState[k]);
+            return newState;
+          });
+        }, 100);
       }
     };
 
@@ -3480,7 +3504,8 @@ export default function UserProfilePage() {
       }
 
       // Load profile data for the requested username
-      fetch(`/api/users/${encodeURIComponent(activeUsername)}`)
+      // Add timestamp to prevent browser caching
+      fetch(`/api/users/${encodeURIComponent(activeUsername)}?t=${Date.now()}`)
         .then((res) => {
           if (!res.ok) {
             if (res.status === 404) {
@@ -3611,21 +3636,21 @@ export default function UserProfilePage() {
             // TBR books
             const transformedTbr: TbrBook[] = Array.isArray(data.user.tbrBooks)
               ? data.user.tbrBooks.map((book: BookFromAPI, idx: number) => ({
-                  id: book.bookId?.toString() || book._id?.toString() || `tbr-${idx}`,
-                  bookId: book.bookId?.toString() || book._id?.toString(),
-                  isbndbId: book.isbndbId,
-                  openLibraryId: book.openLibraryId,
-                  title: book.title || "Unknown Title",
-                  author: book.author || "Unknown Author",
-                  cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
-                  mood: book.mood,
-                  addedOn: book.addedOn
-                    ? `Added ${new Date(book.addedOn).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`
-                    : "Added",
-                  urgency: book.urgency,
-                  whyNow: book.whyNow,
-                  pagesRead: book.pagesRead || 0, // Include reading progress from API
-                }))
+                id: book.bookId?.toString() || book._id?.toString() || `tbr-${idx}`,
+                bookId: book.bookId?.toString() || book._id?.toString(),
+                isbndbId: book.isbndbId,
+                openLibraryId: book.openLibraryId,
+                title: book.title || "Unknown Title",
+                author: book.author || "Unknown Author",
+                cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                mood: book.mood,
+                addedOn: book.addedOn
+                  ? `Added ${new Date(book.addedOn).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`
+                  : "Added",
+                urgency: book.urgency,
+                whyNow: book.whyNow,
+                pagesRead: book.pagesRead || 0, // Include reading progress from API
+              }))
               : [];
             setTbrBooks(transformedTbr);
 
