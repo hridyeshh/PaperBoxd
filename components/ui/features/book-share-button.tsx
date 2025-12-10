@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Share2, Loader2 } from "lucide-react";
+import { Share2, Loader2, Instagram } from "lucide-react";
 import { toast } from "sonner";
 import { toBlob } from "html-to-image";
 import { Button } from "@/components/ui/primitives/button";
@@ -39,24 +39,21 @@ export function BookShareButton({
   const [imageLoaded, setImageLoaded] = React.useState(false);
   const [imgDataUrl, setImgDataUrl] = React.useState<string | null>(null);
 
-  // Wait for image to load before allowing capture
-  // Fetch Base64 data URL from proxy (API now returns text/plain with Base64 string)
+  // Pre-fetch the Base64 image
   React.useEffect(() => {
     if (coverUrl) {
       setImageLoaded(false);
-      // If it's already a data URL, use it directly
+      // If it's already a data URL, good to go
       if (coverUrl.startsWith('data:')) {
         setImgDataUrl(coverUrl);
         setImageLoaded(true);
         return;
       }
 
-      const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(coverUrl)}`;
-
-      fetch(proxyUrl)
+      // Fetch via proxy
+      fetch(`/api/image-proxy?url=${encodeURIComponent(coverUrl)}`)
         .then(res => {
           if (!res.ok) throw new Error("Failed to fetch proxy");
-          // API now returns the Base64 string directly as text/plain
           return res.text();
         })
         .then(dataUrl => {
@@ -65,8 +62,7 @@ export function BookShareButton({
         })
         .catch(err => {
           console.error("Failed to load image via proxy", err);
-          // Fallback to original URL if proxy fails
-          setImageLoaded(true);
+          setImageLoaded(true); // Allow sharing even if image fails (shows No Cover)
         });
     } else {
       setImageLoaded(true);
@@ -80,117 +76,75 @@ export function BookShareButton({
     }
 
     setIsSharing(true);
+    const toastId = toast.loading("Preparing for Instagram...");
+
     try {
       const cardElement = cardRef.current.querySelector(
         '[data-variant="instagram"]'
       ) as HTMLElement;
 
       if (!cardElement) {
-        toast.error("Card element not found");
-        return;
+        throw new Error("Card element not found");
       }
 
-      // Wait for all images to load completely
+      // 1. Wait for the image to exist in the DOM
+      // Since we are using Base64, it renders fast, but we double check.
       const images = cardElement.querySelectorAll('img');
-      const imagePromises = Array.from(images).map((img) => {
-        if (img.complete && img.naturalHeight !== 0) {
-          return Promise.resolve();
-        }
-        return new Promise((resolve) => {
-          const timeout = setTimeout(() => {
-            resolve(null); // Timeout after 10 seconds
-          }, 10000);
-
-          img.onload = () => {
-            clearTimeout(timeout);
-            // Double check the image is actually loaded
-            if (img.complete && img.naturalHeight !== 0) {
-              resolve(null);
-            } else {
-              // Wait a bit more
-              setTimeout(() => resolve(null), 500);
-            }
-          };
-
-          img.onerror = () => {
-            clearTimeout(timeout);
-            resolve(null); // Continue even if image fails
-          };
-        });
-      });
-
-      await Promise.all(imagePromises);
-
-      // Additional wait to ensure everything is fully rendered
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      // Generate blob with CORS support
-      const blob = await toBlob(cardElement, {
-        pixelRatio: 2,
-        quality: 1,
-        backgroundColor: "#000000",
-        width: 1600, // Explicitly set width matching component
-        height: 1200, // Explicitly set height matching component
-        // Force visibility in the clone
-        style: {
-          display: "block",
-          visibility: "visible",
-          opacity: "1",
-          transform: "none", // Ensure no transforms affect the clone
-        },
-      });
-
-      if (!blob) {
-        toast.error("Failed to generate image");
-        return;
-      }
-
-      // Create file from blob
-      const file = new File([blob], `${title}-share.png`, {
-        type: "image/png",
-      });
-
-      // Try Web Share API (mobile)
-      if (navigator.share && navigator.canShare?.({ files: [file] })) {
-        try {
-          await navigator.share({
-            files: [file],
-            title: `Check out ${title}`,
-            text: `I'm reading ${title}${author ? ` by ${author}` : ""} on Paperboxd!`,
+      await Promise.all(
+        Array.from(images).map(img => {
+          if (img.complete) return Promise.resolve();
+          return new Promise(resolve => {
+            img.onload = resolve;
+            img.onerror = resolve; // proceed anyway
           });
-          toast.success("Shared successfully!");
-          setShowDialog(false);
-        } catch (err) {
-          // User cancelled or error - fall through to download
-          if ((err as Error).name !== "AbortError") {
-            console.error("Share error:", err);
-          }
-          // Fall through to download
-          downloadImage(blob);
-        }
+        })
+      );
+
+      // 2. Small delay to ensure layout is stable
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // 3. Generate Image
+      const blob = await toBlob(cardElement, {
+        pixelRatio: 1.5, // 1.5 is enough for 1080p, keeps file size manageable
+        quality: 0.9,
+        // MATCH THE COMPONENT DIMENSIONS EXACTLY
+        width: 1080,
+        height: 1920,
+      });
+
+      if (!blob) throw new Error("Failed to generate blob");
+
+      // 4. Create File
+      const file = new File([blob], "paperboxd-story.png", { type: "image/png" });
+
+      // 5. Share
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `Check out ${title}`,
+        });
+        toast.success("Opened Instagram!", { id: toastId });
+        setShowDialog(false);
       } else {
-        // Fallback to download (desktop)
-        downloadImage(blob);
+        // Fallback
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `paperboxd-story.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success("Image downloaded!", { id: toastId });
+        setShowDialog(false);
       }
+
     } catch (error) {
-      console.error("Error sharing:", error);
-      toast.error("Failed to share. Please try again.");
+      console.error("Share error:", error);
+      toast.error("Failed to share", { id: toastId });
     } finally {
       setIsSharing(false);
     }
-  };
-
-  const downloadImage = (blob: Blob) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${title.replace(/[^a-z0-9]/gi, "_")}-share.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success("Image downloaded!");
-    setShowDialog(false);
   };
 
   return (
@@ -217,49 +171,52 @@ export function BookShareButton({
             </Button>
           )}
         </DialogTrigger>
-        <DialogContent className="max-w-[95vw] sm:max-w-5xl max-h-[95vh] overflow-hidden p-0 flex flex-col bg-black sm:bg-background">
-          <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b border-border sm:border-border border-white/10 sm:border-border">
-            <DialogTitle className="text-base sm:text-lg text-white sm:text-foreground">Share to Instagram Stories</DialogTitle>
+        
+        <DialogContent className="max-w-[95vw] h-[90vh] overflow-hidden p-0 flex flex-col bg-black border-zinc-800 [&>button]:text-white [&>button]:hover:text-white [&>button]:opacity-100 [&>button]:hover:opacity-80">
+          <DialogHeader className="px-6 py-4 border-b border-white/10 bg-zinc-900/50">
+            <DialogTitle className="text-white">Preview Story</DialogTitle>
           </DialogHeader>
-          <div className="flex-1 flex flex-col items-center justify-center p-3 sm:p-6 gap-4 sm:gap-6 overflow-auto bg-black sm:bg-transparent">
-            {/* Preview - Centered and Responsive */}
-            <div className="flex justify-center items-center flex-1 min-h-0 w-full">
-              <div className="border-2 sm:border-4 border-transparent sm:border-border rounded-lg sm:rounded-xl p-2 sm:p-4 bg-black shadow-2xl overflow-hidden flex items-center justify-center">
-                <div
-                  className="scale-[0.15] sm:scale-[0.2] md:scale-[0.25] lg:scale-[0.3] origin-center"
-                  style={{ transformOrigin: "center center" }}
-                >
-                  <div data-variant="instagram">
-                    <BookShareCard
-                      title={title}
-                      author={author}
-                      coverUrl={imgDataUrl || coverUrl}
-                      username={username}
-                    />
-                  </div>
-                </div>
+          
+          <div className="flex-1 flex flex-col items-center justify-center p-4 gap-6 bg-zinc-950 overflow-auto">
+            
+            {/* Preview Container - Scaled Down */}
+            <div className="relative w-full flex-1 flex items-center justify-center min-h-0 overflow-visible">
+              <div 
+                className="relative"
+                style={{ 
+                  // Scale to fit: 1080px * 0.18 = ~194px wide, fits mobile screens
+                  transform: "scale(0.18)",
+                  transformOrigin: "center center",
+                  width: "1080px",
+                  height: "1920px",
+                }}
+              >
+                {/* We render a "Visible" version just for preview */}
+                <BookShareCard
+                  title={title}
+                  author={author}
+                  coverUrl={imgDataUrl || coverUrl}
+                  username={username}
+                />
               </div>
             </div>
 
-            {/* Share button - Directly below card, responsive */}
-            <div className="flex justify-center pt-2 w-full px-4">
+            <div className="w-full px-6 pb-6">
               <Button
                 onClick={handleShare}
                 disabled={isSharing || !imageLoaded}
                 size="lg"
-                className="min-w-[180px] sm:min-w-[240px] w-full sm:w-auto text-sm sm:text-base bg-white text-black hover:bg-white/90 sm:bg-primary sm:text-primary-foreground sm:hover:bg-primary/90"
+                className="w-full bg-black hover:bg-black/90 text-white font-bold h-14 rounded-full text-lg border border-white/20"
               >
                 {isSharing ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    <span className="hidden sm:inline">Generating...</span>
-                    <span className="sm:hidden">Generating</span>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    Generating...
                   </>
                 ) : (
                   <>
-                    <Share2 className="h-4 w-4 mr-2" />
-                    <span className="hidden sm:inline">Share to Instagram Stories</span>
-                    <span className="sm:hidden">Share Stories</span>
+                    <Instagram className="h-5 w-5 mr-2" />
+                    Share to Instagram
                   </>
                 )}
               </Button>
@@ -268,11 +225,14 @@ export function BookShareButton({
         </DialogContent>
       </Dialog>
 
-      {/* Hidden container for capture - off-screen but full size */}
+      {/* HIDDEN CAPTURE CONTAINER 
+        Must be visible to DOM but hidden from user. 
+        'fixed left-[200vw]' pushes it off-screen without hiding it from html-to-image.
+      */}
       <div
         ref={cardRef}
-        className="fixed top-0 left-[100vw] pointer-events-none opacity-0"
-        aria-hidden="true"
+        className="fixed top-0 left-[200vw]" 
+        style={{ width: '1080px', height: '1920px' }}
       >
         <div data-variant="instagram">
           <BookShareCard

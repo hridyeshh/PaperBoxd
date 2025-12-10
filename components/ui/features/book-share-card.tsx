@@ -15,104 +15,92 @@ export function BookShareCard({
   coverUrl,
   username,
 }: BookShareCardProps) {
-  const [base64Cover, setBase64Cover] = React.useState<string | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
+  // 1. CHECK IMMEDIATELY: Is this already a Base64 string?
+  const isDataUrl = coverUrl?.startsWith("data:");
+  
+  const [fetchedCover, setFetchedCover] = React.useState<string | null>(null);
+  const [isFetching, setIsFetching] = React.useState(false);
 
-  // Fetch the Base64 string when the component mounts
+  // 2. Only fetch if it's a real URL (not a data string)
   React.useEffect(() => {
-    if (!coverUrl) {
-      setIsLoading(false);
-      return;
-    }
-
-    // If it's already a data URL (pre-fetched), use it directly
-    if (coverUrl.startsWith('data:')) {
-      setBase64Cover(coverUrl);
-      setIsLoading(false);
-      return;
-    }
+    if (!coverUrl || isDataUrl) return;
 
     const fetchBase64 = async () => {
       try {
-        setIsLoading(true);
-        // Call our proxy endpoint
+        setIsFetching(true);
         const res = await fetch(`/api/image-proxy?url=${encodeURIComponent(coverUrl)}`);
-        if (!res.ok) throw new Error("Failed to fetch proxy");
-        
-        // The response body IS the base64 string
+        if (!res.ok) throw new Error("Failed");
         const dataUrl = await res.text();
-        setBase64Cover(dataUrl);
-      } catch (e) {
-        console.error("Failed to load cover via proxy", e);
-        // Fallback to original URL (might fail CORS, but better than nothing)
-        setBase64Cover(coverUrl);
+        setFetchedCover(dataUrl);
+      } catch {
+        // Fallback to original if proxy fails
+        setFetchedCover(coverUrl);
       } finally {
-        setIsLoading(false);
+        setIsFetching(false);
       }
     };
 
     fetchBase64();
-  }, [coverUrl]);
+  }, [coverUrl, isDataUrl]);
+
+  // 3. DECIDE: Use the prop directly if it's data, otherwise use fetched state
+  const finalCoverSrc = isDataUrl ? coverUrl : fetchedCover;
+  
+  // Show loading only if we are waiting for a fetch
+  const isLoading = !isDataUrl && isFetching;
 
   return (
     <div
-      // Landscape dimensions with pure black background
-      className="relative w-[1600px] h-[1200px] bg-black flex items-center justify-center p-20"
+      // CRITICAL FIX: 1080x1920 is the exact Instagram Story size.
+      // This eliminates the gray borders.
+      className="relative w-[1080px] h-[1920px] bg-black flex items-center justify-center font-sans"
       style={{ fontFamily: "system-ui, -apple-system, sans-serif" }}
     >
-      {/* White card with rounded corners and subtle shadow */}
-      <div className="relative w-full h-full bg-white rounded-[80px] shadow-[0_0_80px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col">
-        {/* Username on top */}
+      {/* The White Card Container */}
+      <div className="relative w-[920px] bg-white rounded-[60px] shadow-[0_0_80px_rgba(255,255,255,0.1)] overflow-hidden flex flex-col items-center py-24 px-12 gap-12">
+        
+        {/* Username */}
         {username && (
-          <div className="absolute top-10 left-10 z-10">
+          <div className="w-full flex justify-start opacity-50 mb-4">
             <p className="text-4xl font-bold text-black tracking-tight">@{username}</p>
           </div>
         )}
 
-        {/* Main content area - Landscape layout */}
-        <div className="flex-1 flex items-center justify-between px-20 py-16">
-          {/* Left side: Book title and author */}
-          <div className="flex-1 flex flex-col justify-center space-y-8 pr-16">
-            <h1 className="text-8xl font-bold text-black leading-[1.1] tracking-tight">
-              {title}
-            </h1>
-            {author && (
-              <p className="text-5xl text-gray-600 font-semibold">{author}</p>
-            )}
-          </div>
-
-          {/* Right side: Book cover with elegant shadow */}
-          <div className="flex-shrink-0">
-            {base64Cover && !isLoading ? (
-              <div className="relative aspect-[2/3] w-[520px] overflow-hidden rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.3)] bg-muted">
-                {/* CRITICAL: 
-                    1. Use standard <img> tag for html-to-image compatibility
-                    2. No crossOrigin needed for Data URLs!
-                    3. src is now a Base64 data URL string
-                */}
-                <img
-                  src={base64Cover} // Now this is a huge "data:image/jpg;base64..." string
-                  alt={title}
-                  className="w-full h-full object-cover"
-                  style={{ display: 'block' }}
-                />
-              </div>
-            ) : isLoading ? (
-              <div className="relative aspect-[2/3] w-[520px] bg-gray-200 flex items-center justify-center rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
-                <span className="text-gray-400 text-3xl font-medium">Loading...</span>
-              </div>
-            ) : (
-              <div className="relative aspect-[2/3] w-[520px] bg-gray-200 flex items-center justify-center rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
-                <span className="text-gray-400 text-3xl font-medium">No cover</span>
-              </div>
-            )}
-          </div>
+        {/* Book Cover */}
+        <div className="relative w-[500px] aspect-[2/3] rounded-[32px] shadow-[0_30px_60px_rgba(0,0,0,0.2)] overflow-hidden bg-gray-100">
+          {finalCoverSrc && !isLoading ? (
+            <img
+              src={finalCoverSrc}
+              alt={title}
+              className="w-full h-full object-cover"
+              style={{ display: 'block' }} // Prevents tiny gaps
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-400 text-3xl font-medium">
+              {isLoading ? "Loading..." : "No Cover"}
+            </div>
+          )}
         </div>
 
-        {/* Paperboxd branding - right bottom */}
-        <div className="absolute bottom-10 right-10">
-          <p className="text-3xl font-semibold text-gray-500 tracking-wide">paperboxd.in</p>
+        {/* Text Info */}
+        <div className="flex flex-col items-center text-center space-y-6 max-w-[800px]">
+          <h1 className="text-7xl font-bold text-black leading-[1.1] tracking-tight line-clamp-3">
+            {title}
+          </h1>
+          {author && (
+            <p className="text-5xl text-gray-500 font-semibold uppercase tracking-widest">
+              {author}
+            </p>
+          )}
         </div>
+
+        {/* Footer */}
+        <div className="mt-auto pt-10 border-t border-gray-100 w-full text-center opacity-30">
+          <p className="text-3xl font-bold text-black tracking-[0.3em] uppercase">
+            PAPERBOXD
+          </p>
+        </div>
+
       </div>
     </div>
   );
