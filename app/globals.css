@@ -214,3 +214,42 @@
     top: -0.5em;
   }
 }
+
+/* CSS Columns Masonry Layout - Bidirectional (row and column wise) */
+.masonry-grid {
+  column-count: 2;
+  column-gap: 1rem;
+  column-fill: balance;
+}
+
+@media (min-width: 640px) {
+  .masonry-grid {
+    column-count: 2;
+  }
+}
+
+@media (min-width: 1024px) {
+  .masonry-grid {
+    column-count: 4;
+  }
+}
+
+@media (min-width: 1280px) {
+  .masonry-grid {
+    column-count: 5;
+  }
+}
+
+@media (min-width: 1536px) {
+  .masonry-grid {
+    column-count: 6;
+  }
+}
+
+/* Ensure items don't break across columns */
+.masonry-grid > * {
+  break-inside: avoid;
+  margin-bottom: 1rem;
+  display: inline-block;
+  width: 100%;
+}

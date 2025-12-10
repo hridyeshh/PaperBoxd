@@ -67,6 +67,7 @@ export function AuthenticatedHomeMobile() {
   const [hasMore, setHasMore] = React.useState(true);
   const [page, setPage] = React.useState(1);
   const allBooksRef = React.useRef<Book[]>([]);
+  const [cardHeights, setCardHeights] = React.useState<Record<string, number>>({});
 
   // Fetch books (latest + personalized recommendations + friends' liked books)
   React.useEffect(() => {
@@ -373,6 +374,18 @@ export function AuthenticatedHomeMobile() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [loadMore]);
 
+  // Calculate card heights for masonry effect
+  React.useEffect(() => {
+    const heights: Record<string, number> = {};
+    books.forEach((book, index) => {
+      // Create varying heights for mobile: shorter range (200px-280px) to fit mobile screens better
+      // Pattern: short, medium, tall, medium, short, tall, medium, short, tall, medium
+      const heightPattern = [200, 240, 280, 240, 200, 280, 240, 200, 280, 240];
+      heights[book.id] = heightPattern[index % heightPattern.length];
+    });
+    setCardHeights(heights);
+  }, [books]);
+
   // Handle card click to navigate to book detail page
   const handleCardClick = React.useCallback((book: Book) => {
     const bookId = book.isbn13 || book.isbn || book.openLibraryId || book.isbndbId || book._id || book.id;
@@ -407,55 +420,62 @@ export function AuthenticatedHomeMobile() {
 
   return (
     <div className="w-full pb-24">
-      {/* 2x2 Grid Feed */}
+      {/* Masonry Grid Feed */}
       <div className="px-4 py-6">
-        <div className="grid grid-cols-2 gap-4">
-          {books.map((book) => (
-            <motion.div
-              key={book.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              className="cursor-pointer group"
-              onClick={() => handleCardClick(book)}
-            >
-              <div className="relative rounded-xl overflow-hidden bg-background border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300">
-                {/* Book Cover Image */}
-                <div className="relative w-full aspect-[2/3] overflow-hidden bg-muted">
-                  <Image
-                    src={book.cover || getFallbackCover()}
-                    alt={book.title}
-                    fill
-                    className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
-                    sizes="50vw"
-                    unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || book.cover?.includes('unsplash.com')}
-                  />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
-                </div>
+        <div className="masonry-grid">
+          {books.map((book) => {
+            const height = cardHeights[book.id] || 240;
+            
+            return (
+              <motion.div
+                key={book.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                className="cursor-pointer group"
+                onClick={() => handleCardClick(book)}
+              >
+                <div className="relative rounded-xl overflow-hidden bg-background border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300">
+                  {/* Book Cover Image */}
+                  <div 
+                    className="relative w-full overflow-hidden bg-muted"
+                    style={{ height: `${height}px` }}
+                  >
+                    <Image
+                      src={book.cover || getFallbackCover()}
+                      alt={book.title}
+                      fill
+                      className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
+                      sizes="50vw"
+                      unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || book.cover?.includes('unsplash.com')}
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
+                  </div>
 
-                {/* Book Info */}
-                <div className="p-3 space-y-1">
-                  <h3 className="font-semibold text-sm line-clamp-2 text-foreground">
-                    {book.title}
-                  </h3>
-                  <p className="text-xs text-muted-foreground line-clamp-1">
-                    {book.authors?.join(", ") || "Unknown Author"}
-                  </p>
-                  {book.averageRating && (
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <span>★</span>
-                      <span>{book.averageRating.toFixed(1)}</span>
-                      {book.ratingsCount && (
-                        <span className="text-muted-foreground/70">
-                          ({book.ratingsCount})
-                        </span>
-                      )}
-                    </div>
-                  )}
+                  {/* Book Info */}
+                  <div className="p-3 space-y-1">
+                    <h3 className="font-semibold text-sm line-clamp-2 text-foreground">
+                      {book.title}
+                    </h3>
+                    <p className="text-xs text-muted-foreground line-clamp-1">
+                      {book.authors?.join(", ") || "Unknown Author"}
+                    </p>
+                    {book.averageRating && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <span>★</span>
+                        <span>{book.averageRating.toFixed(1)}</span>
+                        {book.ratingsCount && (
+                          <span className="text-muted-foreground/70">
+                            ({book.ratingsCount})
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            );
+          })}
         </div>
 
         {/* Loading more indicator */}

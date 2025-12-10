@@ -122,13 +122,7 @@ export function PinterestGrid({ books, onLoadMore, hasMore = false, isLoading = 
 
   return (
     <>
-      <div 
-        className="w-full columns-2 sm:columns-2 md:columns-2 lg:columns-4 xl:columns-5 2xl:columns-6"
-        style={{ 
-          columnGap: '1rem',
-          columnFill: 'balance'
-        }}
-      >
+      <div className="w-full masonry-grid">
         {books.map((book) => {
           const height = cardHeights[book.id] || 320;
           const formattedDate = formatDate(book.publishedDate);
@@ -140,7 +134,7 @@ export function PinterestGrid({ books, onLoadMore, hasMore = false, isLoading = 
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="cursor-pointer group break-inside-avoid mb-4"
+              className="cursor-pointer group"
               onClick={() => handleCardClick(book)}
             >
               <div className="relative rounded-2xl overflow-hidden bg-background border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
