@@ -39,8 +39,10 @@ export function BookShareButton({
   const [imageLoaded, setImageLoaded] = React.useState(false);
 
   // Wait for image to load before allowing capture
+  // Use proxy URL to avoid CORS issues
   React.useEffect(() => {
     if (coverUrl) {
+      const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(coverUrl)}`;
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = () => {
@@ -50,7 +52,7 @@ export function BookShareButton({
         // Still allow capture even if image fails
         setImageLoaded(true);
       };
-      img.src = coverUrl;
+      img.src = proxyUrl;
     } else {
       setImageLoaded(true);
     }
@@ -192,14 +194,14 @@ export function BookShareButton({
             </Button>
           )}
         </DialogTrigger>
-        <DialogContent className="max-w-[95vw] sm:max-w-5xl max-h-[95vh] overflow-hidden p-0 flex flex-col">
-          <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b border-border">
-            <DialogTitle className="text-base sm:text-lg">Share to Instagram Stories</DialogTitle>
+        <DialogContent className="max-w-[95vw] sm:max-w-5xl max-h-[95vh] overflow-hidden p-0 flex flex-col bg-black sm:bg-background">
+          <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b border-border sm:border-border border-white/10 sm:border-border">
+            <DialogTitle className="text-base sm:text-lg text-white sm:text-foreground">Share to Instagram Stories</DialogTitle>
           </DialogHeader>
-          <div className="flex-1 flex flex-col items-center justify-center p-3 sm:p-6 gap-4 sm:gap-6 overflow-auto">
+          <div className="flex-1 flex flex-col items-center justify-center p-3 sm:p-6 gap-4 sm:gap-6 overflow-auto bg-black sm:bg-transparent">
             {/* Preview - Centered and Responsive */}
             <div className="flex justify-center items-center flex-1 min-h-0 w-full">
-              <div className="border-2 sm:border-4 border-border rounded-lg sm:rounded-xl p-2 sm:p-4 bg-black shadow-2xl overflow-hidden flex items-center justify-center">
+              <div className="border-2 sm:border-4 border-transparent sm:border-border rounded-lg sm:rounded-xl p-2 sm:p-4 bg-black shadow-2xl overflow-hidden flex items-center justify-center">
                 <div 
                   className="scale-[0.15] sm:scale-[0.2] md:scale-[0.25] lg:scale-[0.3] origin-center" 
                   style={{ transformOrigin: "center center" }}
@@ -222,7 +224,7 @@ export function BookShareButton({
                 onClick={handleShare}
                 disabled={isSharing || !imageLoaded}
                 size="lg"
-                className="min-w-[180px] sm:min-w-[240px] w-full sm:w-auto text-sm sm:text-base"
+                className="min-w-[180px] sm:min-w-[240px] w-full sm:w-auto text-sm sm:text-base bg-white text-black hover:bg-white/90 sm:bg-primary sm:text-primary-foreground sm:hover:bg-primary/90"
               >
                 {isSharing ? (
                   <>

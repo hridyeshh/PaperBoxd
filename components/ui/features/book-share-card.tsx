@@ -15,55 +15,12 @@ export function BookShareCard({
   coverUrl,
   username,
 }: BookShareCardProps) {
-  const [imageLoaded, setImageLoaded] = React.useState(false);
   const [imageError, setImageError] = React.useState(false);
-  const [imageDataUrl, setImageDataUrl] = React.useState<string | null>(null);
-  const imgRef = React.useRef<HTMLImageElement>(null);
 
-  // Convert image to data URL to avoid CORS issues
-  React.useEffect(() => {
-    if (coverUrl) {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      
-      img.onload = () => {
-        try {
-          // Create canvas to convert image to data URL
-          const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth;
-          canvas.height = img.naturalHeight;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0);
-            const dataUrl = canvas.toDataURL('image/png');
-            setImageDataUrl(dataUrl);
-            setImageLoaded(true);
-            setImageError(false);
-          } else {
-            // Fallback to direct URL if canvas fails
-            setImageDataUrl(coverUrl);
-            setImageLoaded(true);
-            setImageError(false);
-          }
-        } catch (error) {
-          console.error('Error converting image to data URL:', error);
-          // Fallback to direct URL
-          setImageDataUrl(coverUrl);
-          setImageLoaded(true);
-          setImageError(false);
-        }
-      };
-      
-      img.onerror = () => {
-        setImageError(true);
-        setImageLoaded(false);
-      };
-      
-      img.src = coverUrl;
-    } else {
-      setImageLoaded(true);
-    }
-  }, [coverUrl]);
+  // Use the proxy URL if a cover exists
+  const proxyUrl = coverUrl 
+    ? `/api/image-proxy?url=${encodeURIComponent(coverUrl)}`
+    : null;
 
   return (
     <div
@@ -93,38 +50,21 @@ export function BookShareCard({
 
           {/* Right side: Book cover with elegant shadow */}
           <div className="flex-shrink-0">
-            {coverUrl && !imageError && imageDataUrl ? (
+            {proxyUrl && !imageError ? (
               <div className="relative aspect-[2/3] w-[520px] overflow-hidden rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.3)] bg-muted">
+                {/* CRITICAL: 
+                    1. Use standard <img> for html-to-image compatibility
+                    2. crossOrigin="anonymous" allows pixel reading
+                    3. src is the PROXY URL, not the original google/amazon url
+                */}
                 <img
-                  ref={imgRef}
-                  src={imageDataUrl}
-                  alt={title}
-                  className="w-full h-full object-cover"
-                  style={{ display: 'block' }}
-                />
-              </div>
-            ) : coverUrl && !imageError ? (
-              <div className="relative aspect-[2/3] w-[520px] overflow-hidden rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.3)] bg-muted">
-                <img
-                  ref={imgRef}
-                  src={coverUrl}
+                  src={proxyUrl}
                   alt={title}
                   crossOrigin="anonymous"
                   className="w-full h-full object-cover"
-                  onLoad={() => {
-                    setImageLoaded(true);
-                    setImageError(false);
-                  }}
-                  onError={() => {
-                    setImageError(true);
-                    setImageLoaded(false);
-                  }}
+                  style={{ display: 'block' }}
+                  onError={() => setImageError(true)}
                 />
-                {!imageLoaded && (
-                  <div className="absolute inset-0 bg-gray-200 flex items-center justify-center">
-                    <span className="text-gray-400 text-3xl font-medium">Loading...</span>
-                  </div>
-                )}
               </div>
             ) : (
               <div className="relative aspect-[2/3] w-[520px] bg-gray-200 flex items-center justify-center rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
