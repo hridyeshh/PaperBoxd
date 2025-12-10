@@ -15,12 +15,44 @@ export function BookShareCard({
   coverUrl,
   username,
 }: BookShareCardProps) {
-  // PROXY FIX: Forces image to load via your server to bypass Mobile CORS
-  // If it's already a data URL (pre-fetched), use it directly.
-  const isDataUrl = coverUrl?.startsWith('data:');
-  const proxyUrl = coverUrl
-    ? (isDataUrl ? coverUrl : `/api/image-proxy?url=${encodeURIComponent(coverUrl)}`)
-    : null;
+  const [base64Cover, setBase64Cover] = React.useState<string | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  // Fetch the Base64 string when the component mounts
+  React.useEffect(() => {
+    if (!coverUrl) {
+      setIsLoading(false);
+      return;
+    }
+
+    // If it's already a data URL (pre-fetched), use it directly
+    if (coverUrl.startsWith('data:')) {
+      setBase64Cover(coverUrl);
+      setIsLoading(false);
+      return;
+    }
+
+    const fetchBase64 = async () => {
+      try {
+        setIsLoading(true);
+        // Call our proxy endpoint
+        const res = await fetch(`/api/image-proxy?url=${encodeURIComponent(coverUrl)}`);
+        if (!res.ok) throw new Error("Failed to fetch proxy");
+        
+        // The response body IS the base64 string
+        const dataUrl = await res.text();
+        setBase64Cover(dataUrl);
+      } catch (e) {
+        console.error("Failed to load cover via proxy", e);
+        // Fallback to original URL (might fail CORS, but better than nothing)
+        setBase64Cover(coverUrl);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBase64();
+  }, [coverUrl]);
 
   return (
     <div
@@ -51,20 +83,23 @@ export function BookShareCard({
 
           {/* Right side: Book cover with elegant shadow */}
           <div className="flex-shrink-0">
-            {proxyUrl ? (
+            {base64Cover && !isLoading ? (
               <div className="relative aspect-[2/3] w-[520px] overflow-hidden rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.3)] bg-muted">
                 {/* CRITICAL: 
                     1. Use standard <img> tag for html-to-image compatibility
-                    2. crossOrigin="anonymous" is essential even with the proxy
-                    3. src is the PROXY URL, not the original google/amazon url
+                    2. No crossOrigin needed for Data URLs!
+                    3. src is now a Base64 data URL string
                 */}
                 <img
-                  src={proxyUrl}
+                  src={base64Cover} // Now this is a huge "data:image/jpg;base64..." string
                   alt={title}
-                  crossOrigin="anonymous"
                   className="w-full h-full object-cover"
                   style={{ display: 'block' }}
                 />
+              </div>
+            ) : isLoading ? (
+              <div className="relative aspect-[2/3] w-[520px] bg-gray-200 flex items-center justify-center rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+                <span className="text-gray-400 text-3xl font-medium">Loading...</span>
               </div>
             ) : (
               <div className="relative aspect-[2/3] w-[520px] bg-gray-200 flex items-center justify-center rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.3)]">

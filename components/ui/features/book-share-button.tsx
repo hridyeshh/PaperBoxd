@@ -40,27 +40,32 @@ export function BookShareButton({
   const [imgDataUrl, setImgDataUrl] = React.useState<string | null>(null);
 
   // Wait for image to load before allowing capture
-  // Use proxy URL to avoid CORS issues
+  // Fetch Base64 data URL from proxy (API now returns text/plain with Base64 string)
   React.useEffect(() => {
     if (coverUrl) {
       setImageLoaded(false);
+      // If it's already a data URL, use it directly
+      if (coverUrl.startsWith('data:')) {
+        setImgDataUrl(coverUrl);
+        setImageLoaded(true);
+        return;
+      }
+
       const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(coverUrl)}`;
 
       fetch(proxyUrl)
-        .then(res => res.blob())
-        .then(blob => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            if (reader.result) {
-              setImgDataUrl(reader.result as string);
-              setImageLoaded(true);
-            }
-          };
-          reader.readAsDataURL(blob);
+        .then(res => {
+          if (!res.ok) throw new Error("Failed to fetch proxy");
+          // API now returns the Base64 string directly as text/plain
+          return res.text();
+        })
+        .then(dataUrl => {
+          setImgDataUrl(dataUrl);
+          setImageLoaded(true);
         })
         .catch(err => {
           console.error("Failed to load image via proxy", err);
-          // Fallback to original URL if proxy fails, though likelihood of capture failure is high
+          // Fallback to original URL if proxy fails
           setImageLoaded(true);
         });
     } else {
