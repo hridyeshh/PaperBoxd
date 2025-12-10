@@ -17,7 +17,8 @@ export function BookShareCard({
 }: BookShareCardProps) {
   const [imageError, setImageError] = React.useState(false);
 
-  // Use the proxy URL if a cover exists
+  // CRITICAL: Use the proxy URL to bypass CORS issues
+  // This forces the image to come from YOUR domain, bypassing mobile CORS blocks
   const proxyUrl = coverUrl 
     ? `/api/image-proxy?url=${encodeURIComponent(coverUrl)}`
     : null;
@@ -53,8 +54,8 @@ export function BookShareCard({
             {proxyUrl && !imageError ? (
               <div className="relative aspect-[2/3] w-[520px] overflow-hidden rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.3)] bg-muted">
                 {/* CRITICAL: 
-                    1. Use standard <img> for html-to-image compatibility
-                    2. crossOrigin="anonymous" allows pixel reading
+                    1. Use standard <img> tag for html-to-image compatibility
+                    2. crossOrigin="anonymous" is essential even with the proxy
                     3. src is the PROXY URL, not the original google/amazon url
                 */}
                 <img
