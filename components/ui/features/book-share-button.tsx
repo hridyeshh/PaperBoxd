@@ -140,7 +140,7 @@ export function BookShareButton({
               onClick={handleShare}
               disabled={isSharing}
               size="lg"
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold h-14 rounded-full text-lg shadow-lg"
+              className="w-full bg-white hover:bg-white/90 text-black font-bold h-14 rounded-full text-lg shadow-lg"
             >
               {isSharing ? (
                 <>
