@@ -124,7 +124,13 @@ export function BookShareButton({
         pixelRatio: 2,
         quality: 1,
         backgroundColor: "#000000",
-        cacheBust: true,
+        // cacheBust: true, // REMOVED: Breaks data URLs and unnecessary since we fetch manually
+        // Force visibility in the clone
+        style: {
+          display: "block",
+          visibility: "visible",
+          opacity: "1",
+        },
       });
 
       if (!blob) {
@@ -255,10 +261,10 @@ export function BookShareButton({
         </DialogContent>
       </Dialog>
 
-      {/* Hidden container for capture - off-screen */}
+      {/* Hidden container for capture - using opacity 0 but keeping it in flow/layout significantly reduces Safari issues */}
       <div
         ref={cardRef}
-        className="fixed -left-[9999px] -top-[9999px] pointer-events-none"
+        className="fixed top-0 left-0 z-[-50] w-px h-px overflow-hidden opacity-0 pointer-events-none"
         aria-hidden="true"
       >
         <div data-variant="instagram">
