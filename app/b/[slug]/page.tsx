@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
-import { Calendar, BookOpen, Star, MapPin, Globe, FileText, Heart, Share2, NotebookPen, Link2, Search, Send, BookMarked } from "lucide-react";
+import { Calendar, BookOpen, Star, MapPin, Globe, FileText, Heart, Share2, NotebookPen, Link2, Search, Send, BookMarked, Instagram } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -98,6 +98,9 @@ export default function BookDetailPage() {
 
   // Diary editor dialog state
   const [showDiaryEditor, setShowDiaryEditor] = React.useState(false);
+
+  // Description dialog state (mobile only)
+  const [showDescriptionDialog, setShowDescriptionDialog] = React.useState(false);
   const [existingDiaryContent, setExistingDiaryContent] = React.useState<string>("");
 
   // Share dialog state
@@ -992,8 +995,24 @@ export default function BookDetailPage() {
                     <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-primary/30 via-primary/20 to-primary/5 -z-10" />
                     {/* Card content */}
                     <div className="relative bg-background/90 backdrop-blur-sm rounded-lg border border-border/50 p-6 md:p-8 -m-6 md:-m-8">
+                      {/* Mobile: Limited to 5 lines with read more */}
+                      <div className="md:hidden">
+                        <p
+                          className="text-base leading-relaxed text-muted-foreground whitespace-pre-wrap line-clamp-5"
+                          style={{ fontFamily: '"Helvetica", sans-serif' }}
+                        >
+                          {stripHtmlTags(volumeInfo.description)}
+                        </p>
+                        <button
+                          onClick={() => setShowDescriptionDialog(true)}
+                          className="mt-3 text-sm font-medium text-primary underline"
+                        >
+                          Read more
+                        </button>
+                      </div>
+                      {/* Desktop: Full description */}
                       <p
-                        className="text-base md:text-lg leading-relaxed text-muted-foreground whitespace-pre-wrap"
+                        className="hidden md:block text-base md:text-lg leading-relaxed text-muted-foreground whitespace-pre-wrap"
                         style={{ fontFamily: '"Helvetica", sans-serif' }}
                       >
                         {stripHtmlTags(volumeInfo.description)}
@@ -1002,6 +1021,30 @@ export default function BookDetailPage() {
                   </div>
                 </div>
               )}
+
+              {/* Description Dialog (Mobile Only) */}
+              <Dialog open={showDescriptionDialog} onOpenChange={setShowDescriptionDialog}>
+                <DialogContent className="max-w-[95vw] max-h-[85vh] p-0 flex flex-col md:hidden">
+                  <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b border-border">
+                    <DialogTitle>Description</DialogTitle>
+                  </DialogHeader>
+                  <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                    <div className="relative rounded-lg p-6">
+                      {/* Gradient background element */}
+                      <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-primary/30 via-primary/20 to-primary/5 -z-10" />
+                      {/* Card content */}
+                      <div className="relative bg-background/90 backdrop-blur-sm rounded-lg border border-border/50 p-6 -m-6">
+                        <p
+                          className="text-base leading-relaxed text-muted-foreground whitespace-pre-wrap"
+                          style={{ fontFamily: '"Helvetica", sans-serif' }}
+                        >
+                          {stripHtmlTags(volumeInfo.description)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
 
               {/* Action Buttons */}
               <div className="flex gap-3">
@@ -1062,8 +1105,8 @@ export default function BookDetailPage() {
 
         {/* Share Dialog */}
         <Dialog open={isShareOpen} onOpenChange={setIsShareOpen}>
-          <DialogContent className="max-w-md max-h-[80vh] p-0 flex flex-col">
-            <div className="p-6 flex flex-col min-w-0 flex-1 overflow-hidden">
+          <DialogContent className="max-w-md max-h-[80vh] sm:max-h-[85vh] p-0 flex flex-col">
+            <div className="p-4 sm:p-6 flex flex-col min-w-0 flex-1 overflow-hidden">
               <DialogHeader>
                 <DialogTitle>Share this book</DialogTitle>
                 <DialogDescription>
@@ -1072,21 +1115,22 @@ export default function BookDetailPage() {
               </DialogHeader>
 
               <div className="flex flex-col gap-4 py-4">
-                {/* Instagram Story / Share Card - Mobile Only */}
-                <div className="flex justify-center pb-2 md:hidden">
+                {/* Social Media Buttons Grid */}
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-3 sm:gap-4">
+                  {/* Instagram Stories Button */}
                   <BookShareButton
                     title={book.volumeInfo.title || "Untitled"}
                     author={book.volumeInfo.authors?.join(", ")}
                     coverUrl={coverImage}
-                    rating={book.volumeInfo.averageRating}
-                    pageCount={book.volumeInfo.pageCount}
-                    buttonVariant="default"
-                    size="lg"
-                    className="w-full bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 hover:opacity-90 text-white border-0"
-                  />
-                </div>
-
-                <div className="grid grid-cols-4 gap-4">
+                    username={session?.user?.username}
+                    asCustomButton={true}
+                    className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity cursor-pointer"
+                  >
+                    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#FCAF45] flex items-center justify-center">
+                      <Instagram className="h-6 w-6 text-white" />
+                    </div>
+                    <span className="text-xs text-muted-foreground">Stories</span>
+                  </BookShareButton>
                   <button
                     onClick={handleCopyLink}
                     className="flex flex-col items-center gap-2 hover:opacity-70 transition-opacity"

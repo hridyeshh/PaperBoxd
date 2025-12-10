@@ -427,53 +427,53 @@ export function AuthenticatedHomeMobile() {
             const height = cardHeights[book.id] || 240;
             
             return (
-              <motion.div
-                key={book.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="cursor-pointer group"
-                onClick={() => handleCardClick(book)}
-              >
-                <div className="relative rounded-xl overflow-hidden bg-background border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300">
-                  {/* Book Cover Image */}
+            <motion.div
+              key={book.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="cursor-pointer group"
+              onClick={() => handleCardClick(book)}
+            >
+              <div className="relative rounded-xl overflow-hidden bg-background border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300">
+                {/* Book Cover Image */}
                   <div 
                     className="relative w-full overflow-hidden bg-muted"
                     style={{ height: `${height}px` }}
                   >
-                    <Image
-                      src={book.cover || getFallbackCover()}
-                      alt={book.title}
-                      fill
-                      className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
-                      sizes="50vw"
-                      unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || book.cover?.includes('unsplash.com')}
-                    />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
-                  </div>
-
-                  {/* Book Info */}
-                  <div className="p-3 space-y-1">
-                    <h3 className="font-semibold text-sm line-clamp-2 text-foreground">
-                      {book.title}
-                    </h3>
-                    <p className="text-xs text-muted-foreground line-clamp-1">
-                      {book.authors?.join(", ") || "Unknown Author"}
-                    </p>
-                    {book.averageRating && (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <span>★</span>
-                        <span>{book.averageRating.toFixed(1)}</span>
-                        {book.ratingsCount && (
-                          <span className="text-muted-foreground/70">
-                            ({book.ratingsCount})
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  <Image
+                    src={book.cover || getFallbackCover()}
+                    alt={book.title}
+                    fill
+                    className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
+                    sizes="50vw"
+                    unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || book.cover?.includes('unsplash.com')}
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
                 </div>
-              </motion.div>
+
+                {/* Book Info */}
+                <div className="p-3 space-y-1">
+                  <h3 className="font-semibold text-sm line-clamp-2 text-foreground">
+                    {book.title}
+                  </h3>
+                  <p className="text-xs text-muted-foreground line-clamp-1">
+                    {book.authors?.join(", ") || "Unknown Author"}
+                  </p>
+                  {book.averageRating && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <span>★</span>
+                      <span>{book.averageRating.toFixed(1)}</span>
+                      {book.ratingsCount && (
+                        <span className="text-muted-foreground/70">
+                          ({book.ratingsCount})
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
             );
           })}
         </div>

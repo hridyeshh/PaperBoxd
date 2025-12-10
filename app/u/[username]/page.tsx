@@ -1790,7 +1790,9 @@ function TbrSection({
                   // Save updated cache to sessionStorage immediately
                   try {
                     sessionStorage.setItem('book_totalPages_cache', JSON.stringify(pageCache));
-                  } catch (e) { }
+                  } catch {
+                    // Ignore sessionStorage errors (e.g., in private browsing)
+                  }
                 }
               }
             } catch (fetchError) {

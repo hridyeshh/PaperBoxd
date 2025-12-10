@@ -14,70 +14,41 @@ import {
   DialogTrigger,
 } from "@/components/ui/primitives/dialog";
 
-export interface BookShareButtonProps extends Omit<BookShareCardProps, "variant"> {
+export interface BookShareButtonProps extends BookShareCardProps {
   className?: string;
   buttonVariant?: "default" | "outline" | "ghost" | "secondary" | "destructive" | "link";
   size?: "default" | "sm" | "lg" | "icon";
-  cardVariant?: "aura" | "critic" | "polaroid";
+  children?: React.ReactNode;
+  asCustomButton?: boolean;
 }
 
 export function BookShareButton({
   title,
   author,
   coverUrl,
-  rating,
-  pageCount,
-  cardVariant = "aura",
+  username,
   className,
   buttonVariant = "default",
   size = "default",
+  children,
+  asCustomButton = false,
 }: BookShareButtonProps) {
   const [isSharing, setIsSharing] = React.useState(false);
   const [showDialog, setShowDialog] = React.useState(false);
-  const [selectedVariant, setSelectedVariant] = React.useState<
-    "aura" | "critic" | "polaroid"
-  >(cardVariant || "aura");
   const cardRef = React.useRef<HTMLDivElement>(null);
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const [scale, setScale] = React.useState(0.35); // Default start
   const [imageLoaded, setImageLoaded] = React.useState(false);
-
-  // Responsive scaling
-  React.useEffect(() => {
-    if (!showDialog) return;
-
-    const updateScale = () => {
-      if (containerRef.current) {
-        // Calculate scale based on container width vs card width (1080px)
-        const newScale = containerRef.current.offsetWidth / 1080;
-        setScale(newScale);
-      }
-    };
-
-    // Initial delay to let dialog render
-    const timer = setTimeout(updateScale, 100);
-
-    const observer = new ResizeObserver(updateScale);
-    if (containerRef.current) {
-      observer.observe(containerRef.current);
-    }
-
-    return () => {
-      observer.disconnect();
-      clearTimeout(timer);
-    };
-  }, [showDialog]);
 
   // Wait for image to load before allowing capture
   React.useEffect(() => {
-    if (coverUrl && cardRef.current) {
+    if (coverUrl) {
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = () => {
         setImageLoaded(true);
       };
       img.onerror = () => {
-        setImageLoaded(true); // Allow capture even if image fails
+        // Still allow capture even if image fails
+        setImageLoaded(true);
       };
       img.src = coverUrl;
     } else {
@@ -85,7 +56,7 @@ export function BookShareButton({
     }
   }, [coverUrl]);
 
-  const handleShare = async (variant: "aura" | "critic" | "polaroid") => {
+  const handleShare = async () => {
     if (!cardRef.current) {
       toast.error("Failed to generate share card");
       return;
@@ -93,9 +64,8 @@ export function BookShareButton({
 
     setIsSharing(true);
     try {
-      // Find the card element for the selected variant
       const cardElement = cardRef.current.querySelector(
-        `[data-variant="${variant}"]`
+        '[data-variant="instagram"]'
       ) as HTMLElement;
 
       if (!cardElement) {
@@ -103,14 +73,45 @@ export function BookShareButton({
         return;
       }
 
-      // Wait a bit more to ensure everything is rendered
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Wait for all images to load completely
+      const images = cardElement.querySelectorAll('img');
+      const imagePromises = Array.from(images).map((img) => {
+        if (img.complete && img.naturalHeight !== 0) {
+          return Promise.resolve();
+        }
+        return new Promise((resolve) => {
+          const timeout = setTimeout(() => {
+            resolve(null); // Timeout after 10 seconds
+          }, 10000);
+          
+          img.onload = () => {
+            clearTimeout(timeout);
+            // Double check the image is actually loaded
+            if (img.complete && img.naturalHeight !== 0) {
+              resolve(null);
+            } else {
+              // Wait a bit more
+              setTimeout(() => resolve(null), 500);
+            }
+          };
+          
+          img.onerror = () => {
+            clearTimeout(timeout);
+            resolve(null); // Continue even if image fails
+          };
+        });
+      });
 
-      // Generate blob
+      await Promise.all(imagePromises);
+      
+      // Additional wait to ensure everything is fully rendered
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // Generate blob with CORS support
       const blob = await toBlob(cardElement, {
         pixelRatio: 2,
         quality: 1,
-        backgroundColor: variant === "aura" ? "#000000" : variant === "critic" ? "#18181b" : "#f5f1e8",
+        backgroundColor: "#000000",
         cacheBust: true,
       });
 
@@ -171,82 +172,69 @@ export function BookShareButton({
     <>
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogTrigger asChild>
-          <Button
-            variant={buttonVariant}
-            size={size}
-            className={className}
-            onClick={() => setShowDialog(true)}
-          >
-            <Share2 className="h-4 w-4 mr-2" />
-            Share
-          </Button>
-        </DialogTrigger>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Share Book Card</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-6">
-            {/* Variant selector */}
-            <div className="flex gap-3 justify-center">
-              {(["aura", "critic", "polaroid"] as const).map((variant) => (
-                <Button
-                  key={variant}
-                  variant={selectedVariant === variant ? "default" : "outline"}
-                  onClick={() => setSelectedVariant(variant)}
-                  className="capitalize"
-                >
-                  {variant}
-                </Button>
-              ))}
+          {asCustomButton && children ? (
+            <div onClick={() => setShowDialog(true)} className={className}>
+              {children}
             </div>
-
-            {/* Preview */}
-            <div className="flex justify-center w-full overflow-hidden">
-              <div className="border-2 border-border rounded-lg p-2 bg-muted/50 w-full max-w-[380px]">
-                <div
-                  ref={containerRef}
-                  className="relative w-full aspect-[9/16] overflow-hidden bg-black/5"
+          ) : (
+            <Button
+              variant={buttonVariant}
+              size={size}
+              className={className}
+              onClick={() => setShowDialog(true)}
+            >
+              {children || (
+                <>
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share
+                </>
+              )}
+            </Button>
+          )}
+        </DialogTrigger>
+        <DialogContent className="max-w-[95vw] sm:max-w-5xl max-h-[95vh] overflow-hidden p-0 flex flex-col">
+          <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b border-border">
+            <DialogTitle className="text-base sm:text-lg">Share to Instagram Stories</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 flex flex-col items-center justify-center p-3 sm:p-6 gap-4 sm:gap-6 overflow-auto">
+            {/* Preview - Centered and Responsive */}
+            <div className="flex justify-center items-center flex-1 min-h-0 w-full">
+              <div className="border-2 sm:border-4 border-border rounded-lg sm:rounded-xl p-2 sm:p-4 bg-black shadow-2xl overflow-hidden flex items-center justify-center">
+                <div 
+                  className="scale-[0.15] sm:scale-[0.2] md:scale-[0.25] lg:scale-[0.3] origin-center" 
+                  style={{ transformOrigin: "center center" }}
                 >
-                  <div
-                    className="origin-top-left absolute top-0 left-0 will-change-transform"
-                    style={{
-                      transform: `scale(${scale})`,
-                      width: '1080px',
-                      height: '1920px'
-                    }}
-                  >
-                    <div data-variant={selectedVariant}>
-                      <BookShareCard
-                        title={title}
-                        author={author}
-                        coverUrl={coverUrl}
-                        rating={rating}
-                        pageCount={pageCount}
-                        variant={selectedVariant}
-                      />
-                    </div>
+                  <div data-variant="instagram">
+                    <BookShareCard
+                      title={title}
+                      author={author}
+                      coverUrl={coverUrl}
+                      username={username}
+                    />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Share button */}
-            <div className="flex justify-center">
+            {/* Share button - Directly below card, responsive */}
+            <div className="flex justify-center pt-2 w-full px-4">
               <Button
-                onClick={() => handleShare(selectedVariant)}
+                onClick={handleShare}
                 disabled={isSharing || !imageLoaded}
                 size="lg"
-                className="min-w-[200px]"
+                className="min-w-[180px] sm:min-w-[240px] w-full sm:w-auto text-sm sm:text-base"
               >
                 {isSharing ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Generating...
+                    <span className="hidden sm:inline">Generating...</span>
+                    <span className="sm:hidden">Generating</span>
                   </>
                 ) : (
                   <>
                     <Share2 className="h-4 w-4 mr-2" />
-                    Share to Instagram Stories
+                    <span className="hidden sm:inline">Share to Instagram Stories</span>
+                    <span className="sm:hidden">Share Stories</span>
                   </>
                 )}
               </Button>
@@ -261,18 +249,14 @@ export function BookShareButton({
         className="fixed -left-[9999px] -top-[9999px] pointer-events-none"
         aria-hidden="true"
       >
-        {(["aura", "critic", "polaroid"] as const).map((variant) => (
-          <div key={variant} data-variant={variant}>
-            <BookShareCard
-              title={title}
-              author={author}
-              coverUrl={coverUrl}
-              rating={rating}
-              pageCount={pageCount}
-              variant={variant}
-            />
-          </div>
-        ))}
+        <div data-variant="instagram">
+          <BookShareCard
+            title={title}
+            author={author}
+            coverUrl={coverUrl}
+            username={username}
+          />
+        </div>
       </div>
     </>
   );
