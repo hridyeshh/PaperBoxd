@@ -206,14 +206,14 @@ export function BookShareButton({
 
       // 6. Share
       console.log('[Share] Attempting to share file');
-      await navigator.share({
-        files: [file],
+          await navigator.share({
+            files: [file],
         title: `Reading ${title}`,
       });
       
       console.log('[Share] Share successful');
       toast.success("Opened Instagram!", { id: toastId });
-      setShowDialog(false);
+          setShowDialog(false);
     } catch (error) {
       console.error("[Share] Share error caught:", error);
       console.error("[Share] Error details:", {
@@ -254,7 +254,7 @@ export function BookShareButton({
         } else {
           console.error("[Share] Fallback fetch failed:", response.status);
           toast.error("Failed to generate image", { id: toastId });
-        }
+      }
       } catch (fallbackError) {
         console.error("[Share] Fallback error:", fallbackError);
         toast.error("Failed to generate image", { id: toastId });
