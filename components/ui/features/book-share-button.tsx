@@ -37,22 +37,32 @@ export function BookShareButton({
   const [showDialog, setShowDialog] = React.useState(false);
   const cardRef = React.useRef<HTMLDivElement>(null);
   const [imageLoaded, setImageLoaded] = React.useState(false);
+  const [imgDataUrl, setImgDataUrl] = React.useState<string | null>(null);
 
   // Wait for image to load before allowing capture
   // Use proxy URL to avoid CORS issues
   React.useEffect(() => {
     if (coverUrl) {
+      setImageLoaded(false);
       const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(coverUrl)}`;
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        setImageLoaded(true);
-      };
-      img.onerror = () => {
-        // Still allow capture even if image fails
-        setImageLoaded(true);
-      };
-      img.src = proxyUrl;
+
+      fetch(proxyUrl)
+        .then(res => res.blob())
+        .then(blob => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            if (reader.result) {
+              setImgDataUrl(reader.result as string);
+              setImageLoaded(true);
+            }
+          };
+          reader.readAsDataURL(blob);
+        })
+        .catch(err => {
+          console.error("Failed to load image via proxy", err);
+          // Fallback to original URL if proxy fails, though likelihood of capture failure is high
+          setImageLoaded(true);
+        });
     } else {
       setImageLoaded(true);
     }
@@ -85,7 +95,7 @@ export function BookShareButton({
           const timeout = setTimeout(() => {
             resolve(null); // Timeout after 10 seconds
           }, 10000);
-          
+
           img.onload = () => {
             clearTimeout(timeout);
             // Double check the image is actually loaded
@@ -96,7 +106,7 @@ export function BookShareButton({
               setTimeout(() => resolve(null), 500);
             }
           };
-          
+
           img.onerror = () => {
             clearTimeout(timeout);
             resolve(null); // Continue even if image fails
@@ -105,7 +115,7 @@ export function BookShareButton({
       });
 
       await Promise.all(imagePromises);
-      
+
       // Additional wait to ensure everything is fully rendered
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
@@ -202,15 +212,15 @@ export function BookShareButton({
             {/* Preview - Centered and Responsive */}
             <div className="flex justify-center items-center flex-1 min-h-0 w-full">
               <div className="border-2 sm:border-4 border-transparent sm:border-border rounded-lg sm:rounded-xl p-2 sm:p-4 bg-black shadow-2xl overflow-hidden flex items-center justify-center">
-                <div 
-                  className="scale-[0.15] sm:scale-[0.2] md:scale-[0.25] lg:scale-[0.3] origin-center" 
+                <div
+                  className="scale-[0.15] sm:scale-[0.2] md:scale-[0.25] lg:scale-[0.3] origin-center"
                   style={{ transformOrigin: "center center" }}
                 >
                   <div data-variant="instagram">
                     <BookShareCard
                       title={title}
                       author={author}
-                      coverUrl={coverUrl}
+                      coverUrl={imgDataUrl || coverUrl}
                       username={username}
                     />
                   </div>
@@ -255,7 +265,7 @@ export function BookShareButton({
           <BookShareCard
             title={title}
             author={author}
-            coverUrl={coverUrl}
+            coverUrl={imgDataUrl || coverUrl}
             username={username}
           />
         </div>

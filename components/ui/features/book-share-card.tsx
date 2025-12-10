@@ -16,8 +16,10 @@ export function BookShareCard({
   username,
 }: BookShareCardProps) {
   // PROXY FIX: Forces image to load via your server to bypass Mobile CORS
-  const proxyUrl = coverUrl 
-    ? `/api/image-proxy?url=${encodeURIComponent(coverUrl)}`
+  // If it's already a data URL (pre-fetched), use it directly.
+  const isDataUrl = coverUrl?.startsWith('data:');
+  const proxyUrl = coverUrl
+    ? (isDataUrl ? coverUrl : `/api/image-proxy?url=${encodeURIComponent(coverUrl)}`)
     : null;
 
   return (
