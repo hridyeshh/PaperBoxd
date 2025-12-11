@@ -7,8 +7,49 @@ export async function GET(request: NextRequest) {
     return new NextResponse("Missing URL", { status: 400 });
   }
 
+  // 1. Validate the URL object
+  let parsedUrl;
   try {
-    // 1. Fetch the image server-side (No CORS issues here!)
+    parsedUrl = new URL(url);
+  } catch {
+    return new NextResponse("Invalid URL", { status: 400 });
+  }
+
+  // 2. Allow-list specific domains to prevent SSRF attacks
+  const ALLOWED_HOSTS = [
+    "images.unsplash.com",
+    "books.google.com",
+    "covers.openlibrary.org",
+    "images.isbndb.com",
+    "covers.isbndb.com",
+    "res.cloudinary.com",
+    "lh3.googleusercontent.com",
+    "i.pravatar.cc",
+  ];
+
+  if (!ALLOWED_HOSTS.includes(parsedUrl.hostname)) {
+    return new NextResponse("Forbidden Domain", { status: 403 });
+  }
+
+  // 3. Block private/internal IP addresses (additional SSRF protection)
+  const hostname = parsedUrl.hostname.toLowerCase();
+  const isPrivateIP = 
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    hostname.startsWith("169.254.") || // AWS metadata
+    hostname.startsWith("10.") || // Private range 10.0.0.0/8
+    (hostname.startsWith("172.") && 
+     parseInt(hostname.split(".")[1] || "0") >= 16 && 
+     parseInt(hostname.split(".")[1] || "0") <= 31) || // Private range 172.16.0.0/12
+    hostname.startsWith("192.168."); // Private range 192.168.0.0/16
+  
+  if (isPrivateIP) {
+    return new NextResponse("Forbidden Domain", { status: 403 });
+  }
+
+  try {
+    // 4. Fetch the image server-side (No CORS issues here!)
     const response = await fetch(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",

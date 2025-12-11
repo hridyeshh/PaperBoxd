@@ -232,7 +232,8 @@ export async function GET(
         id: userPlain._id?.toString() || userPlain._id,
         username: userPlain.username,
         name: userPlain.name,
-        email: userPlain.email,
+        // Only reveal email if it's the logged-in user looking at their own profile
+        email: isOwner ? userPlain.email : undefined,
         avatar: userPlain.avatar,
         bio: userPlain.bio,
         birthday: userPlain.birthday,
