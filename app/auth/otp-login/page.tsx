@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import * as React from "react";
 import { useForm } from "react-hook-form";
@@ -54,7 +55,7 @@ export default function OTPLoginPage() {
   const onEmailSubmit = async (data: EmailFormValues) => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/auth/otp-login/send-code", {
+      const response = await fetch(API_BASE_URL + "/api/auth/otp-login/send-code", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -90,7 +91,7 @@ export default function OTPLoginPage() {
     isSubmittingRef.current = true;
     setIsLoading(true);
     try {
-      const response = await fetch("/api/auth/otp-login/verify-code", {
+      const response = await fetch(API_BASE_URL + "/api/auth/otp-login/verify-code", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -120,7 +121,7 @@ export default function OTPLoginPage() {
           // Check onboarding status and redirect
           setTimeout(async () => {
             try {
-              const onboardingResponse = await fetch("/api/onboarding/status");
+              const onboardingResponse = await fetch(API_BASE_URL + "/api/onboarding/status");
               if (onboardingResponse.ok) {
                 const onboardingData = await onboardingResponse.json();
                 let redirectUrl = "/";
@@ -183,7 +184,7 @@ export default function OTPLoginPage() {
   const handleResendCode = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/auth/otp-login/send-code", {
+      const response = await fetch(API_BASE_URL + "/api/auth/otp-login/send-code", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

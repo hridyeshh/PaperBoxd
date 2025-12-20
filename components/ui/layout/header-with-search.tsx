@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import Image from "next/image";
 import React from "react";
@@ -91,7 +92,7 @@ export function Header({
       const username = session.user.username;
       setIsLoadingAvatar(true);
       // Fetch logged-in user's profile to get their avatar
-      fetch(`/api/users/${encodeURIComponent(username)}`)
+      fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(username)}`)
         .then((res) => {
           if (res.ok) {
             return res.json();
@@ -265,7 +266,7 @@ export function Header({
         const cached = typeof window !== "undefined" ? sessionStorage.getItem(cacheKey) : null;
         if (!cached) {
           // Prefetch in background
-          fetch(`/api/users/${encodeURIComponent(session.user.username)}`)
+          fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(session.user.username)}`)
             .then((res) => res.ok ? res.json() : null)
             .then((data) => {
               if (data?.user && typeof window !== "undefined") {

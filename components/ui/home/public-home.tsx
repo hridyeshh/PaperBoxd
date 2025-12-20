@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import React, { useEffect, useState, useRef } from "react";
 import { useScroll, useTransform, motion } from "framer-motion";
@@ -109,10 +110,17 @@ export function PublicHome() {
   useEffect(() => {
     const fetchSphereBooks = async () => {
       try {
-        const response = await fetch('/api/books/sphere?limit=80');
+        const response = await fetch(API_BASE_URL + '/api/books/sphere?limit=80', {
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
         if (response.ok) {
           const data = await response.json();
           setSphereBooks(data.books || []);
+        } else {
+          console.error('Error fetching sphere books:', response.status, response.statusText);
         }
       } catch (error) {
         console.error('Error fetching sphere books:', error);

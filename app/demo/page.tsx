@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import * as React from "react";
 import Image from "next/image";
@@ -49,7 +50,7 @@ export default function DemoPage() {
         setError(null);
 
         // Fetch multiple books to find one with a cover image
-        const response = await fetch("/api/books/latest?pageSize=10");
+        const response = await fetch(API_BASE_URL + "/api/books/latest?pageSize=10");
         
         if (!response.ok) {
           throw new Error("Failed to fetch book");

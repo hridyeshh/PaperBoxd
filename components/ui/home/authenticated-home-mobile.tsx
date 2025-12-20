@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -74,7 +75,7 @@ export function AuthenticatedHomeMobile() {
     // Background fetch function (doesn't show loading state)
     const fetchBooksInBackground = async () => {
       try {
-        const latestResponse = await fetch(`/api/books/latest?page=1&pageSize=200`);
+        const latestResponse = await fetch(`${API_BASE_URL}/api/books/latest?page=1&pageSize=200`);
         const latestData = latestResponse.ok ? await latestResponse.json() : { books: [] };
 
         const bookMap = new Map<string, Book>();
@@ -105,9 +106,9 @@ export function AuthenticatedHomeMobile() {
 
         if (session?.user?.id) {
           const [recommendationsResponse, onboardingResponse, friendsResponse] = await Promise.all([
-            fetch(`/api/books/personalized?type=recommended&limit=100`),
-            fetch(`/api/books/personalized?type=onboarding&limit=100`),
-            fetch(`/api/books/personalized?type=friends&limit=100`),
+            fetch(`${API_BASE_URL}/api/books/personalized?type=recommended&limit=100`),
+            fetch(`${API_BASE_URL}/api/books/personalized?type=onboarding&limit=100`),
+            fetch(`${API_BASE_URL}/api/books/personalized?type=friends&limit=100`),
           ]);
 
           const recommendationsData = recommendationsResponse.ok ? await recommendationsResponse.json() : { books: [] };
@@ -230,9 +231,9 @@ export function AuthenticatedHomeMobile() {
         if (session?.user?.id) {
           // Fetch all personalized sources in parallel
           const [recommendationsResponse, onboardingResponse, friendsResponse] = await Promise.all([
-            fetch(`/api/books/personalized?type=recommended&limit=100`),
-            fetch(`/api/books/personalized?type=onboarding&limit=100`),
-            fetch(`/api/books/personalized?type=friends&limit=100`),
+            fetch(`${API_BASE_URL}/api/books/personalized?type=recommended&limit=100`),
+            fetch(`${API_BASE_URL}/api/books/personalized?type=onboarding&limit=100`),
+            fetch(`${API_BASE_URL}/api/books/personalized?type=friends&limit=100`),
           ]);
 
           const recommendationsData = recommendationsResponse.ok ? await recommendationsResponse.json() : { books: [] };

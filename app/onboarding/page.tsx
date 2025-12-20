@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -28,7 +29,7 @@ export default function OnboardingPage() {
       // Check onboarding status via API (this will also verify username from database)
       const checkOnboarding = async () => {
         try {
-          const response = await fetch("/api/onboarding/status");
+          const response = await fetch(API_BASE_URL + "/api/onboarding/status");
           if (response.ok) {
             const data = await response.json();
             

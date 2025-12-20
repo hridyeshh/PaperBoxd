@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -31,7 +32,7 @@ export default function Home() {
       const checkOnboarding = async () => {
         try {
           setCheckingOnboarding(true);
-          const response = await fetch("/api/onboarding/status");
+          const response = await fetch(API_BASE_URL + "/api/onboarding/status");
           if (response.ok) {
             const data = await response.json();
             

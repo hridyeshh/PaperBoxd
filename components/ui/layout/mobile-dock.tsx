@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -47,7 +48,7 @@ export function MobileDock() {
   // Function to fetch profile avatar
   const fetchProfileAvatar = React.useCallback(() => {
     if (session?.user?.username) {
-      fetch(`/api/users/${encodeURIComponent(session.user.username)}`)
+      fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(session.user.username)}`)
         .then((res) => res.ok ? res.json() : null)
         .then((data) => {
           if (data?.user?.avatar) {

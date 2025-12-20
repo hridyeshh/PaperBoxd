@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
@@ -175,7 +176,7 @@ export function UsernameSelection({
 
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/users/set-username", {
+      const response = await fetch(API_BASE_URL + "/api/users/set-username", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: data.username }),

@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import Image from "next/image";
 import React from "react";
@@ -56,7 +57,7 @@ export function MinimalDesktopHeader() {
     if (session?.user?.username) {
       const username = session.user.username;
       setIsLoadingAvatar(true);
-      fetch(`/api/users/${encodeURIComponent(username)}`)
+      fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(username)}`)
         .then((res) => {
           if (res.ok) {
             return res.json();

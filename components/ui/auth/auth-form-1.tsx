@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import * as React from "react";
 import { useForm } from "react-hook-form";
@@ -310,7 +311,7 @@ function AuthSignIn({ onSignUp, onForgotPassword }: AuthSignInProps) {
         // Wait a moment for session to be established, then check onboarding status
         setTimeout(async () => {
           try {
-            const response = await fetch("/api/onboarding/status");
+            const response = await fetch(API_BASE_URL + "/api/onboarding/status");
             if (response.ok) {
               const data = await response.json();
               
@@ -861,7 +862,7 @@ function OTPLoginCard({ onBack }: OTPLoginCardProps) {
   const onEmailSubmit = async (data: OTPEmailFormValues) => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/auth/otp-login/send-code", {
+      const response = await fetch(API_BASE_URL + "/api/auth/otp-login/send-code", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -896,7 +897,7 @@ function OTPLoginCard({ onBack }: OTPLoginCardProps) {
     isSubmittingRef.current = true;
     setIsLoading(true);
     try {
-      const response = await fetch("/api/auth/otp-login/verify-code", {
+      const response = await fetch(API_BASE_URL + "/api/auth/otp-login/verify-code", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -920,7 +921,7 @@ function OTPLoginCard({ onBack }: OTPLoginCardProps) {
 
           setTimeout(async () => {
             try {
-              const onboardingResponse = await fetch("/api/onboarding/status");
+              const onboardingResponse = await fetch(API_BASE_URL + "/api/onboarding/status");
               if (onboardingResponse.ok) {
                 const onboardingData = await onboardingResponse.json();
                 let redirectUrl = "/";
@@ -976,7 +977,7 @@ function OTPLoginCard({ onBack }: OTPLoginCardProps) {
   const handleResendCode = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/auth/otp-login/send-code", {
+      const response = await fetch(API_BASE_URL + "/api/auth/otp-login/send-code", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1220,7 +1221,7 @@ function ResetPasswordCard({ onBack }: ResetPasswordCardProps) {
   const onSubmit = async (data: ResetPasswordEmailFormValues) => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/auth/forgot-password", {
+      const response = await fetch(API_BASE_URL + "/api/auth/forgot-password", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

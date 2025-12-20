@@ -1,64 +1,125 @@
-import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import type { NextRequest } from "next/server";
 
-// Routes that require authentication
-const protectedRoutes = ["/profile", "/settings"];
+type NextRequestWithAuth = NextRequest & {
+  auth: {
+    user?: {
+      id: string;
+      email: string;
+      name: string;
+      username?: string;
+      image?: string;
+    };
+  } | null;
+};
 
-// Routes that should redirect to profile if already authenticated
-const authRoutes = ["/auth"];
+// Allowed origins for CORS (Capacitor + web)
+const allowedOrigins = [
+  "https://paperboxd.in",
+  "http://localhost:3000",
+  "capacitor://localhost",
+  "ionic://localhost",
+  "http://localhost",
+];
 
-// Auth routes that should be accessible even when logged in (e.g., forgot password, reset password)
-const publicAuthRoutes = ["/auth/forgot-password", "/auth/reset-password"];
+// Handle CORS for API routes
+function handleCORS(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  const isApiRoute = request.nextUrl.pathname.startsWith("/api");
 
-// Setup routes that should be accessible even when logged in (e.g., choose username, setup profile, onboarding)
-const setupRoutes = ["/choose-username", "/setup-profile", "/onboarding"];
+  if (!isApiRoute) {
+    return null; // Not an API route, skip CORS
+  }
 
-export default auth((req) => {
+  // Handle preflight (OPTIONS) requests
+  if (request.method === "OPTIONS") {
+    const response = new NextResponse(null, { status: 204 });
+
+    if (origin && allowedOrigins.includes(origin)) {
+      response.headers.set("Access-Control-Allow-Origin", origin);
+      response.headers.set("Access-Control-Allow-Credentials", "true");
+      response.headers.set(
+        "Access-Control-Allow-Methods",
+        "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+      );
+      response.headers.set(
+        "Access-Control-Allow-Headers",
+        "Content-Type, Authorization, Cookie, X-Requested-With"
+      );
+      response.headers.set("Access-Control-Max-Age", "86400"); // Cache for 24 hours
+    }
+
+    return response;
+  }
+
+  // For actual API requests, return headers to add to response
+  if (origin && allowedOrigins.includes(origin)) {
+    return {
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Credentials": "true",
+    };
+  }
+
+  return null;
+}
+
+export default auth((req: NextRequestWithAuth) => {
+  // Handle CORS first (before any auth checks)
+  const corsResponse = handleCORS(req);
+  if (corsResponse instanceof NextResponse) {
+    return corsResponse; // Return preflight response immediately
+  }
+
   const { nextUrl } = req;
   const isLoggedIn = !!req.auth;
+
+  const protectedRoutes = ["/profile", "/settings"];
+  const authRoutes = ["/auth"];
+  const publicAuthRoutes = ["/auth/forgot-password", "/auth/reset-password"];
+  const setupRoutes = ["/choose-username", "/setup-profile", "/onboarding"];
 
   const isProtectedRoute = protectedRoutes.some((route) =>
     nextUrl.pathname.startsWith(route)
   );
-  
-  // Check if it's a setup route (should be accessible even when logged in)
+
   const isSetupRoute = setupRoutes.some((route) =>
     nextUrl.pathname.startsWith(route)
   );
-  
-  // Check if it's a public auth route (should be accessible even when logged in)
+
   const isPublicAuthRoute = publicAuthRoutes.some((route) =>
     nextUrl.pathname.startsWith(route)
   );
-  
+
   const isAuthRoute = authRoutes.some((route) =>
     nextUrl.pathname.startsWith(route)
   );
 
-  // Redirect to auth if trying to access protected route without being logged in
+  // Auth redirects
   if (isProtectedRoute && !isLoggedIn) {
     return NextResponse.redirect(new URL("/auth", nextUrl));
   }
 
-  // Redirect to profile if trying to access auth routes while logged in
-  // BUT allow public auth routes (forgot password, reset password) and setup routes even when logged in
   if (isAuthRoute && isLoggedIn && !isPublicAuthRoute && !isSetupRoute) {
     return NextResponse.redirect(new URL("/profile", nextUrl));
   }
 
-  return NextResponse.next();
+  // Create response with CORS headers if needed
+  const response = NextResponse.next();
+
+  // Add CORS headers to API responses
+  if (corsResponse && typeof corsResponse === "object") {
+    Object.entries(corsResponse).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+  }
+
+  return response;
 });
 
-// Matcher configuration
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api/auth (NextAuth routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    "/((?!api/auth|_next/static|_next/image|favicon.ico).*)",
+    // Match all paths including API routes
+    "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 };

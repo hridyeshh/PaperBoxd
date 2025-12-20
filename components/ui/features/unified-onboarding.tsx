@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
@@ -93,7 +94,7 @@ export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
           const username = currentUsername;
           console.log("[UnifiedOnboarding] Fetching profile for username:", username);
 
-          const response = await fetch(`/api/users/${encodeURIComponent(username)}`);
+          const response = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(username)}`);
           console.log("[UnifiedOnboarding] Profile fetch response status:", response.status);
 
           if (response.ok) {
@@ -273,7 +274,7 @@ export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
       console.log("[UnifiedOnboarding] Profile payload:", payload);
       console.log("[UnifiedOnboarding] Fetching to:", `/api/users/${encodeURIComponent(session.user.username)}`);
 
-      const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(session.user.username)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

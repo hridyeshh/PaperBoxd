@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import Image from "next/image";
 import * as React from "react";
@@ -231,7 +232,7 @@ export function EditProfileForm({
 
     try {
       // Upload cropped image to Cloudinary
-      const response = await fetch('/api/upload/avatar', {
+      const response = await fetch(API_BASE_URL + '/api/upload/avatar', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -272,7 +273,7 @@ export function EditProfileForm({
     try {
       // Only call delete endpoint if avatar is from Cloudinary
       if (profile.avatar && profile.avatar.includes('cloudinary.com')) {
-        const response = await fetch('/api/upload/avatar', {
+        const response = await fetch(API_BASE_URL + '/api/upload/avatar', {
           method: 'DELETE',
         });
 

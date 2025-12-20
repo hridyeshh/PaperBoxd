@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import { useSession } from "next-auth/react";
 import { useState, useEffect } from "react";
@@ -20,7 +21,7 @@ export default function TestAuthPage() {
   }, []);
 
   const testBackendAuth = async () => {
-    const res = await fetch("/api/auth/test");
+    const res = await fetch(API_BASE_URL + "/api/auth/test");
     const data = await res.json();
     setTestResult(data);
   };

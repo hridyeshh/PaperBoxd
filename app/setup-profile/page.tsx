@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -41,7 +42,7 @@ export default function SetupProfilePage() {
             return;
           }
 
-          const response = await fetch(`/api/users/${encodeURIComponent(username)}`);
+          const response = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(username)}`);
           if (response.ok) {
             const data = await response.json();
             if (data.user) {
@@ -137,7 +138,7 @@ export default function SetupProfilePage() {
         avatar: profileData.avatar || "",
       };
 
-      const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(session.user.username)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import * as React from "react";
 import { Suspense } from "react";
@@ -70,7 +71,7 @@ function ResetPasswordForm() {
 
     setIsLoading(true);
     try {
-      const response = await fetch("/api/auth/reset-password", {
+      const response = await fetch(API_BASE_URL + "/api/auth/reset-password", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import Image from "next/image";
 import * as React from "react";
@@ -226,7 +227,7 @@ export default function ActivityPage() {
 
       console.log('[ACTIVITY PAGE] Fetching activities for:', username);
       // Fetch activities from followed users
-      fetch(`/api/users/${encodeURIComponent(username)}/activities/following?page=${currentPage}&pageSize=${ACTIVITY_PAGE_SIZE}`)
+      fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(username)}/activities/following?page=${currentPage}&pageSize=${ACTIVITY_PAGE_SIZE}`)
         .then((res) => {
           console.log('[ACTIVITY PAGE] API response status:', res.status);
           if (!res.ok) {
@@ -336,7 +337,7 @@ export default function ActivityPage() {
       // Refresh activities
       if (session?.user?.username) {
         const username = session.user.username;
-        fetch(`/api/users/${encodeURIComponent(username)}/activities/following?page=${currentPage}&pageSize=${ACTIVITY_PAGE_SIZE}`)
+        fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(username)}/activities/following?page=${currentPage}&pageSize=${ACTIVITY_PAGE_SIZE}`)
           .then((res) => res.json())
           .then((data) => {
             const transformedActivities: ActivityEntry[] = Array.isArray(data.activities)
@@ -507,7 +508,7 @@ export default function ActivityPage() {
                       // The owner is the current user (since the activity is in their activities array)
                       else if (entry.type === "liked_diary_entry" && entry.diaryEntryId && session?.user?.username) {
                         // Fetch the diary entry from the current user's diary
-                        fetch(`/api/users/${encodeURIComponent(session.user.username)}/diary`)
+                        fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(session.user.username)}/diary`)
                           .then((res) => res.json())
                           .then((data: { entries?: Array<{ _id?: { toString(): string } | string; id?: string; bookId?: { toString(): string } | string; bookTitle?: string; bookAuthor?: string; bookCover?: string; content?: string; createdAt?: string; updatedAt?: string; isLiked?: boolean; likesCount?: number }> }) => {
                             const diaryEntry = data.entries?.find((e) => 
@@ -706,7 +707,7 @@ export default function ActivityPage() {
                 // Refresh activities after like change
                 if (session?.user?.username) {
                   try {
-                    const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/activities/following?page=${currentPage}&pageSize=${ACTIVITY_PAGE_SIZE}`);
+                    const response = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(session.user.username)}/activities/following?page=${currentPage}&pageSize=${ACTIVITY_PAGE_SIZE}`);
                     if (response.ok) {
                       const data = await response.json();
                       

@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import * as React from "react";
 import Image from "next/image";
@@ -80,7 +81,7 @@ export function DiaryEditorDialog({
 
       console.log("[DiaryEditor] Request body:", requestBody);
 
-      const response = await fetch(`/api/users/${encodeURIComponent(username)}/diary`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(username)}/diary`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),

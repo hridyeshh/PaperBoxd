@@ -253,3 +253,17 @@
   display: inline-block;
   width: 100%;
 }
+
+/* iOS safe area support for Capacitor webview */
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom);
+}
+
+header {
+  padding-top: max(1rem, var(--safe-area-inset-top));
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}

@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import * as React from "react";
 import { useForm } from "react-hook-form";
@@ -39,7 +40,7 @@ export default function ForgotPasswordPage() {
   const onSubmit = async (data: ForgotPasswordFormValues) => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/auth/forgot-password", {
+      const response = await fetch(API_BASE_URL + "/api/auth/forgot-password", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

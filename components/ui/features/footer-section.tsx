@@ -1,4 +1,5 @@
 "use client"
+import { API_BASE_URL } from '@/lib/api/client';
 
 import * as React from "react"
 import Link from "next/link"
@@ -37,7 +38,7 @@ function Footerdemo() {
     setSubmitMessage(null)
 
     try {
-      const response = await fetch("/api/newsletter/subscribe", {
+      const response = await fetch(API_BASE_URL + "/api/newsletter/subscribe", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

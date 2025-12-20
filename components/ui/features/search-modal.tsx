@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/lib/api/client';
 import React from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -174,7 +175,7 @@ export function SearchModal({ children }: SearchModalProps) {
 				switch (searchType) {
 					case 'Books':
 						try {
-							response = await fetch(`/api/books/search?q=${encodeURIComponent(query)}&maxResults=10&forceFresh=true`);
+							response = await fetch(`${API_BASE_URL}/api/books/search?q=${encodeURIComponent(query)}&maxResults=10&forceFresh=true`);
 						} catch {
 							// Network error (connection failed, CORS, etc.)
 							throw new Error(`Network error: Unable to connect to search API. Please check your connection.`);
@@ -229,7 +230,7 @@ export function SearchModal({ children }: SearchModalProps) {
 
 					case 'User':
 						try {
-							response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}&limit=10`);
+							response = await fetch(`${API_BASE_URL}/api/users/search?q=${encodeURIComponent(query)}&limit=10`);
 						} catch {
 							throw new Error(`Network error: Unable to connect to search API. Please check your connection.`);
 						}

@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
@@ -25,7 +26,7 @@ export default function ProfilePage() {
       const checkStatus = async () => {
         try {
           // Check if user has username and onboarding status
-          const response = await fetch("/api/onboarding/status");
+          const response = await fetch(API_BASE_URL + "/api/onboarding/status");
           if (response.ok) {
             const data = await response.json();
             

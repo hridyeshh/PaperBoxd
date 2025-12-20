@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import React, { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -65,7 +66,7 @@ export default function ListsPage() {
 
       try {
         setLoading(true);
-        const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/lists`);
+        const response = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(session.user.username)}/lists`);
         
         if (!response.ok) {
           throw new Error("Failed to fetch lists");

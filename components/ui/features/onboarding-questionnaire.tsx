@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import * as React from "react";
 import { motion } from "framer-motion";
@@ -34,7 +35,7 @@ export function OnboardingQuestionnaire({ onComplete }: OnboardingQuestionnaireP
   React.useEffect(() => {
     const fetchGenres = async () => {
       try {
-        const response = await fetch("/api/onboarding");
+        const response = await fetch(API_BASE_URL + "/api/onboarding");
         if (response.ok) {
           const data = await response.json();
           setGenres(data.genres || []);
@@ -122,7 +123,7 @@ export function OnboardingQuestionnaire({ onComplete }: OnboardingQuestionnaireP
         (id) => genres.find((g) => g.id === id)?.name || id
       );
 
-      const response = await fetch("/api/onboarding", {
+      const response = await fetch(API_BASE_URL + "/api/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

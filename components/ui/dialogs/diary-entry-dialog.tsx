@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import * as React from "react";
 import Image from "next/image";
@@ -88,7 +89,7 @@ export function DiaryEntryDialog({
     setIsLiking(true);
 
     try {
-      const response = await fetch(`/api/users/${encodeURIComponent(username)}/diary/${entry.id}/like`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(username)}/diary/${entry.id}/like`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -182,7 +183,7 @@ export function DiaryEntryDialog({
 
       console.log('[DiaryEntryDialog] Deleting entry:', requestBody);
 
-      const response = await fetch(`/api/users/${encodeURIComponent(username)}/diary`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(username)}/diary`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),

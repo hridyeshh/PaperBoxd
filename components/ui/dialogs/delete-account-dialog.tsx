@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api/client';
 
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -78,7 +79,7 @@ export function DeleteAccountDialog({
         reason === "Other" ? `Other: ${otherReason.trim()}` : reason
       );
 
-      const response = await fetch("/api/users/delete-account", {
+      const response = await fetch(API_BASE_URL + "/api/users/delete-account", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reasons }),

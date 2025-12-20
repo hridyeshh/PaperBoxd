@@ -1,0 +1,67 @@
+import { NextResponse } from 'next/server';
+import cloudinary from '@/lib/cloudinary';
+
+export const dynamic = "force-dynamic";
+
+/**
+ * GET /api/test/cloudinary
+ * Test Cloudinary configuration and connection
+ */
+export async function GET() {
+  try {
+    // Check environment variables
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+    const envCheck = {
+      cloudName: cloudName ? '✅ Set' : '❌ Missing',
+      apiKey: apiKey ? '✅ Set' : '❌ Missing',
+      apiSecret: apiSecret ? '✅ Set' : '❌ Missing',
+    };
+
+    // If any are missing, return early
+    if (!cloudName || !apiKey || !apiSecret) {
+      return NextResponse.json({
+        success: false,
+        message: 'Cloudinary environment variables are missing',
+        envCheck,
+        error: 'Please add CLOUDINARY environment variables to .env.local',
+      }, { status: 400 });
+    }
+
+    // Test Cloudinary connection by getting account details
+    try {
+      const result = await cloudinary.api.ping();
+
+      return NextResponse.json({
+        success: true,
+        message: 'Cloudinary is configured and working!',
+        envCheck,
+        cloudinaryStatus: result.status === 'ok' ? '✅ Connected' : '❌ Connection failed',
+        accountInfo: {
+          cloudName: cloudName,
+          // Don't expose sensitive data
+          apiKeyPrefix: apiKey.substring(0, 4) + '***',
+        },
+      });
+    } catch (cloudinaryError: unknown) {
+      const errorMessage = cloudinaryError instanceof Error ? cloudinaryError.message : 'Unknown error';
+      return NextResponse.json({
+        success: false,
+        message: 'Cloudinary configuration error',
+        envCheck,
+        error: errorMessage,
+        details: 'Check your Cloudinary credentials in .env.local',
+      }, { status: 500 });
+    }
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({
+      success: false,
+      message: 'Failed to test Cloudinary',
+      error: errorMessage,
+    }, { status: 500 });
+  }
+}
+
