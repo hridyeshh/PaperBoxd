@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
 import Book from '@/lib/db/models/Book';
+import { getBestBookCover } from '@/lib/utils';
 
 // Types for MongoDB lean documents
 type BookLean = {
@@ -266,12 +267,8 @@ export async function GET(request: NextRequest) {
         id: book._id.toString(),
         title: book.volumeInfo?.title || 'Unknown Title',
         author: book.volumeInfo?.authors?.[0] || 'Unknown Author',
-        cover:
-          book.volumeInfo?.imageLinks?.thumbnail ||
-          book.volumeInfo?.imageLinks?.smallThumbnail ||
-          book.volumeInfo?.imageLinks?.medium ||
-          book.volumeInfo?.imageLinks?.large ||
-          'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80',
+        cover: getBestBookCover(book.volumeInfo?.imageLinks) || 
+               'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80',
       }))
       .filter((book) => {
         // Create a unique key from title and author (case-insensitive, normalized)

@@ -85,14 +85,14 @@ function Hero({ showButton = true }: HeroProps) {
           </div>
           {showButton && (
             <div className="flex flex-row flex-wrap justify-center gap-3">
-              <InteractiveHoverButton
-                text="Start saving your books"
-                showIdleAccent={false}
-                invert
-                className="w-64 sm:w-72"
-                onClick={() => router.push("/auth")}
-              />
-            </div>
+            <InteractiveHoverButton
+              text="Start saving your books"
+              showIdleAccent={false}
+              invert
+              className="w-64 sm:w-72"
+              onClick={() => router.push("/auth")}
+            />
+          </div>
           )}
         </div>
       </div>

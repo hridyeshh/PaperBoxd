@@ -94,3 +94,72 @@ export function formatDiaryDate(dateString: string | Date): string {
     return `${month} ${day}, ${year}`;
   }
 }
+
+/**
+ * Check if an image URL is from Open Library
+ */
+export function isOpenLibraryImage(url: string | null | undefined): boolean {
+  if (!url) return false;
+  return url.includes('covers.openlibrary.org') || url.includes('openlibrary.org');
+}
+
+/**
+ * Check if an image URL is from ISBNdb
+ */
+export function isISBNdbImage(url: string | null | undefined): boolean {
+  if (!url) return false;
+  return url.includes('isbndb.com') || url.includes('images.isbndb.com') || url.includes('covers.isbndb.com');
+}
+
+/**
+ * Get the best book cover image, prioritizing ISBNdb over Open Library
+ * This prevents Open Library 503 errors when ISBNdb images are available
+ * 
+ * @param imageLinks - Book imageLinks object
+ * @returns Best cover image URL or null
+ */
+export function getBestBookCover(imageLinks?: {
+  thumbnail?: string | null;
+  smallThumbnail?: string | null;
+  small?: string | null;
+  medium?: string | null;
+  large?: string | null;
+  extraLarge?: string | null;
+}): string | null {
+  if (!imageLinks) return null;
+
+  // Collect all available images
+  const allImages: Array<{ url: string; priority: number }> = [];
+  
+  if (imageLinks.extraLarge) allImages.push({ url: imageLinks.extraLarge, priority: 5 });
+  if (imageLinks.large) allImages.push({ url: imageLinks.large, priority: 4 });
+  if (imageLinks.medium) allImages.push({ url: imageLinks.medium, priority: 3 });
+  if (imageLinks.thumbnail) allImages.push({ url: imageLinks.thumbnail, priority: 2 });
+  if (imageLinks.smallThumbnail) allImages.push({ url: imageLinks.smallThumbnail, priority: 1 });
+  if (imageLinks.small) allImages.push({ url: imageLinks.small, priority: 1 });
+
+  if (allImages.length === 0) return null;
+
+  // Separate ISBNdb and Open Library images
+  const isbndbImages = allImages.filter(img => isISBNdbImage(img.url));
+  const openLibraryImages = allImages.filter(img => isOpenLibraryImage(img.url));
+  const otherImages = allImages.filter(img => !isISBNdbImage(img.url) && !isOpenLibraryImage(img.url));
+
+  // Priority: ISBNdb > Other > Open Library (to avoid 503 errors)
+  if (isbndbImages.length > 0) {
+    // Return highest priority ISBNdb image
+    return isbndbImages.sort((a, b) => b.priority - a.priority)[0].url;
+  }
+  
+  if (otherImages.length > 0) {
+    // Return highest priority other image
+    return otherImages.sort((a, b) => b.priority - a.priority)[0].url;
+  }
+  
+  if (openLibraryImages.length > 0) {
+    // Only use Open Library as last resort
+    return openLibraryImages.sort((a, b) => b.priority - a.priority)[0].url;
+  }
+
+  return null;
+}
