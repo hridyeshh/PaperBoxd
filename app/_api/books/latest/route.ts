@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/db/mongodb";
 import Book from "@/lib/db/models/Book";
+import { getBestBookCover } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -65,21 +66,9 @@ export async function GET(request: NextRequest) {
     };
     const transformedBooks = books.map((book: BookLean) => {
       // Determine the best cover image to use
-      // Prioritize ISBNdb images for high resolution
       const imageLinks = book.volumeInfo?.imageLinks || {};
-      const cover = imageLinks.large ||
-        imageLinks.medium ||
-        imageLinks.thumbnail ||
-        imageLinks.smallThumbnail ||
-        imageLinks.extraLarge ||
-        "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
-
-      // If it's an ISBNdb image, ensure we're using the best resolution
-      // ISBNdb images are typically high quality, but we can check for image_original
-      if (cover && (cover.includes('isbndb.com') || cover.includes('images.isbndb.com') || cover.includes('covers.isbndb.com'))) {
-        // ISBNdb images are already high quality, use as-is
-        // If we have image_original in the future, we could use that
-      }
+      const cover = getBestBookCover(imageLinks) || 
+                  "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
 
       // Get book ID for navigation
       const bookId = book._id?.toString() ||

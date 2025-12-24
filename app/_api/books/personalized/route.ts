@@ -6,6 +6,7 @@ import User from '@/lib/db/models/User';
 import UserPreference from '@/lib/db/models/UserPreference';
 import { RecommendationService } from '@/lib/services/RecommendationService';
 import { RecommendationConfig } from '@/lib/config/recommendation.config';
+import { getBestBookCover } from '@/lib/utils';
 import mongoose from 'mongoose';
 
 export const dynamic = "force-dynamic";
@@ -665,12 +666,8 @@ export async function GET(request: NextRequest) {
         authors: book.volumeInfo?.authors || [],
         description: book.volumeInfo?.description || '',
         publishedDate: book.volumeInfo?.publishedDate || '',
-        cover:
-          book.volumeInfo?.imageLinks?.thumbnail ||
-          book.volumeInfo?.imageLinks?.smallThumbnail ||
-          book.volumeInfo?.imageLinks?.medium ||
-          book.volumeInfo?.imageLinks?.large ||
-          'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80',
+        cover: getBestBookCover(book.volumeInfo?.imageLinks) || 
+               'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80',
         isbn: book.isbn,
         isbn13: book.isbn13,
         openLibraryId: book.openLibraryId,
