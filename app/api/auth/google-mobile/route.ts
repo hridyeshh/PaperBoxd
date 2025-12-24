@@ -8,12 +8,19 @@ import User from "@/lib/db/models/User";
 export const dynamic = "force-dynamic";
 
 /**
- * Verify Google ID Token from iOS app and return JWT
+ * Verify Google ID Token from iOS or Web app and return JWT
+ * 
+ * Supports both Web and iOS Client IDs to allow authentication from both platforms.
  * 
  * POST /api/auth/google-mobile
  * Body: { idToken: string }
  * 
  * Returns: { token: string, user: { id, email, username, name, image } }
+ * 
+ * Environment Variables:
+ * - GOOGLE_CLIENT_ID_WEB: Web OAuth Client ID (optional, falls back to GOOGLE_CLIENT_ID)
+ * - GOOGLE_CLIENT_ID_IOS: iOS OAuth Client ID (optional, has default fallback)
+ * - GOOGLE_CLIENT_ID: Fallback for Web Client ID
  */
 export async function POST(req: NextRequest) {
   try {
@@ -28,27 +35,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get Google Client ID from environment
-    // Note: For iOS, use the iOS OAuth client ID (not the web client ID)
-    const googleClientId = process.env.GOOGLE_CLIENT_ID;
+    // Get Google Client IDs from environment
+    // Support both Web and iOS Client IDs to allow tokens from both platforms
+    const webClientID = process.env.GOOGLE_CLIENT_ID_WEB || process.env.GOOGLE_CLIENT_ID;
+    const iosClientID = process.env.GOOGLE_CLIENT_ID_IOS || "893085484645-7788sam2d7posge2bcild48duripv8h4.apps.googleusercontent.com";
     
-    if (!googleClientId) {
-      console.error("[Google Mobile Auth] GOOGLE_CLIENT_ID is not configured");
+    // Build array of acceptable client IDs
+    const allowedAudiences: string[] = [];
+    if (webClientID) allowedAudiences.push(webClientID);
+    if (iosClientID) allowedAudiences.push(iosClientID);
+    
+    if (allowedAudiences.length === 0) {
+      console.error("[Google Mobile Auth] No Google Client IDs configured");
       return NextResponse.json(
         { error: "Authentication configuration error" },
         { status: 500 }
       );
     }
 
-    // Initialize OAuth2Client for token verification
-    const client = new OAuth2Client(googleClientId);
+    // Initialize OAuth2Client without a single client ID
+    // We'll verify against multiple audiences
+    const client = new OAuth2Client();
 
-    // Verify the Google ID token
+    // Verify the Google ID token against multiple audiences
+    // This allows tokens from both Web and iOS clients
     let ticket;
     try {
       ticket = await client.verifyIdToken({
         idToken,
-        audience: googleClientId, // Must match the client ID used to generate the token
+        audience: allowedAudiences, // Accept tokens from BOTH Web and iOS
       });
     } catch (verifyError) {
       console.error("[Google Mobile Auth] Token verification failed:", verifyError);

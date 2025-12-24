@@ -20,16 +20,26 @@ The authentication system includes:
 
 ### Update `.env.local`
 
-You need three additional environment variables for authentication:
+You need these environment variables for authentication:
 
 ```bash
 # NextAuth Secret (for JWT encryption)
 NEXTAUTH_SECRET=your_random_secret_here
 
-# Google OAuth Credentials
+# Google OAuth Credentials (Web)
 GOOGLE_CLIENT_ID=your_google_client_id_here
 GOOGLE_CLIENT_SECRET=your_google_client_secret_here
+
+# Google OAuth Client IDs (for mobile apps)
+# Optional: Separate Client IDs for Web and iOS
+GOOGLE_CLIENT_ID_WEB=your_web_client_id_here  # Optional, falls back to GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_ID_IOS=893085484645-7788sam2d7posge2bcild48duripv8h4.apps.googleusercontent.com  # iOS Client ID
 ```
+
+**Note**: The `/api/auth/google-mobile` endpoint supports both Web and iOS Client IDs. If you want to support both platforms:
+- Set `GOOGLE_CLIENT_ID_WEB` for your web app (or use `GOOGLE_CLIENT_ID` as fallback)
+- Set `GOOGLE_CLIENT_ID_IOS` for your iOS app
+- The endpoint will accept tokens from either client ID
 
 ### Generate NextAuth Secret
 
