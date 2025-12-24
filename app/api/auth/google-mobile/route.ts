@@ -37,21 +37,44 @@ export async function POST(req: NextRequest) {
 
     // Get Google Client IDs from environment
     // Support both Web and iOS Client IDs to allow tokens from both platforms
+    // IMPORTANT: In production, these MUST be set via environment variables
     const webClientID = process.env.GOOGLE_CLIENT_ID_WEB || process.env.GOOGLE_CLIENT_ID;
-    const iosClientID = process.env.GOOGLE_CLIENT_ID_IOS || "893085484645-7788sam2d7posge2bcild48duripv8h4.apps.googleusercontent.com";
+    const iosClientID = process.env.GOOGLE_CLIENT_ID_IOS;
     
     // Build array of acceptable client IDs
     const allowedAudiences: string[] = [];
-    if (webClientID) allowedAudiences.push(webClientID);
-    if (iosClientID) allowedAudiences.push(iosClientID);
+    if (webClientID) {
+      allowedAudiences.push(webClientID);
+      console.log("[Google Mobile Auth] Web Client ID configured:", webClientID.substring(0, 20) + "...");
+    }
+    if (iosClientID) {
+      allowedAudiences.push(iosClientID);
+      console.log("[Google Mobile Auth] iOS Client ID configured:", iosClientID.substring(0, 20) + "...");
+    } else {
+      // Only allow hardcoded fallback in development
+      const isDevelopment = process.env.NODE_ENV !== "production";
+      if (isDevelopment) {
+        const fallbackIOS = "893085484645-7788sam2d7posge2bcild48duripv8h4.apps.googleusercontent.com";
+        allowedAudiences.push(fallbackIOS);
+        console.warn("[Google Mobile Auth] Using hardcoded iOS Client ID fallback (development only):", fallbackIOS.substring(0, 20) + "...");
+      } else {
+        console.error("[Google Mobile Auth] ERROR: GOOGLE_CLIENT_ID_IOS not set in production environment!");
+        return NextResponse.json(
+          { error: "Authentication configuration error: iOS Client ID not configured" },
+          { status: 500 }
+        );
+      }
+    }
     
     if (allowedAudiences.length === 0) {
       console.error("[Google Mobile Auth] No Google Client IDs configured");
       return NextResponse.json(
-        { error: "Authentication configuration error" },
+        { error: "Authentication configuration error: No Client IDs configured" },
         { status: 500 }
       );
     }
+    
+    console.log("[Google Mobile Auth] Accepting tokens from", allowedAudiences.length, "client ID(s)");
 
     // Initialize OAuth2Client without a single client ID
     // We'll verify against multiple audiences
@@ -65,21 +88,51 @@ export async function POST(req: NextRequest) {
         idToken,
         audience: allowedAudiences, // Accept tokens from BOTH Web and iOS
       });
-    } catch (verifyError) {
-      console.error("[Google Mobile Auth] Token verification failed:", verifyError);
+    } catch (verifyError: any) {
+      // Enhanced error logging for debugging audience mismatch
+      console.error("[Google Mobile Auth] Token verification failed:", {
+        error: verifyError.message,
+        errorType: verifyError.name,
+      });
+      
+      // Try to decode the token to see what audience it has (for debugging)
+      try {
+        const decoded = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64').toString());
+        console.error("[Google Mobile Auth] Token audience (aud):", decoded.aud);
+        console.error("[Google Mobile Auth] Expected audiences:", allowedAudiences);
+        console.error("[Google Mobile Auth] Audience mismatch - token was issued for:", decoded.aud, "but we're expecting one of:", allowedAudiences);
+      } catch (decodeError) {
+        console.error("[Google Mobile Auth] Could not decode token for debugging");
+      }
+      
       return NextResponse.json(
-        { error: "Invalid or expired Google ID token" },
+        { 
+          error: "Invalid or expired Google ID token",
+          details: verifyError.message || "Token verification failed"
+        },
         { status: 401 }
       );
     }
 
     const payload = ticket.getPayload();
     if (!payload) {
+      console.error("[Google Mobile Auth] No payload found in verified ticket");
       return NextResponse.json(
         { error: "Invalid ID token payload" },
         { status: 401 }
       );
     }
+    
+    // DEBUG: Log the full payload to help diagnose issues
+    console.log("[DEBUG] Google Payload:", JSON.stringify({
+      email: payload.email,
+      name: payload.name,
+      sub: payload.sub,
+      aud: payload.aud,
+      iss: payload.iss,
+      exp: payload.exp,
+      iat: payload.iat,
+    }, null, 2));
 
     const { email, name, picture, sub: googleId } = payload;
 
@@ -163,9 +216,25 @@ export async function POST(req: NextRequest) {
     // Generate JWT token (same format as /api/auth/token/login)
     const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET;
     if (!secret) {
-      console.error("[Google Mobile Auth] NEXTAUTH_SECRET or AUTH_SECRET is not configured");
+      console.error("[Google Mobile Auth] CRITICAL: NEXTAUTH_SECRET or AUTH_SECRET is not configured");
+      console.error("[Google Mobile Auth] This will cause token generation to fail!");
       return NextResponse.json(
-        { error: "Authentication configuration error" },
+        { 
+          error: "Authentication configuration error",
+          details: "JWT secret not configured. Please set NEXTAUTH_SECRET or AUTH_SECRET environment variable."
+        },
+        { status: 500 }
+      );
+    }
+    
+    // Validate secret is not empty
+    if (secret.trim().length === 0) {
+      console.error("[Google Mobile Auth] CRITICAL: JWT secret is empty string!");
+      return NextResponse.json(
+        { 
+          error: "Authentication configuration error",
+          details: "JWT secret is empty. Please set a valid NEXTAUTH_SECRET or AUTH_SECRET."
+        },
         { status: 500 }
       );
     }
