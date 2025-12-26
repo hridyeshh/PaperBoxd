@@ -26,17 +26,57 @@ export async function getUserFromRequest(
   console.log(`[auth-token] [${requestId}] Path: ${req.nextUrl.pathname}`);
   
   // Try token-based auth first (for mobile apps)
-  let authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
-  console.log(`[auth-token] [${requestId}] Authorization header present: ${!!authHeader}`);
+  // Check ALL possible header locations where Authorization might be
+  // Vercel sometimes strips/replaces the Authorization header, so we check multiple locations:
+  // 1. Standard Authorization header
+  // 2. Custom X-User-Authorization header (fallback if Vercel strips Authorization)
+  // 3. x-vercel-sc-headers (Vercel internal headers)
+  let authHeader = req.headers.get("authorization") || 
+                   req.headers.get("Authorization") ||
+                   req.headers.get("x-user-authorization") ||
+                   req.headers.get("X-User-Authorization");
+  console.log(`[auth-token] [${requestId}] Authorization header (standard or custom) present: ${!!authHeader}`);
   
   if (authHeader) {
     console.log(`[auth-token] [${requestId}] Authorization header length: ${authHeader.length}`);
     console.log(`[auth-token] [${requestId}] Authorization header (first 50 chars): ${authHeader.substring(0, 50)}...`);
     console.log(`[auth-token] [${requestId}] Authorization starts with 'Bearer': ${authHeader.startsWith("Bearer ")}`);
-  } else {
-    console.log(`[auth-token] [${requestId}] ⚠️ No Authorization header found in standard headers`);
+    
+    // Check if this is a Vercel internal token (should have "iss":"serverless" in payload)
+    if (authHeader.startsWith("Bearer ")) {
+      const token = authHeader.replace("Bearer ", "").trim();
+      try {
+        // Decode JWT without verification to check issuer
+        const parts = token.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString());
+          if (payload.iss === "serverless") {
+            console.log(`[auth-token] [${requestId}] ⚠️ WARNING: Authorization header contains Vercel internal token, not user token!`);
+            console.log(`[auth-token] [${requestId}] This means the user's Authorization header was stripped/replaced by Vercel`);
+            authHeader = null; // Reset to null so we can check other locations
+          } else {
+            console.log(`[auth-token] [${requestId}] ✅ Authorization header contains user token (iss: ${payload.iss || "unknown"})`);
+          }
+        }
+      } catch (e) {
+        // Not a JWT or can't decode, continue with this header
+        console.log(`[auth-token] [${requestId}] Could not decode token to check issuer:`, e);
+      }
+    }
+  }
+  
+  if (!authHeader) {
+    console.log(`[auth-token] [${requestId}] ⚠️ No valid Authorization header found in standard headers`);
     const headerKeys = Array.from(req.headers.keys());
     console.log(`[auth-token] [${requestId}] Available header keys:`, headerKeys);
+    
+    // Check forwarded header for signature (Vercel might encode Authorization here)
+    const forwarded = req.headers.get("forwarded");
+    if (forwarded) {
+      console.log(`[auth-token] [${requestId}] Forwarded header present: ${forwarded.substring(0, 200)}...`);
+      // The forwarded header might contain encoded Authorization in the sig parameter
+      // But this is complex to decode, so we'll focus on other locations first
+    }
     
     // Check Vercel internal headers
     const vercelHeaders = req.headers.get("x-vercel-sc-headers");
@@ -46,14 +86,49 @@ export async function getUserFromRequest(
         const parsed = JSON.parse(vercelHeaders);
         console.log(`[auth-token] [${requestId}] x-vercel-sc-headers parsed:`, JSON.stringify(parsed, null, 2));
         if (parsed.Authorization || parsed.authorization) {
-          authHeader = parsed.Authorization || parsed.authorization;
-          if (authHeader) {
-            console.log(`[auth-token] [${requestId}] ✅ Found Authorization in x-vercel-sc-headers (first 50 chars): ${authHeader.substring(0, 50)}...`);
+          const vercelAuth = parsed.Authorization || parsed.authorization;
+          if (vercelAuth) {
+            console.log(`[auth-token] [${requestId}] Found Authorization in x-vercel-sc-headers (first 50 chars): ${vercelAuth.substring(0, 50)}...`);
+            
+            // Check if this is a Vercel internal token
+            if (vercelAuth.startsWith("Bearer ")) {
+              const token = vercelAuth.replace("Bearer ", "").trim();
+              try {
+                const parts = token.split(".");
+                if (parts.length === 3) {
+                  const payload = JSON.parse(Buffer.from(parts[1], "base64").toString());
+                  if (payload.iss === "serverless") {
+                    console.log(`[auth-token] [${requestId}] ⚠️ WARNING: x-vercel-sc-headers Authorization is Vercel internal token, not user token!`);
+                    console.log(`[auth-token] [${requestId}] The user's Authorization header is NOT being forwarded by Vercel`);
+                  } else {
+                    console.log(`[auth-token] [${requestId}] ✅ x-vercel-sc-headers Authorization is user token (iss: ${payload.iss || "unknown"})`);
+                    authHeader = vercelAuth; // Use this as the auth header
+                  }
+                }
+              } catch (e) {
+                // Can't decode, but use it anyway
+                console.log(`[auth-token] [${requestId}] Could not decode token from x-vercel-sc-headers, using it anyway`);
+                authHeader = vercelAuth;
+              }
+            } else {
+              authHeader = vercelAuth;
+            }
           }
+        } else {
+          console.log(`[auth-token] [${requestId}] No Authorization field in x-vercel-sc-headers`);
         }
       } catch (e) {
         console.log(`[auth-token] [${requestId}] Could not parse x-vercel-sc-headers:`, e);
       }
+    } else {
+      console.log(`[auth-token] [${requestId}] x-vercel-sc-headers not present`);
+    }
+    
+    // Final check: if still no authHeader, the user's token was not forwarded
+    if (!authHeader) {
+      console.log(`[auth-token] [${requestId}] ❌ CRITICAL: User's Authorization header was NOT forwarded by Vercel`);
+      console.log(`[auth-token] [${requestId}] This is likely a Vercel proxy configuration issue`);
+      console.log(`[auth-token] [${requestId}] The iOS app is sending the header, but Vercel is not forwarding it`);
     }
   }
   

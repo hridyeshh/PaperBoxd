@@ -32,15 +32,26 @@ export async function GET(req: NextRequest) {
     });
     console.log(`[Mobile Profile API] [${requestId}] All Headers:`, JSON.stringify(allHeaders, null, 2));
     
-    // Specifically check Authorization header
+    // Specifically check Authorization header (standard and custom fallback)
     const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
+    const customAuthHeader = req.headers.get("x-user-authorization") || req.headers.get("X-User-Authorization");
+    
     console.log(`[Mobile Profile API] [${requestId}] Authorization header present: ${!!authHeader}`);
+    console.log(`[Mobile Profile API] [${requestId}] X-User-Authorization header present: ${!!customAuthHeader}`);
+    
     if (authHeader) {
       console.log(`[Mobile Profile API] [${requestId}] Authorization header length: ${authHeader.length}`);
       console.log(`[Mobile Profile API] [${requestId}] Authorization header (first 50 chars): ${authHeader.substring(0, 50)}...`);
       console.log(`[Mobile Profile API] [${requestId}] Authorization starts with 'Bearer': ${authHeader.startsWith("Bearer ")}`);
-    } else {
-      console.log(`[Mobile Profile API] [${requestId}] ⚠️ WARNING: No Authorization header found!`);
+    }
+    
+    if (customAuthHeader) {
+      console.log(`[Mobile Profile API] [${requestId}] X-User-Authorization header length: ${customAuthHeader.length}`);
+      console.log(`[Mobile Profile API] [${requestId}] X-User-Authorization header (first 50 chars): ${customAuthHeader.substring(0, 50)}...`);
+    }
+    
+    if (!authHeader && !customAuthHeader) {
+      console.log(`[Mobile Profile API] [${requestId}] ⚠️ WARNING: No Authorization or X-User-Authorization header found!`);
       const headerKeys = Array.from(req.headers.keys());
       console.log(`[Mobile Profile API] [${requestId}] Available header keys:`, headerKeys);
     }
