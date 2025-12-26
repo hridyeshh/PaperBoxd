@@ -123,6 +123,7 @@ export function BookShareButton({
             )}
             
             {/* Image - hidden until loaded */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src={shareImageUrl} 
               alt="Story Preview" 

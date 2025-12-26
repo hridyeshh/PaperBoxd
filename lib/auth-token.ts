@@ -47,7 +47,9 @@ export async function getUserFromRequest(
         console.log(`[auth-token] [${requestId}] x-vercel-sc-headers parsed:`, JSON.stringify(parsed, null, 2));
         if (parsed.Authorization || parsed.authorization) {
           authHeader = parsed.Authorization || parsed.authorization;
-          console.log(`[auth-token] [${requestId}] ✅ Found Authorization in x-vercel-sc-headers (first 50 chars): ${authHeader.substring(0, 50)}...`);
+          if (authHeader) {
+            console.log(`[auth-token] [${requestId}] ✅ Found Authorization in x-vercel-sc-headers (first 50 chars): ${authHeader.substring(0, 50)}...`);
+          }
         }
       } catch (e) {
         console.log(`[auth-token] [${requestId}] Could not parse x-vercel-sc-headers:`, e);

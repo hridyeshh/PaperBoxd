@@ -113,7 +113,6 @@ export async function GET(request: NextRequest) {
             {/* Right: Book Cover */}
             <div style={{ display: 'flex', flexShrink: 0 }}>
               {coverUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={coverUrl}
                   width="280"
