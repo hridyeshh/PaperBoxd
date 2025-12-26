@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest } from "@/lib/auth-token";
 import connectDB from "@/lib/db/mongodb";
 import Book from "@/lib/db/models/Book";
-import User from "@/lib/db/models/User";
 import {
   getBookByISBN,
   transformISBNdbBook,
@@ -12,7 +10,6 @@ import {
   transformOpenLibraryBook,
 } from "@/lib/api/open-library";
 import { getBestBookCover } from "@/lib/utils";
-import mongoose from "mongoose";
 
 export const dynamic = "force-dynamic";
 
@@ -138,177 +135,15 @@ export async function GET(
         });
       }
 
-      // Get authenticated user context (optional - don't fail if guest)
-      console.log(`[Mobile Book Detail API] [${requestId}] Checking user context...`);
-      const userContextStartTime = Date.now();
-      const authUser = await getUserFromRequest(req);
-      let userInteraction = {
-        isLiked: false,
-        shelfStatus: "None" as "None" | "Want to Read" | "Reading" | "Read" | "DNF",
-      };
-
-      const bookIdObj = book._id as mongoose.Types.ObjectId;
-      const bookIdString = bookIdObj.toString();
-
-      if (authUser && authUser.id) {
-        try {
-          const user = await User.findById(authUser.id)
-            .select("likedBooks bookshelf tbrBooks currentlyReading")
-            .lean();
-
-          if (user) {
-            // Check if book is liked
-            const isLiked = Array.isArray(user.likedBooks) && user.likedBooks.some((liked: { bookId?: mongoose.Types.ObjectId | string }) => {
-              const likedBookId = liked.bookId ? (typeof liked.bookId === 'string' ? liked.bookId : liked.bookId.toString()) : null;
-              return likedBookId === bookIdString || 
-                     liked.isbndbId === book.isbndbId ||
-                     liked.openLibraryId === book.openLibraryId;
-            });
-            userInteraction.isLiked = isLiked || false;
-
-            // Check shelf status (priority: bookshelf > currentlyReading > tbrBooks)
-            const inBookshelf = Array.isArray(user.bookshelf) && user.bookshelf.some((shelf: { bookId?: mongoose.Types.ObjectId | string; thoughts?: string }) => {
-              const shelfBookId = shelf.bookId ? (typeof shelf.bookId === 'string' ? shelf.bookId : shelf.bookId.toString()) : null;
-              const matches = shelfBookId === bookIdString || 
-                            shelf.isbndbId === book.isbndbId ||
-                            shelf.openLibraryId === book.openLibraryId;
-              if (matches && shelf.thoughts) {
-                const thoughtsLower = String(shelf.thoughts).toLowerCase();
-                if (thoughtsLower.includes("dnf") || thoughtsLower.includes("did not finish")) {
-                  userInteraction.shelfStatus = "DNF";
-                  return true;
-                }
-              }
-              return matches;
-            });
-
-            const inCurrentlyReading = Array.isArray(user.currentlyReading) && user.currentlyReading.some((reading: { bookId?: mongoose.Types.ObjectId | string }) => {
-              const readingBookId = reading.bookId ? (typeof reading.bookId === 'string' ? reading.bookId : reading.bookId.toString()) : null;
-              return readingBookId === bookIdString || 
-                     reading.isbndbId === book.isbndbId ||
-                     reading.openLibraryId === book.openLibraryId;
-            });
-
-            const inTBR = Array.isArray(user.tbrBooks) && user.tbrBooks.some((tbr: { bookId?: mongoose.Types.ObjectId | string }) => {
-              const tbrBookId = tbr.bookId ? (typeof tbr.bookId === 'string' ? tbr.bookId : tbr.bookId.toString()) : null;
-              return tbrBookId === bookIdString || 
-                     tbr.isbndbId === book.isbndbId ||
-                     tbr.openLibraryId === book.openLibraryId;
-            });
-
-            if (inBookshelf && userInteraction.shelfStatus !== "DNF") {
-              userInteraction.shelfStatus = "Read";
-            } else if (inCurrentlyReading) {
-              userInteraction.shelfStatus = "Reading";
-            } else if (inTBR) {
-              userInteraction.shelfStatus = "Want to Read";
-            }
-          }
-        } catch (error) {
-          console.error(`[Mobile Book Detail API] [${requestId}] Error checking user context:`, error);
-          // Continue without user context - don't fail the request
-        }
-      }
-      console.log(`[Mobile Book Detail API] [${requestId}] User context completed (${Date.now() - userContextStartTime}ms):`, userInteraction);
-
-      // Get similar books (by genre and author)
-      console.log(`[Mobile Book Detail API] [${requestId}] Fetching similar books...`);
-      const similarStartTime = Date.now();
-      const genres = book.volumeInfo?.categories || [];
-      const authors = book.volumeInfo?.authors || [];
-      
-      type BookLean = {
-        _id?: { toString(): string } | mongoose.Types.ObjectId;
-        volumeInfo?: {
-          title?: string;
-          authors?: string[];
-          imageLinks?: {
-            thumbnail?: string;
-            smallThumbnail?: string;
-            medium?: string;
-            large?: string;
-          };
-        };
-        isbndbId?: string;
-        openLibraryId?: string;
-        isbn?: string;
-        isbn13?: string;
-      };
-
-      let similarBooks: Array<{
-        id: string;
-        title: string;
-        author: string;
-        cover: string;
-      }> = [];
-
-      if (genres.length > 0 || authors.length > 0) {
-        try {
-          const similar = await Book.find({
-            _id: { $ne: bookIdObj },
-            $or: [
-              { 'volumeInfo.categories': { $in: genres } },
-              { 'volumeInfo.authors': { $in: authors } },
-            ],
-            'volumeInfo.imageLinks.thumbnail': { $exists: true, $ne: null },
-          })
-            .sort({ paperboxdRating: -1, 'volumeInfo.averageRating': -1 })
-            .limit(12) // Fetch more to account for deduplication
-            .lean();
-
-          // Deduplicate by title+author
-          const seenBooks = new Set<string>();
-          similarBooks = (similar as unknown as BookLean[])
-            .filter((b) => {
-              const title = (b.volumeInfo?.title || '').toLowerCase().trim();
-              const author = (b.volumeInfo?.authors?.[0] || '').toLowerCase().trim();
-              const key = `${title}|${author}`;
-              
-              if (seenBooks.has(key)) {
-                return false;
-              }
-              seenBooks.add(key);
-              return true;
-            })
-            .slice(0, 6) // Return top 6
-            .map((b) => {
-              const imageLinks = b.volumeInfo?.imageLinks || {};
-              const cover = getBestBookCover(imageLinks) || 
-                           "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
-              
-              const bookId = b._id ? (typeof b._id === 'string' ? b._id : b._id.toString()) : 
-                            b.isbndbId || b.openLibraryId || b.isbn13 || b.isbn || "unknown";
-              
-              return {
-                id: bookId,
-                title: b.volumeInfo?.title || "Untitled",
-                author: b.volumeInfo?.authors?.[0] || "Unknown Author",
-                cover: cover,
-              };
-            });
-        } catch (error) {
-          console.error(`[Mobile Book Detail API] [${requestId}] Error fetching similar books:`, error);
-        }
-      }
-      console.log(`[Mobile Book Detail API] [${requestId}] Similar books fetched (${Date.now() - similarStartTime}ms): ${similarBooks.length} books`);
-
-      // Get social stats (readers, reviews, lists)
-      // Note: These are Paperboxd-specific stats from the Book model
-      const stats = {
-        readers: book.totalReads || 0,
-        reviews: book.paperboxdRatingsCount || 0,
-        lists: 0, // TODO: Count how many reading lists contain this book
-      };
-
       // Transform to iOS-friendly format (flat structure, not nested volumeInfo)
       const imageLinks = book.volumeInfo?.imageLinks || {};
       const cover = getBestBookCover(imageLinks) || 
                    "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
 
       const responseData = {
-        id: book.isbndbId || book.openLibraryId || book.isbn13 || book.isbn || bookIdString,
-        _id: bookIdString,
-        bookId: bookIdString,
+        id: book.isbndbId || book.openLibraryId || book.isbn13 || book.isbn || (book._id as { toString(): string }).toString(),
+        _id: (book._id as { toString(): string }).toString(),
+        bookId: (book._id as { toString(): string }).toString(),
         title: book.volumeInfo?.title || "Untitled",
         author: book.volumeInfo?.authors?.[0] || "Unknown Author",
         authors: book.volumeInfo?.authors || [],
@@ -324,12 +159,6 @@ export async function GET(
         pageCount: book.volumeInfo?.pageCount,
         categories: book.volumeInfo?.categories || [],
         publisher: book.volumeInfo?.publisher,
-        // User interaction context
-        userInteraction: userInteraction,
-        // Similar books for discovery
-        similarBooks: similarBooks,
-        // Social stats
-        stats: stats,
         // Paperboxd stats
         paperboxdStats: {
           rating: book.paperboxdRating,
@@ -370,8 +199,6 @@ export async function GET(
         const cover = getBestBookCover(imageLinks) || 
                      "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
 
-        // For external API results, skip user context and similar books (optimization)
-        // User can refresh to get full context after book is cached
         const responseData = {
           id: createdBook.isbndbId || id,
           _id: (createdBook._id as { toString(): string }).toString(),
@@ -391,13 +218,6 @@ export async function GET(
           pageCount: createdBook.volumeInfo?.pageCount,
           categories: createdBook.volumeInfo?.categories || [],
           publisher: createdBook.volumeInfo?.publisher,
-          userInteraction: { isLiked: false, shelfStatus: "None" as const },
-          similarBooks: [],
-          stats: {
-            readers: createdBook.totalReads || 0,
-            reviews: createdBook.paperboxdRatingsCount || 0,
-            lists: 0,
-          },
           paperboxdStats: {
             rating: createdBook.paperboxdRating,
             ratingsCount: createdBook.paperboxdRatingsCount,
@@ -463,7 +283,6 @@ export async function GET(
         const cover = getBestBookCover(imageLinks) || 
                      "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
 
-        // For external API results, skip user context and similar books (optimization)
         const responseData = {
           id: createdBook.openLibraryId || id,
           _id: (createdBook._id as { toString(): string }).toString(),
@@ -483,13 +302,6 @@ export async function GET(
           pageCount: createdBook.volumeInfo?.pageCount,
           categories: createdBook.volumeInfo?.categories || [],
           publisher: createdBook.volumeInfo?.publisher,
-          userInteraction: { isLiked: false, shelfStatus: "None" as const },
-          similarBooks: [],
-          stats: {
-            readers: createdBook.totalReads || 0,
-            reviews: createdBook.paperboxdRatingsCount || 0,
-            lists: 0,
-          },
           paperboxdStats: {
             rating: createdBook.paperboxdRating,
             ratingsCount: createdBook.paperboxdRatingsCount,
