@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-token";
 import connectDB from "@/lib/db/mongodb";
-import User from "@/lib/db/models/User";
+import User, { IReadingList } from "@/lib/db/models/User";
+import Book from "@/lib/db/models/Book";
+import mongoose from "mongoose";
+import { getBestBookCover } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -124,6 +127,304 @@ export async function GET(req: NextRequest) {
       readingListsCount: Array.isArray(user.readingLists) ? user.readingLists.length : 0,
     });
 
+    // Helper function to populate book details from bookId references
+    const populateBookDetails = async (bookReferences: Array<{ bookId?: mongoose.Types.ObjectId | string }>) => {
+      if (!Array.isArray(bookReferences) || bookReferences.length === 0) {
+        return [];
+      }
+
+      // Extract all unique book IDs
+      const bookIds = bookReferences
+        .map(ref => {
+          const id = ref.bookId;
+          if (!id) return null;
+          return typeof id === 'string' ? id : id.toString();
+        })
+        .filter((id): id is string => Boolean(id));
+
+      if (bookIds.length === 0) {
+        return bookReferences.map(ref => ({
+          ...ref,
+          title: undefined,
+          author: undefined,
+          cover: undefined,
+        }));
+      }
+
+      // Type for MongoDB lean book documents
+      type BookLean = {
+        _id?: mongoose.Types.ObjectId | { toString(): string } | string;
+        volumeInfo?: {
+          title?: string;
+          authors?: string[];
+          imageLinks?: {
+            thumbnail?: string;
+            smallThumbnail?: string;
+            medium?: string;
+            large?: string;
+            extraLarge?: string;
+          };
+        };
+        isbn?: string;
+        isbn13?: string;
+        openLibraryId?: string;
+        isbndbId?: string;
+      };
+
+      // Batch fetch all books
+      const booksMap = new Map<string, BookLean>();
+      try {
+        const books = await Book.find({
+          _id: { $in: bookIds.map(id => new mongoose.Types.ObjectId(id)) }
+        })
+          .select('volumeInfo.title volumeInfo.authors volumeInfo.imageLinks isbn isbn13 openLibraryId isbndbId')
+          .lean();
+
+        (books as unknown as BookLean[]).forEach((book) => {
+          if (book._id) {
+            const bookId = typeof book._id === 'string' ? book._id : book._id.toString();
+            booksMap.set(bookId, book);
+          }
+        });
+      } catch (error) {
+        console.error(`[Mobile Profile API] [${requestId}] Error fetching books:`, error);
+      }
+
+      // Map references to include book details
+      return bookReferences.map((ref) => {
+        const bookId = ref.bookId ? (typeof ref.bookId === 'string' ? ref.bookId : ref.bookId.toString()) : null;
+        const book = bookId ? booksMap.get(bookId) : null;
+
+        if (book) {
+          const imageLinks = book.volumeInfo?.imageLinks || {};
+          const cover = getBestBookCover(imageLinks) || 
+                       "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
+          
+          return {
+            ...ref,
+            title: book.volumeInfo?.title || "Unknown Title",
+            author: Array.isArray(book.volumeInfo?.authors) && book.volumeInfo.authors.length > 0
+              ? book.volumeInfo.authors[0]
+              : "Unknown Author",
+            authors: book.volumeInfo?.authors || [],
+            cover: cover,
+            isbn: book.isbn,
+            isbn13: book.isbn13,
+            openLibraryId: book.openLibraryId,
+            isbndbId: book.isbndbId,
+          };
+        }
+
+        return {
+          ...ref,
+          title: undefined,
+          author: undefined,
+          cover: undefined,
+        };
+      });
+    };
+
+    // Populate book details for favorites (max 4)
+    console.log(`[Mobile Profile API] [${requestId}] Populating favorite books...`);
+    const favoriteStartTime = Date.now();
+    const favoriteBooks = Array.isArray(user.favoriteBooks) ? user.favoriteBooks : [];
+    const populatedFavorites = await populateBookDetails(favoriteBooks.slice(0, 4)); // Max 4 as per requirement
+    console.log(`[Mobile Profile API] [${requestId}] Favorite books populated (${Date.now() - favoriteStartTime}ms)`);
+
+    // Populate book details for bookshelf
+    console.log(`[Mobile Profile API] [${requestId}] Populating bookshelf books...`);
+    const bookshelfStartTime = Date.now();
+    const bookshelf = Array.isArray(user.bookshelf) ? user.bookshelf : [];
+    const populatedBookshelf = await populateBookDetails(bookshelf);
+    console.log(`[Mobile Profile API] [${requestId}] Bookshelf books populated (${Date.now() - bookshelfStartTime}ms)`);
+
+    // DNF detection will be done after all population is complete
+
+    // Populate book details for topBooks
+    console.log(`[Mobile Profile API] [${requestId}] Populating top books...`);
+    const topBooksStartTime = Date.now();
+    const topBooks = Array.isArray(user.topBooks) ? user.topBooks : [];
+    const populatedTopBooks = await populateBookDetails(topBooks);
+    console.log(`[Mobile Profile API] [${requestId}] Top books populated (${Date.now() - topBooksStartTime}ms)`);
+
+    // Populate book details for currentlyReading
+    console.log(`[Mobile Profile API] [${requestId}] Populating currently reading books...`);
+    const currentlyReading = Array.isArray(user.currentlyReading) ? user.currentlyReading : [];
+    const populatedCurrentlyReading = await populateBookDetails(currentlyReading);
+
+    // Populate book details for tbrBooks
+    console.log(`[Mobile Profile API] [${requestId}] Populating TBR books...`);
+    const tbrBooks = Array.isArray(user.tbrBooks) ? user.tbrBooks : [];
+    const populatedTbrBooks = await populateBookDetails(tbrBooks);
+
+    // Populate reading lists with book details
+    console.log(`[Mobile Profile API] [${requestId}] Populating reading lists...`);
+    const readingListsStartTime = Date.now();
+    type PopulatedReadingList = Omit<IReadingList, 'books'> & {
+      books?: Array<{
+        _id?: string;
+        volumeInfo?: {
+          title?: string;
+          authors?: string[];
+          imageLinks?: {
+            thumbnail?: string;
+            smallThumbnail?: string;
+            medium?: string;
+            large?: string;
+          };
+        };
+      }> | mongoose.Types.ObjectId[];
+    };
+    let populatedReadingLists: PopulatedReadingList[] = Array.isArray(user.readingLists) 
+      ? user.readingLists.map(list => ({ ...list })) as unknown as PopulatedReadingList[] 
+      : [];
+    
+    if (populatedReadingLists.length > 0) {
+      try {
+        populatedReadingLists = await Promise.all(
+          populatedReadingLists.map(async (list) => {
+            // Check if books is an array of ObjectIds (not yet populated)
+            if (!list.books || !Array.isArray(list.books) || list.books.length === 0) {
+              return list;
+            }
+
+            // Check if books are already populated (have volumeInfo)
+            const firstBook = list.books[0];
+            if (firstBook && typeof firstBook === 'object' && 'volumeInfo' in firstBook) {
+              // Already populated, return as-is
+              return list;
+            }
+
+            // Convert book IDs to ObjectIds (books is ObjectId[])
+            const bookIds = (list.books as mongoose.Types.ObjectId[])
+              .map((id: mongoose.Types.ObjectId | string) => {
+                if (typeof id === 'string') {
+                  return new mongoose.Types.ObjectId(id);
+                }
+                return id;
+              })
+              .filter((id): id is mongoose.Types.ObjectId => id != null);
+
+            if (bookIds.length === 0) {
+              return list;
+            }
+
+            try {
+              // Fetch books for this list
+              const books = await Book.find({
+                _id: { $in: bookIds }
+              })
+                .select("volumeInfo.title volumeInfo.authors volumeInfo.imageLinks")
+                .lean();
+
+              // Map books to the format expected by iOS
+              const populatedBooks = books.map((book: {
+                _id?: { toString(): string } | mongoose.Types.ObjectId;
+                volumeInfo?: {
+                  title?: string;
+                  authors?: string[];
+                  imageLinks?: {
+                    thumbnail?: string;
+                    smallThumbnail?: string;
+                    medium?: string;
+                    large?: string;
+                    extraLarge?: string;
+                  };
+                };
+              }) => {
+                const imageLinks = book.volumeInfo?.imageLinks || {};
+
+                return {
+                  _id: book._id?.toString(),
+                  volumeInfo: {
+                    title: book.volumeInfo?.title,
+                    authors: book.volumeInfo?.authors || [],
+                    imageLinks: {
+                      thumbnail: imageLinks.thumbnail,
+                      smallThumbnail: imageLinks.smallThumbnail,
+                      medium: imageLinks.medium,
+                      large: imageLinks.large,
+                    }
+                  }
+                };
+              });
+
+              return {
+                ...list,
+                books: populatedBooks
+              };
+            } catch (bookError) {
+              console.error(`[Mobile Profile API] [${requestId}] Failed to populate books for list ${list._id}:`, bookError);
+              return list; // Return original list if population fails
+            }
+          })
+        );
+        console.log(`[Mobile Profile API] [${requestId}] Reading lists populated (${Date.now() - readingListsStartTime}ms)`);
+      } catch (error) {
+        console.error(`[Mobile Profile API] [${requestId}] Error populating reading lists:`, error);
+        // Keep original lists if population fails
+      }
+    }
+
+    // Enhanced DNF detection - check multiple indicators
+    console.log(`[Mobile Profile API] [${requestId}] Identifying DNF books with enhanced detection...`);
+    type PopulatedBook = {
+      bookId?: mongoose.Types.ObjectId | string;
+      title?: string;
+      author?: string;
+      authors?: string[];
+      cover?: string;
+      thoughts?: string;
+      reason?: string;
+      finishedDate?: Date | string;
+      [key: string]: unknown;
+    };
+    const dnfBooks = populatedBookshelf.filter((book: PopulatedBook) => {
+      // Check thoughts field for DNF indicators
+      if (book.thoughts) {
+        const thoughtsLower = book.thoughts.toLowerCase();
+        if (thoughtsLower.includes("dnf") || 
+            thoughtsLower.includes("did not finish") ||
+            thoughtsLower.includes("didn't finish") ||
+            thoughtsLower.includes("couldn't finish") ||
+            thoughtsLower.includes("could not finish")) {
+          return true;
+        }
+      }
+      
+      // Check if there's a reason field (some books might have this)
+      if (book.reason) {
+        const reasonLower = String(book.reason).toLowerCase();
+        if (reasonLower.includes("dnf") || reasonLower.includes("did not finish")) {
+          return true;
+        }
+      }
+      
+      // Check if finishedDate is null/undefined but book is in bookshelf (might indicate DNF)
+      // Actually, this might be too broad, so we'll skip this check
+      
+      return false;
+    });
+    console.log(`[Mobile Profile API] [${requestId}] Found ${dnfBooks.length} DNF books out of ${populatedBookshelf.length} bookshelf books`);
+    
+    // Log sample DNF books for debugging
+    if (dnfBooks.length > 0) {
+      console.log(`[Mobile Profile API] [${requestId}] Sample DNF books:`, dnfBooks.slice(0, 3).map((b: PopulatedBook) => ({
+        title: b.title,
+        thoughts: b.thoughts?.substring(0, 50),
+        reason: b.reason
+      })));
+    } else {
+      // Log sample bookshelf books to help debug why DNF detection isn't working
+      console.log(`[Mobile Profile API] [${requestId}] Sample bookshelf books (for DNF debugging):`, populatedBookshelf.slice(0, 3).map((b: PopulatedBook) => ({
+        title: b.title,
+        hasThoughts: !!b.thoughts,
+        thoughts: b.thoughts?.substring(0, 50),
+        hasReason: !!b.reason,
+        reason: b.reason
+      })));
+    }
+
     // Build response
     const responseData = {
       user: {
@@ -139,14 +440,14 @@ export async function GET(req: NextRequest) {
         links: Array.isArray(user.links) ? user.links : [],
         isPublic: user.isPublic ?? true,
         
-        // Books & Reading
-        topBooks: Array.isArray(user.topBooks) ? user.topBooks : [],
-        favoriteBooks: Array.isArray(user.favoriteBooks) ? user.favoriteBooks : [],
-        bookshelf: Array.isArray(user.bookshelf) ? user.bookshelf : [],
-        likedBooks: Array.isArray(user.likedBooks) ? user.likedBooks : [],
-        tbrBooks: Array.isArray(user.tbrBooks) ? user.tbrBooks : [],
-        currentlyReading: Array.isArray(user.currentlyReading) ? user.currentlyReading : [],
-        readingLists: Array.isArray(user.readingLists) ? user.readingLists : [],
+        // Books & Reading - with populated book details
+        topBooks: populatedTopBooks,
+        favoriteBooks: populatedFavorites,
+        bookshelf: populatedBookshelf,
+        likedBooks: Array.isArray(user.likedBooks) ? user.likedBooks : [], // Liked books don't need population for now
+        tbrBooks: populatedTbrBooks,
+        currentlyReading: populatedCurrentlyReading,
+        readingLists: populatedReadingLists,
         
         // Statistics
         totalBooksRead: user.totalBooksRead ?? 0,
@@ -165,7 +466,28 @@ export async function GET(req: NextRequest) {
       favoriteBooksCount: responseData.user.favoriteBooks.length,
       bookshelfCount: responseData.user.bookshelf.length,
       readingListsCount: responseData.user.readingLists.length,
+      dnfCount: dnfBooks.length,
+      readingListsWithBooks: responseData.user.readingLists.filter((list) => list.books && Array.isArray(list.books) && list.books.length > 0).length,
     });
+    
+    // Log reading lists details for debugging
+    if (responseData.user.readingLists.length > 0) {
+      console.log(`[Mobile Profile API] [${requestId}] Reading lists details:`, responseData.user.readingLists.map((list) => {
+        const firstBook = list.books?.[0];
+        const firstBookTitle = firstBook && typeof firstBook === 'object' && 'volumeInfo' in firstBook 
+          ? (firstBook as { volumeInfo?: { title?: string } }).volumeInfo?.title 
+          : undefined;
+        return {
+          id: list._id,
+          title: list.title,
+          booksCount: list.books?.length || 0,
+          hasBooks: !!(list.books && list.books.length > 0),
+          firstBookTitle
+        };
+      }));
+    } else {
+      console.log(`[Mobile Profile API] [${requestId}] No reading lists found in user data`);
+    }
 
     const totalTime = Date.now() - startTime;
     console.log(`[Mobile Profile API] [${requestId}] ✅ SUCCESS: Returning profile (total time: ${totalTime}ms)`);

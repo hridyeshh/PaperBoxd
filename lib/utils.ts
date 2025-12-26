@@ -112,11 +112,26 @@ export function isISBNdbImage(url: string | null | undefined): boolean {
 }
 
 /**
+ * Convert HTTP URLs to HTTPS for iOS App Transport Security compliance
+ * @param url - Image URL (may be HTTP or HTTPS)
+ * @returns HTTPS URL or original URL if already HTTPS or invalid
+ */
+function ensureHTTPS(url: string): string {
+  if (!url) return url;
+  if (url.startsWith('https://')) return url;
+  if (url.startsWith('http://')) {
+    return url.replace('http://', 'https://');
+  }
+  // If URL doesn't start with http/https, assume it's relative or invalid
+  return url;
+}
+
+/**
  * Get the best book cover image, prioritizing ISBNdb over Open Library
  * This prevents Open Library 503 errors when ISBNdb images are available
  * 
  * @param imageLinks - Book imageLinks object
- * @returns Best cover image URL or null
+ * @returns Best cover image URL (HTTPS) or null
  */
 export function getBestBookCover(imageLinks?: {
   thumbnail?: string | null;
@@ -146,20 +161,19 @@ export function getBestBookCover(imageLinks?: {
   const otherImages = allImages.filter(img => !isISBNdbImage(img.url) && !isOpenLibraryImage(img.url));
 
   // Priority: ISBNdb > Other > Open Library (to avoid 503 errors)
+  let selectedUrl: string | null = null;
+  
   if (isbndbImages.length > 0) {
     // Return highest priority ISBNdb image
-    return isbndbImages.sort((a, b) => b.priority - a.priority)[0].url;
-  }
-  
-  if (otherImages.length > 0) {
+    selectedUrl = isbndbImages.sort((a, b) => b.priority - a.priority)[0].url;
+  } else if (otherImages.length > 0) {
     // Return highest priority other image
-    return otherImages.sort((a, b) => b.priority - a.priority)[0].url;
-  }
-  
-  if (openLibraryImages.length > 0) {
+    selectedUrl = otherImages.sort((a, b) => b.priority - a.priority)[0].url;
+  } else if (openLibraryImages.length > 0) {
     // Only use Open Library as last resort
-    return openLibraryImages.sort((a, b) => b.priority - a.priority)[0].url;
+    selectedUrl = openLibraryImages.sort((a, b) => b.priority - a.priority)[0].url;
   }
 
-  return null;
+  // Ensure HTTPS for iOS App Transport Security
+  return selectedUrl ? ensureHTTPS(selectedUrl) : null;
 }

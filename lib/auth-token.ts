@@ -105,7 +105,7 @@ export async function getUserFromRequest(
                     authHeader = vercelAuth; // Use this as the auth header
                   }
                 }
-              } catch (e) {
+              } catch {
                 // Can't decode, but use it anyway
                 console.log(`[auth-token] [${requestId}] Could not decode token from x-vercel-sc-headers, using it anyway`);
                 authHeader = vercelAuth;
