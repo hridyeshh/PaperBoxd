@@ -15,6 +15,13 @@ const setupRoutes = ["/choose-username", "/setup-profile", "/onboarding"];
 
 export default auth((req) => {
   const { nextUrl } = req;
+  
+  // NEW: Completely exempt the mobile API from web-session logic
+  // Mobile API uses Bearer tokens, not cookies/sessions
+  if (nextUrl.pathname.startsWith("/api/mobile")) {
+    return NextResponse.next();
+  }
+  
   const isLoggedIn = !!req.auth;
 
   const isProtectedRoute = protectedRoutes.some((route) =>
@@ -55,10 +62,11 @@ export const config = {
     /*
      * Match all request paths except for the ones starting with:
      * - api/auth (NextAuth routes)
+     * - api/mobile (Mobile API - uses Bearer tokens, not sessions)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      */
-    "/((?!api/auth|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api/auth|api/mobile|_next/static|_next/image|favicon.ico).*)",
   ],
 };
