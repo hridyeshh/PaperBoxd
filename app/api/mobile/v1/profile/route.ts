@@ -202,6 +202,7 @@ export async function GET(req: NextRequest) {
           
           return {
             ...ref,
+            _id: book._id ? (typeof book._id === 'string' ? book._id : book._id.toString()) : ref.bookId?.toString(),
             title: book.volumeInfo?.title || "Unknown Title",
             author: Array.isArray(book.volumeInfo?.authors) && book.volumeInfo.authors.length > 0
               ? book.volumeInfo.authors[0]
@@ -444,6 +445,7 @@ export async function GET(req: NextRequest) {
         topBooks: populatedTopBooks,
         favoriteBooks: populatedFavorites,
         bookshelf: populatedBookshelf,
+        dnfBooks: dnfBooks, // Separate DNF books array for easy access
         likedBooks: Array.isArray(user.likedBooks) ? user.likedBooks : [], // Liked books don't need population for now
         tbrBooks: populatedTbrBooks,
         currentlyReading: populatedCurrentlyReading,
