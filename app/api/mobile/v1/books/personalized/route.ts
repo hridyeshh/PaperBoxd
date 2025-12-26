@@ -18,12 +18,58 @@ export const dynamic = "force-dynamic";
  * Returns: { books: Book[], count?: number }
  */
 export async function GET(req: NextRequest) {
+  const startTime = Date.now();
+  const requestId = Math.random().toString(36).substring(7);
+  
   try {
+    console.log("=".repeat(80));
+    console.log(`[Mobile Personalized Books API] [${requestId}] === REQUEST START ===`);
+    console.log(`[Mobile Personalized Books API] [${requestId}] Path: ${req.nextUrl.pathname}`);
+    console.log(`[Mobile Personalized Books API] [${requestId}] Method: ${req.method}`);
+    console.log(`[Mobile Personalized Books API] [${requestId}] URL: ${req.url}`);
+    console.log(`[Mobile Personalized Books API] [${requestId}] Timestamp: ${new Date().toISOString()}`);
+    
+    // Log ALL headers for debugging
+    const allHeaders: Record<string, string> = {};
+    req.headers.forEach((value, key) => {
+      allHeaders[key] = value;
+    });
+    console.log(`[Mobile Personalized Books API] [${requestId}] All Headers:`, JSON.stringify(allHeaders, null, 2));
+    
+    // Specifically check Authorization header
+    const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
+    console.log(`[Mobile Personalized Books API] [${requestId}] Authorization header present: ${!!authHeader}`);
+    if (authHeader) {
+      console.log(`[Mobile Personalized Books API] [${requestId}] Authorization header length: ${authHeader.length}`);
+      console.log(`[Mobile Personalized Books API] [${requestId}] Authorization header (first 50 chars): ${authHeader.substring(0, 50)}...`);
+      console.log(`[Mobile Personalized Books API] [${requestId}] Authorization starts with 'Bearer': ${authHeader.startsWith("Bearer ")}`);
+    } else {
+      console.log(`[Mobile Personalized Books API] [${requestId}] ⚠️ WARNING: No Authorization header found!`);
+      const headerKeys = Array.from(req.headers.keys());
+      console.log(`[Mobile Personalized Books API] [${requestId}] Available header keys:`, headerKeys);
+    }
+    
+    console.log(`[Mobile Personalized Books API] [${requestId}] Connecting to database...`);
+    const dbStartTime = Date.now();
     await connectDB();
+    console.log(`[Mobile Personalized Books API] [${requestId}] ✅ Database connected (${Date.now() - dbStartTime}ms)`);
     
     // Auth check using our Bearer Token helper (bypasses NextAuth)
+    console.log(`[Mobile Personalized Books API] [${requestId}] Calling getUserFromRequest...`);
+    const authStartTime = Date.now();
     const authUser = await getUserFromRequest(req);
+    console.log(`[Mobile Personalized Books API] [${requestId}] getUserFromRequest completed (${Date.now() - authStartTime}ms)`);
+    
+    console.log(`[Mobile Personalized Books API] [${requestId}] Auth user result:`, {
+      present: !!authUser,
+      id: authUser?.id,
+      email: authUser?.email,
+      username: authUser?.username,
+    });
+    
     if (!authUser || !authUser.id) {
+      console.log(`[Mobile Personalized Books API] [${requestId}] ❌ AUTH FAILED: No auth user or missing ID`);
+      console.log(`[Mobile Personalized Books API] [${requestId}] Auth user object:`, JSON.stringify(authUser, null, 2));
       return NextResponse.json(
         { error: "Mobile authentication required" },
         { status: 401 }
@@ -34,7 +80,10 @@ export async function GET(req: NextRequest) {
     const type = searchParams.get("type") || "recommended";
     const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "20")), 100);
 
+    console.log(`[Mobile Personalized Books API] [${requestId}] Query params:`, { type, limit });
+
     const userId = new mongoose.Types.ObjectId(authUser.id);
+    console.log(`[Mobile Personalized Books API] [${requestId}] User ID (ObjectId): ${userId.toString()}`);
     
     // Type for MongoDB lean documents
     type BookLean = {
@@ -66,18 +115,40 @@ export async function GET(req: NextRequest) {
     let books: BookLean[] = [];
 
     // Get user preferences
+    console.log(`[Mobile Personalized Books API] [${requestId}] Fetching user preferences...`);
+    const prefStartTime = Date.now();
     const preference = await UserPreference.findOne({ userId }).lean();
+    console.log(`[Mobile Personalized Books API] [${requestId}] Preferences query completed (${Date.now() - prefStartTime}ms)`, {
+      found: !!preference,
+      hasOnboarding: !!preference?.onboarding,
+      hasImplicitPrefs: !!preference?.implicitPreferences,
+    });
+    
+    console.log(`[Mobile Personalized Books API] [${requestId}] Fetching user data...`);
+    const userStartTime = Date.now();
     const user = await User.findById(userId).lean();
+    console.log(`[Mobile Personalized Books API] [${requestId}] User query completed (${Date.now() - userStartTime}ms)`, {
+      found: !!user,
+      hasAuthorsRead: !!user?.authorsRead && Array.isArray(user.authorsRead),
+      authorsReadCount: user?.authorsRead && Array.isArray(user.authorsRead) ? user.authorsRead.length : 0,
+      hasFollowing: !!user?.following && Array.isArray(user.following),
+      followingCount: user?.following && Array.isArray(user.following) ? user.following.length : 0,
+    });
 
+    console.log(`[Mobile Personalized Books API] [${requestId}] Processing type: ${type}`);
+    
     switch (type) {
       case "recommended": {
+        console.log(`[Mobile Personalized Books API] [${requestId}] Building 'recommended' recommendations...`);
         // Simple recommendation based on user's favorite genres and authors
         const genreNames: string[] = [];
         const authorNames: string[] = [];
 
         // Get genres from onboarding or implicit preferences
         if (preference?.onboarding?.genres) {
-          genreNames.push(...preference.onboarding.genres.map((g: { genre: string }) => g.genre));
+          const onboardingGenres = preference.onboarding.genres.map((g: { genre: string }) => g.genre);
+          genreNames.push(...onboardingGenres);
+          console.log(`[Mobile Personalized Books API] [${requestId}] Found ${onboardingGenres.length} genres from onboarding:`, onboardingGenres);
         }
         if (preference?.implicitPreferences?.genreWeights) {
           const genreWeights = preference.implicitPreferences.genreWeights;
@@ -87,12 +158,16 @@ export async function GET(req: NextRequest) {
               .slice(0, 5)
               .map(([genre]) => genre);
             genreNames.push(...topGenres);
+            console.log(`[Mobile Personalized Books API] [${requestId}] Found ${topGenres.length} top genres from implicit preferences:`, topGenres);
+          } else {
+            console.log(`[Mobile Personalized Books API] [${requestId}] Genre weights is not a Map, type:`, typeof genreWeights);
           }
         }
 
         // Get authors from onboarding or user's bookshelf
         if (preference?.onboarding?.favoriteAuthors) {
           authorNames.push(...preference.onboarding.favoriteAuthors);
+          console.log(`[Mobile Personalized Books API] [${requestId}] Found ${preference.onboarding.favoriteAuthors.length} authors from onboarding:`, preference.onboarding.favoriteAuthors);
         }
         if (user?.authorsRead && Array.isArray(user.authorsRead)) {
           const userAuthors = user.authorsRead
@@ -100,7 +175,10 @@ export async function GET(req: NextRequest) {
             .filter((a: string | undefined): a is string => a !== undefined && a.length > 0)
             .slice(0, 5);
           authorNames.push(...userAuthors);
+          console.log(`[Mobile Personalized Books API] [${requestId}] Found ${userAuthors.length} authors from user's reading history:`, userAuthors);
         }
+        
+        console.log(`[Mobile Personalized Books API] [${requestId}] Total genres: ${genreNames.length}, Total authors: ${authorNames.length}`);
 
         // Build query based on preferences
         const query: {
@@ -131,14 +209,21 @@ export async function GET(req: NextRequest) {
           }
         }
 
+        console.log(`[Mobile Personalized Books API] [${requestId}] Query structure:`, JSON.stringify(query, null, 2));
+        
         // Fetch books sorted by rating (personalized recommendations)
+        console.log(`[Mobile Personalized Books API] [${requestId}] Fetching books from database...`);
+        const queryStartTime = Date.now();
         books = await Book.find(query)
           .sort({ "volumeInfo.averageRating": -1, createdAt: -1 })
           .limit(limit * 2) // Fetch more to ensure we have enough after filtering
           .lean();
+        console.log(`[Mobile Personalized Books API] [${requestId}] Books query completed (${Date.now() - queryStartTime}ms), found ${books.length} books`);
 
         // If we don't have enough books, fall back to popular books
         if (books.length < limit) {
+          console.log(`[Mobile Personalized Books API] [${requestId}] Only found ${books.length} books, fetching popular books as fallback...`);
+          const fallbackStartTime = Date.now();
           const popularBooks = await Book.find({
             "volumeInfo.imageLinks.thumbnail": { $exists: true, $ne: null },
             "volumeInfo.averageRating": { $gte: 4.0 },
@@ -146,6 +231,7 @@ export async function GET(req: NextRequest) {
             .sort({ "volumeInfo.averageRating": -1, "volumeInfo.ratingsCount": -1 })
             .limit(limit)
             .lean();
+          console.log(`[Mobile Personalized Books API] [${requestId}] Fallback query completed (${Date.now() - fallbackStartTime}ms), found ${popularBooks.length} popular books`);
           
           // Combine and deduplicate
           const seenIds = new Set(books.map((b: BookLean) => {
@@ -159,18 +245,25 @@ export async function GET(req: NextRequest) {
               seenIds.add(bookId);
             }
           }
+          console.log(`[Mobile Personalized Books API] [${requestId}] After fallback merge: ${books.length} total books`);
         }
 
         // Limit to requested amount
         books = books.slice(0, limit);
+        console.log(`[Mobile Personalized Books API] [${requestId}] Final book count after limit: ${books.length}`);
         break;
       }
 
       case "onboarding": {
+        console.log(`[Mobile Personalized Books API] [${requestId}] Building 'onboarding' recommendations...`);
         // Books based on onboarding preferences
         if (preference?.onboarding) {
           const genreNames = preference.onboarding.genres?.map((g: { genre: string }) => g.genre) || [];
           const authorNames = preference.onboarding.favoriteAuthors || [];
+          console.log(`[Mobile Personalized Books API] [${requestId}] Onboarding data:`, {
+            genres: genreNames,
+            authors: authorNames,
+          });
 
           const query: {
             "volumeInfo.imageLinks.thumbnail": { $exists: boolean; $ne: null };
@@ -193,28 +286,40 @@ export async function GET(req: NextRequest) {
           }
 
           if (query.$or.length > 0) {
+            console.log(`[Mobile Personalized Books API] [${requestId}] Fetching onboarding books...`);
+            const queryStartTime = Date.now();
             books = await Book.find(query)
               .sort({ "volumeInfo.averageRating": -1 })
               .limit(limit)
               .lean();
+            console.log(`[Mobile Personalized Books API] [${requestId}] Onboarding books query completed (${Date.now() - queryStartTime}ms), found ${books.length} books`);
+          } else {
+            console.log(`[Mobile Personalized Books API] [${requestId}] No query conditions, skipping onboarding books`);
           }
+        } else {
+          console.log(`[Mobile Personalized Books API] [${requestId}] No onboarding preferences found`);
         }
         break;
       }
 
       case "friends": {
+        console.log(`[Mobile Personalized Books API] [${requestId}] Building 'friends' recommendations...`);
         // Books liked by users you follow
         if (user?.following && Array.isArray(user.following) && user.following.length > 0) {
+          console.log(`[Mobile Personalized Books API] [${requestId}] User follows ${user.following.length} users`);
           const followingIds = user.following.map((id: string | mongoose.Types.ObjectId) => 
             typeof id === "string" ? new mongoose.Types.ObjectId(id) : id
           );
           
+          console.log(`[Mobile Personalized Books API] [${requestId}] Fetching following users...`);
+          const followingStartTime = Date.now();
           const followingUsers = await User.find({
             _id: { $in: followingIds },
             likedBooks: { $exists: true, $ne: [] },
           })
             .select("likedBooks")
             .lean();
+          console.log(`[Mobile Personalized Books API] [${requestId}] Following users query completed (${Date.now() - followingStartTime}ms), found ${followingUsers.length} users with liked books`);
 
           const bookIds = new Set<string>();
           for (const followingUser of followingUsers) {
@@ -227,9 +332,12 @@ export async function GET(req: NextRequest) {
               }
             }
           }
+          console.log(`[Mobile Personalized Books API] [${requestId}] Collected ${bookIds.size} unique book IDs from friends`);
 
           if (bookIds.size > 0) {
             const bookObjectIds = Array.from(bookIds).map((id) => new mongoose.Types.ObjectId(id));
+            console.log(`[Mobile Personalized Books API] [${requestId}] Fetching friend-liked books...`);
+            const booksStartTime = Date.now();
             books = await Book.find({
               _id: { $in: bookObjectIds },
               "volumeInfo.imageLinks.thumbnail": { $exists: true, $ne: null },
@@ -237,13 +345,20 @@ export async function GET(req: NextRequest) {
               .sort({ "volumeInfo.averageRating": -1 })
               .limit(limit)
               .lean();
+            console.log(`[Mobile Personalized Books API] [${requestId}] Friends books query completed (${Date.now() - booksStartTime}ms), found ${books.length} books`);
+          } else {
+            console.log(`[Mobile Personalized Books API] [${requestId}] No book IDs collected from friends`);
           }
+        } else {
+          console.log(`[Mobile Personalized Books API] [${requestId}] User has no following or following array is empty`);
         }
         break;
       }
 
       default:
+        console.log(`[Mobile Personalized Books API] [${requestId}] Unknown type '${type}', using popular books fallback`);
         // Fallback to popular books
+        const fallbackStartTime = Date.now();
         books = await Book.find({
           "volumeInfo.imageLinks.thumbnail": { $exists: true, $ne: null },
           "volumeInfo.averageRating": { $gte: 4.0 },
@@ -251,9 +366,14 @@ export async function GET(req: NextRequest) {
           .sort({ "volumeInfo.averageRating": -1, "volumeInfo.ratingsCount": -1 })
           .limit(limit)
           .lean();
+        console.log(`[Mobile Personalized Books API] [${requestId}] Fallback query completed (${Date.now() - fallbackStartTime}ms), found ${books.length} books`);
     }
+    
+    console.log(`[Mobile Personalized Books API] [${requestId}] Total books found: ${books.length}`);
 
     // Transform books to match iOS Book model format
+    console.log(`[Mobile Personalized Books API] [${requestId}] Transforming ${books.length} books...`);
+    const transformStartTime = Date.now();
     const transformedBooks = books.map((book: BookLean) => {
       const imageLinks = book.volumeInfo?.imageLinks || {};
       const cover = getBestBookCover(imageLinks) || 
@@ -285,15 +405,38 @@ export async function GET(req: NextRequest) {
         publisher: book.volumeInfo?.publisher,
       };
     });
+    console.log(`[Mobile Personalized Books API] [${requestId}] Transformation completed (${Date.now() - transformStartTime}ms)`);
 
-    return NextResponse.json({
+    const responseData = {
       books: transformedBooks,
       count: transformedBooks.length,
+    };
+
+    const totalTime = Date.now() - startTime;
+    console.log(`[Mobile Personalized Books API] [${requestId}] ✅ SUCCESS: Returning ${transformedBooks.length} books (total time: ${totalTime}ms)`);
+    console.log(`[Mobile Personalized Books API] [${requestId}] Response structure:`, {
+      booksCount: responseData.books.length,
+      count: responseData.count,
+      firstBookId: responseData.books[0]?.id,
+      firstBookTitle: responseData.books[0]?.title,
     });
+    console.log(`[Mobile Personalized Books API] [${requestId}] === REQUEST END ===`);
+    console.log("=".repeat(80));
+
+    return NextResponse.json(responseData);
   } catch (error) {
-    console.error("[Mobile API] Personalized Books Error:", error);
+    const totalTime = Date.now() - startTime;
+    console.error("=".repeat(80));
+    console.error(`[Mobile Personalized Books API] [${requestId}] ❌ ERROR (after ${totalTime}ms):`, error);
+    if (error instanceof Error) {
+      console.error(`[Mobile Personalized Books API] [${requestId}] Error message:`, error.message);
+      console.error(`[Mobile Personalized Books API] [${requestId}] Error stack:`, error.stack);
+    }
+    console.error(`[Mobile Personalized Books API] [${requestId}] === REQUEST END (ERROR) ===`);
+    console.error("=".repeat(80));
+    
     return NextResponse.json(
-      { error: "Internal Server Error" },
+      { error: "Internal Server Error", details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
