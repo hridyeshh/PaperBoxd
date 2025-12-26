@@ -35,7 +35,35 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "20")), 100);
 
     const userId = new mongoose.Types.ObjectId(authUser.id);
-    let books: any[] = [];
+    
+    // Type for MongoDB lean documents
+    type BookLean = {
+      _id?: { toString(): string } | mongoose.Types.ObjectId;
+      isbn?: string;
+      isbn13?: string;
+      openLibraryId?: string;
+      isbndbId?: string;
+      volumeInfo?: {
+        title?: string;
+        authors?: string[];
+        description?: string;
+        publishedDate?: string;
+        averageRating?: number;
+        ratingsCount?: number;
+        pageCount?: number;
+        categories?: string[];
+        publisher?: string;
+        imageLinks?: {
+          large?: string;
+          medium?: string;
+          thumbnail?: string;
+          smallThumbnail?: string;
+          extraLarge?: string;
+        };
+      };
+    };
+    
+    let books: BookLean[] = [];
 
     // Get user preferences
     const preference = await UserPreference.findOne({ userId }).lean();
@@ -49,7 +77,7 @@ export async function GET(req: NextRequest) {
 
         // Get genres from onboarding or implicit preferences
         if (preference?.onboarding?.genres) {
-          genreNames.push(...preference.onboarding.genres.map((g: any) => g.genre));
+          genreNames.push(...preference.onboarding.genres.map((g: { genre: string }) => g.genre));
         }
         if (preference?.implicitPreferences?.genreWeights) {
           const genreWeights = preference.implicitPreferences.genreWeights;
@@ -68,14 +96,17 @@ export async function GET(req: NextRequest) {
         }
         if (user?.authorsRead && Array.isArray(user.authorsRead)) {
           const userAuthors = user.authorsRead
-            .map((a: any) => a.authorName)
-            .filter((a: string) => a && a.length > 0)
+            .map((a: { authorName?: string }) => a.authorName)
+            .filter((a: string | undefined): a is string => a !== undefined && a.length > 0)
             .slice(0, 5);
           authorNames.push(...userAuthors);
         }
 
         // Build query based on preferences
-        const query: any = {
+        const query: {
+          "volumeInfo.imageLinks.thumbnail": { $exists: boolean; $ne: null };
+          $or?: Array<{ "volumeInfo.categories"?: { $regex: string; $options: string }; "volumeInfo.authors"?: { $regex: string; $options: string } }>;
+        } = {
           "volumeInfo.imageLinks.thumbnail": { $exists: true, $ne: null },
         };
 
@@ -117,7 +148,10 @@ export async function GET(req: NextRequest) {
             .lean();
           
           // Combine and deduplicate
-          const seenIds = new Set(books.map((b: any) => b._id?.toString()));
+          const seenIds = new Set(books.map((b: BookLean) => {
+            const id = b._id;
+            return id ? (typeof id === 'object' && 'toString' in id ? id.toString() : String(id)) : undefined;
+          }).filter((id): id is string => id !== undefined));
           for (const book of popularBooks) {
             const bookId = book._id?.toString();
             if (bookId && !seenIds.has(bookId)) {
@@ -135,10 +169,13 @@ export async function GET(req: NextRequest) {
       case "onboarding": {
         // Books based on onboarding preferences
         if (preference?.onboarding) {
-          const genreNames = preference.onboarding.genres?.map((g: any) => g.genre) || [];
+          const genreNames = preference.onboarding.genres?.map((g: { genre: string }) => g.genre) || [];
           const authorNames = preference.onboarding.favoriteAuthors || [];
 
-          const query: any = {
+          const query: {
+            "volumeInfo.imageLinks.thumbnail": { $exists: boolean; $ne: null };
+            $or: Array<{ "volumeInfo.categories"?: { $regex: string; $options: string }; "volumeInfo.authors"?: { $regex: string; $options: string } }>;
+          } = {
             "volumeInfo.imageLinks.thumbnail": { $exists: true, $ne: null },
             $or: [],
           };
@@ -168,7 +205,7 @@ export async function GET(req: NextRequest) {
       case "friends": {
         // Books liked by users you follow
         if (user?.following && Array.isArray(user.following) && user.following.length > 0) {
-          const followingIds = user.following.map((id: any) => 
+          const followingIds = user.following.map((id: string | mongoose.Types.ObjectId) => 
             typeof id === "string" ? new mongoose.Types.ObjectId(id) : id
           );
           
@@ -217,32 +254,6 @@ export async function GET(req: NextRequest) {
     }
 
     // Transform books to match iOS Book model format
-    type BookLean = {
-      _id?: { toString(): string };
-      isbn?: string;
-      isbn13?: string;
-      openLibraryId?: string;
-      isbndbId?: string;
-      volumeInfo?: {
-        title?: string;
-        authors?: string[];
-        description?: string;
-        publishedDate?: string;
-        averageRating?: number;
-        ratingsCount?: number;
-        pageCount?: number;
-        categories?: string[];
-        publisher?: string;
-        imageLinks?: {
-          large?: string;
-          medium?: string;
-          thumbnail?: string;
-          smallThumbnail?: string;
-          extraLarge?: string;
-        };
-      };
-    };
-
     const transformedBooks = books.map((book: BookLean) => {
       const imageLinks = book.volumeInfo?.imageLinks || {};
       const cover = getBestBookCover(imageLinks) || 
