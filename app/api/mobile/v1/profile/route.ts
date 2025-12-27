@@ -126,6 +126,21 @@ export async function GET(req: NextRequest) {
       bookshelfCount: Array.isArray(user.bookshelf) ? user.bookshelf.length : 0,
       readingListsCount: Array.isArray(user.readingLists) ? user.readingLists.length : 0,
     });
+    
+    // Create a map for reading progress lookup (for DNF detection from TBR books)
+    const readingProgressMap = new Map<string, { pagesRead: number; updatedAt: Date | null }>();
+    if (Array.isArray(user.readingProgress)) {
+      user.readingProgress.forEach((p: { bookId?: mongoose.Types.ObjectId | string; pagesRead?: number; updatedAt?: Date }) => {
+        const bookId = p.bookId?.toString() || (typeof p.bookId === 'string' ? p.bookId : null);
+        if (bookId) {
+          readingProgressMap.set(bookId, {
+            pagesRead: p.pagesRead || 0,
+            updatedAt: p.updatedAt || null,
+          });
+        }
+      });
+    }
+    console.log(`[Mobile Profile API] [${requestId}] Reading progress map created: ${readingProgressMap.size} entries`);
 
     // Helper function to populate book details from bookId references
     const populateBookDetails = async (bookReferences: Array<{ bookId?: mongoose.Types.ObjectId | string }>) => {
@@ -253,10 +268,22 @@ export async function GET(req: NextRequest) {
     const currentlyReading = Array.isArray(user.currentlyReading) ? user.currentlyReading : [];
     const populatedCurrentlyReading = await populateBookDetails(currentlyReading);
 
-    // Populate book details for tbrBooks
+    // Populate book details for tbrBooks and enrich with reading progress
     console.log(`[Mobile Profile API] [${requestId}] Populating TBR books...`);
     const tbrBooks = Array.isArray(user.tbrBooks) ? user.tbrBooks : [];
-    const populatedTbrBooks = await populateBookDetails(tbrBooks);
+    const populatedTbrBooksRaw = await populateBookDetails(tbrBooks);
+    
+    // Enrich TBR books with reading progress (for DNF detection)
+    const populatedTbrBooks = populatedTbrBooksRaw.map((tbrBook: { bookId?: mongoose.Types.ObjectId | string; [key: string]: unknown }) => {
+      const tbrBookId = tbrBook.bookId ? (typeof tbrBook.bookId === 'string' ? tbrBook.bookId : tbrBook.bookId.toString()) : null;
+      const progress = tbrBookId ? readingProgressMap.get(tbrBookId) : null;
+      
+      return {
+        ...tbrBook,
+        pagesRead: progress?.pagesRead || 0,
+        progressUpdatedAt: progress?.updatedAt || null,
+      };
+    });
 
     // Populate reading lists with book details
     console.log(`[Mobile Profile API] [${requestId}] Populating reading lists...`);
@@ -367,7 +394,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Enhanced DNF detection - check multiple indicators
+    // Enhanced DNF detection - check multiple sources (matching web version logic)
     console.log(`[Mobile Profile API] [${requestId}] Identifying DNF books with enhanced detection...`);
     type PopulatedBook = {
       bookId?: mongoose.Types.ObjectId | string;
@@ -378,9 +405,12 @@ export async function GET(req: NextRequest) {
       thoughts?: string;
       reason?: string;
       finishedDate?: Date | string;
+      pagesRead?: number; // For TBR books with reading progress
       [key: string]: unknown;
     };
-    const dnfBooks = populatedBookshelf.filter((book: PopulatedBook) => {
+    
+    // Source 1: Bookshelf books with "DNF" in thoughts (explicit DNF)
+    const dnfFromBookshelf = populatedBookshelf.filter((book: PopulatedBook) => {
       // Check thoughts field for DNF indicators
       if (book.thoughts) {
         const thoughtsLower = book.thoughts.toLowerCase();
@@ -401,12 +431,39 @@ export async function GET(req: NextRequest) {
         }
       }
       
-      // Check if finishedDate is null/undefined but book is in bookshelf (might indicate DNF)
-      // Actually, this might be too broad, so we'll skip this check
-      
       return false;
     });
-    console.log(`[Mobile Profile API] [${requestId}] Found ${dnfBooks.length} DNF books out of ${populatedBookshelf.length} bookshelf books`);
+    console.log(`[Mobile Profile API] [${requestId}] Found ${dnfFromBookshelf.length} DNF books from bookshelf (explicit DNF)`);
+    
+    // Source 2: TBR books with reading progress > 0 (automatic DNF)
+    const dnfFromTBR = populatedTbrBooks.filter((book: PopulatedBook) => {
+      const pagesRead = book.pagesRead || 0;
+      // TBR books with pagesRead > 0 are considered DNF (started but not finished)
+      return pagesRead > 0;
+    });
+    console.log(`[Mobile Profile API] [${requestId}] Found ${dnfFromTBR.length} DNF books from TBR (with reading progress)`);
+    
+    // Combine both sources and deduplicate by bookId
+    const dnfBooksMap = new Map<string, PopulatedBook>();
+    
+    // Add bookshelf DNF books
+    dnfFromBookshelf.forEach((book: PopulatedBook) => {
+      const bookId = book.bookId ? (typeof book.bookId === 'string' ? book.bookId : book.bookId.toString()) : null;
+      if (bookId) {
+        dnfBooksMap.set(bookId, book);
+      }
+    });
+    
+    // Add TBR DNF books (won't overwrite if already in map from bookshelf)
+    dnfFromTBR.forEach((book: PopulatedBook) => {
+      const bookId = book.bookId ? (typeof book.bookId === 'string' ? book.bookId : book.bookId.toString()) : null;
+      if (bookId && !dnfBooksMap.has(bookId)) {
+        dnfBooksMap.set(bookId, book);
+      }
+    });
+    
+    const dnfBooks = Array.from(dnfBooksMap.values());
+    console.log(`[Mobile Profile API] [${requestId}] Total DNF books (deduplicated): ${dnfBooks.length} (${dnfFromBookshelf.length} from bookshelf + ${dnfFromTBR.length} from TBR)`);
     
     // Log sample DNF books for debugging
     if (dnfBooks.length > 0) {
