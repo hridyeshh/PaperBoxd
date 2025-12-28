@@ -29,7 +29,7 @@ export const dynamic = "force-dynamic";
  * }
  * 
  * Maps status to collection:
- * - "Want to Read" -> tbrBooks
+ * - "Want to Read" -> tbrBooks (TBR = DNF)
  * - "Reading" -> currentlyReading
  * - "Read" -> bookshelf
  * - "DNF" -> bookshelf (with thoughts containing "DNF")

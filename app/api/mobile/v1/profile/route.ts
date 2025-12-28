@@ -416,8 +416,10 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Simple DNF detection: Only books logged with status "DNF" (which adds "DNF: " prefix to thoughts)
-    console.log(`[Mobile Profile API] [${requestId}] Identifying DNF books (simple logic: only books logged as DNF)...`);
+    // DNF detection: Match web version - includes both:
+    // 1. Bookshelf books with "DNF:" prefix in thoughts (explicitly logged as DNF)
+    // 2. TBR books with reading progress > 0 (automatically added via reading progress API)
+    console.log(`[Mobile Profile API] [${requestId}] Identifying DNF books (matching web version logic)...`);
     type PopulatedBook = {
       bookId?: mongoose.Types.ObjectId | string;
       title?: string;
@@ -431,16 +433,44 @@ export async function GET(req: NextRequest) {
       [key: string]: unknown;
     };
     
-    // Only check bookshelf books with "DNF:" prefix in thoughts (books logged with status "DNF")
-    const dnfBooks = populatedBookshelf.filter((book: PopulatedBook) => {
-      // Simple check: if thoughts starts with "DNF:" (case-insensitive), it's a DNF book
+    // 1. Bookshelf books with "DNF:" prefix in thoughts (explicitly logged as DNF)
+    const dnfBooksFromBookshelf = populatedBookshelf.filter((book: PopulatedBook) => {
       if (book.thoughts) {
         const thoughtsTrimmed = book.thoughts.trim();
         return thoughtsTrimmed.toLowerCase().startsWith("dnf:");
       }
       return false;
     });
-    console.log(`[Mobile Profile API] [${requestId}] Found ${dnfBooks.length} DNF books (books logged with status "DNF")`);
+    
+    // 2. TBR books with reading progress > 0 (automatically added via reading progress API)
+    const dnfBooksFromTbr = populatedTbrBooks.filter((book: PopulatedBook) => {
+      const pagesRead = book.pagesRead || 0;
+      return pagesRead > 0;
+    });
+    
+    // Combine both sources and deduplicate by bookId
+    const dnfBooksMap = new Map<string, PopulatedBook>();
+    
+    // Add bookshelf DNF books
+    dnfBooksFromBookshelf.forEach((book: PopulatedBook) => {
+      const bookId = book.bookId ? (typeof book.bookId === 'string' ? book.bookId : book.bookId.toString()) : null;
+      if (bookId) {
+        dnfBooksMap.set(bookId, book);
+      }
+    });
+    
+    // Add TBR books with progress (don't overwrite if already in map from bookshelf)
+    dnfBooksFromTbr.forEach((book: PopulatedBook) => {
+      const bookId = book.bookId ? (typeof book.bookId === 'string' ? book.bookId : book.bookId.toString()) : null;
+      if (bookId && !dnfBooksMap.has(bookId)) {
+        dnfBooksMap.set(bookId, book);
+      }
+    });
+    
+    const dnfBooks = Array.from(dnfBooksMap.values());
+    console.log(`[Mobile Profile API] [${requestId}] Found ${dnfBooks.length} DNF books total:`);
+    console.log(`[Mobile Profile API] [${requestId}]   - ${dnfBooksFromBookshelf.length} from bookshelf (explicit DNF)`);
+    console.log(`[Mobile Profile API] [${requestId}]   - ${dnfBooksFromTbr.length} from TBR (with reading progress)`);
     
     // Log sample DNF books for debugging
     if (dnfBooks.length > 0) {

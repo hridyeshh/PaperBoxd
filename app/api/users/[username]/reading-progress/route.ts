@@ -174,13 +174,13 @@ export async function POST(
         }
       }
     } else if (clampedPagesRead > 0) {
-      // If progress is set but not complete, add to DNF (TBR) if not already there
+      // If progress is set but not complete, add to TBR (TBR = DNF) if not already there
       const isInTbr = user.tbrBooks?.some(
         (b) => b.bookId?.toString() === bookId
       );
       
       if (!isInTbr) {
-        // Add to TBR (DNF) with book reference
+        // Add to TBR (TBR = DNF - books started but not finished)
         const bookReference = {
           bookId: bookIdObj,
           isbndbId: book.isbndbId,
@@ -200,7 +200,7 @@ export async function POST(
         });
       }
     } else if (clampedPagesRead === 0) {
-      // If progress is reset to 0, remove from DNF (TBR) if it's there
+      // If progress is reset to 0, remove from TBR (TBR = DNF) if it's there
       if (user.tbrBooks && user.tbrBooks.length > 0) {
         const tbrIndex = user.tbrBooks.findIndex(
           (b) => b.bookId?.toString() === bookId

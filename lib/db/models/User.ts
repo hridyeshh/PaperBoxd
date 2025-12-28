@@ -36,6 +36,9 @@ export interface ILikedBook extends IBookReference {
   reason?: string;
 }
 
+// TBR (To Be Read) = DNF (Did Not Finish)
+// TBR books represent books that were started but not finished (DNF)
+// This includes books with reading progress > 0 or books explicitly marked as DNF
 export interface ITbrBook extends IBookReference {
   addedOn: Date;
   urgency?: "Soon" | "Eventually" | "This weekend";
@@ -116,9 +119,9 @@ export interface IUser extends Document {
   // Books & Reading
   topBooks: IBookReference[]; // 4-6 favorite books
   favoriteBooks: IBookReference[]; // Up to 12 favorite books
-  bookshelf: IBookshelfBook[]; // All finished books
+  bookshelf: IBookshelfBook[]; // All finished books (including explicit DNF books with "DNF:" prefix)
   likedBooks: ILikedBook[]; // Starred/saved books
-  tbrBooks: ITbrBook[]; // To be read
+  tbrBooks: ITbrBook[]; // DNF books (To Be Read = Did Not Finish) - books started but not finished
   currentlyReading: IBookReference[];
   readingProgress: IReadingProgress[]; // Track reading progress (pages read) for each book
 
@@ -184,6 +187,8 @@ const LikedBookSchema = new Schema({
   reason: { type: String },
 });
 
+// TBR Schema: TBR = DNF (Did Not Finish)
+// Stores books that were started but not finished
 const TbrBookSchema = new Schema({
   ...BookReferenceSchema.obj,
   addedOn: { type: Date, default: Date.now },
