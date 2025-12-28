@@ -83,6 +83,24 @@ export function EditProfileForm({
     checking: boolean;
   }>({ available: null, checking: false });
   const originalUsername = React.useRef(profile.username);
+  const originalEmail = React.useRef(profile.email);
+  
+  // Email change OTP state
+  const [emailChangeState, setEmailChangeState] = React.useState<{
+    isChanging: boolean;
+    otpSent: boolean;
+    sendingOtp: boolean;
+    verifyingOtp: boolean;
+    otpCode: string;
+    error: string | null;
+  }>({
+    isChanging: false,
+    otpSent: false,
+    sendingOtp: false,
+    verifyingOtp: false,
+    otpCode: "",
+    error: null,
+  });
   // Use state for selections to ensure they update immediately
   const [pronounSelection, setPronounSelection] = React.useState<Selection>(() => new Set(profile.pronouns));
   const [genderSelection, setGenderSelection] = React.useState<Selection>(() => {
@@ -91,6 +109,11 @@ export function EditProfileForm({
     }
     return profile.gender ? new Set([profile.gender]) : new Set();
   });
+  
+  // Sync originalEmail when profile changes (in case email is updated externally)
+  React.useEffect(() => {
+    originalEmail.current = profile.email;
+  }, [profile.email]);
   
   // Sync selections when profile changes
   React.useEffect(() => {
@@ -500,12 +523,173 @@ export function EditProfileForm({
                 name="email"
                 type="email"
                 value={profile.email}
-                onChange={handleChange}
+                onChange={(e) => {
+                  handleChange(e);
+                  // Reset email change state if email is reverted to original
+                  if (e.target.value === originalEmail.current) {
+                    setEmailChangeState({
+                      isChanging: false,
+                      otpSent: false,
+                      sendingOtp: false,
+                      verifyingOtp: false,
+                      otpCode: "",
+                      error: null,
+                    });
+                  } else if (!emailChangeState.isChanging) {
+                    setEmailChangeState(prev => ({ ...prev, isChanging: true, otpSent: false, error: null }));
+                  }
+                }}
                 placeholder="you@example.com"
                 className="pl-9"
+                disabled={emailChangeState.otpSent}
               />
               <MailIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             </div>
+            {profile.email !== originalEmail.current && !emailChangeState.otpSent && (
+              <div className="flex gap-2 mt-2">
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  onClick={async () => {
+                    setEmailChangeState(prev => ({ ...prev, sendingOtp: true, error: null }));
+                    try {
+                      const response = await fetch(`/api/users/${profile.username}/email-change/send-otp`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ newEmail: profile.email }),
+                      });
+                      const data = await response.json();
+                      if (response.ok) {
+                        setEmailChangeState(prev => ({ ...prev, otpSent: true, sendingOtp: false }));
+                      } else {
+                        setEmailChangeState(prev => ({ ...prev, sendingOtp: false, error: data.error || "Failed to send OTP" }));
+                      }
+                    } catch (error) {
+                      setEmailChangeState(prev => ({ ...prev, sendingOtp: false, error: "Failed to send OTP. Please try again." }));
+                    }
+                  }}
+                  disabled={emailChangeState.sendingOtp}
+                  className="rounded-full px-4"
+                >
+                  {emailChangeState.sendingOtp ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    "Send OTP"
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    updateProfile({ email: originalEmail.current });
+                    setEmailChangeState({
+                      isChanging: false,
+                      otpSent: false,
+                      sendingOtp: false,
+                      verifyingOtp: false,
+                      otpCode: "",
+                      error: null,
+                    });
+                  }}
+                  disabled={emailChangeState.sendingOtp}
+                  className="rounded-full px-4"
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
+            {emailChangeState.otpSent && (
+              <div className="mt-2 space-y-2">
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    placeholder="Enter 6-digit OTP"
+                    value={emailChangeState.otpCode}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                      setEmailChangeState(prev => ({ ...prev, otpCode: value, error: null }));
+                    }}
+                    className="flex-1"
+                    maxLength={6}
+                  />
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    onClick={async () => {
+                      if (emailChangeState.otpCode.length !== 6) {
+                        setEmailChangeState(prev => ({ ...prev, error: "Please enter a 6-digit code" }));
+                        return;
+                      }
+                      setEmailChangeState(prev => ({ ...prev, verifyingOtp: true, error: null }));
+                      try {
+                        const response = await fetch(`/api/users/${profile.username}/email-change/verify-otp`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ code: emailChangeState.otpCode }),
+                        });
+                        const data = await response.json();
+                        if (response.ok) {
+                          // Email updated successfully
+                          originalEmail.current = data.newEmail;
+                          updateProfile({ email: data.newEmail });
+                          setEmailChangeState({
+                            isChanging: false,
+                            otpSent: false,
+                            sendingOtp: false,
+                            verifyingOtp: false,
+                            otpCode: "",
+                            error: null,
+                          });
+                        } else {
+                          setEmailChangeState(prev => ({ ...prev, verifyingOtp: false, error: data.error || "Invalid OTP code" }));
+                        }
+                      } catch (error) {
+                        setEmailChangeState(prev => ({ ...prev, verifyingOtp: false, error: "Failed to verify OTP. Please try again." }));
+                      }
+                    }}
+                    disabled={emailChangeState.verifyingOtp || emailChangeState.otpCode.length !== 6}
+                    className="rounded-full px-4"
+                  >
+                    {emailChangeState.verifyingOtp ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Verifying...
+                      </>
+                    ) : (
+                      "Verify"
+                    )}
+                  </Button>
+                </div>
+                {emailChangeState.error && (
+                  <p className="text-xs text-destructive">{emailChangeState.error}</p>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    updateProfile({ email: originalEmail.current });
+                    setEmailChangeState({
+                      isChanging: false,
+                      otpSent: false,
+                      sendingOtp: false,
+                      verifyingOtp: false,
+                      otpCode: "",
+                      error: null,
+                    });
+                  }}
+                  className="rounded-full px-4 text-xs"
+                >
+                  Cancel email change
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className={fieldGroupClass}>

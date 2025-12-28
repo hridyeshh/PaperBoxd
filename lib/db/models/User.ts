@@ -157,6 +157,9 @@ export interface IUser extends Document {
     expiresAt: Date;      // 1 hour expiry
     usedAt?: Date;        // Track if used
   };
+  
+  // Temporary email for email change verification
+  tempNewEmail?: string;
 }
 
 // =====================================================
@@ -354,6 +357,9 @@ const UserSchema = new Schema<IUser>(
       expiresAt: { type: Date },
       usedAt: { type: Date },
     },
+    
+    // Temporary email for email change verification
+    tempNewEmail: { type: String, lowercase: true, trim: true },
   },
   {
     timestamps: true, // Automatically adds createdAt and updatedAt

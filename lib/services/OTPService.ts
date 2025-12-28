@@ -3,8 +3,9 @@ import connectDB from "@/lib/db/mongodb";
 import User, { IUser } from "@/lib/db/models/User";
 import OTP from "@/lib/db/models/OTP";
 import { sendOTPLoginEmail } from "@/lib/email/otp-login";
+import { sendEmailChangeOTP } from "@/lib/email/email-change";
 
-export type OTPType = "login" | "password_reset";
+export type OTPType = "login" | "password_reset" | "email_change";
 
 class OTPService {
   /**
@@ -63,12 +64,26 @@ class OTPService {
    */
   async createAndSend(
     email: string,
-    type: OTPType = "login"
+    type: OTPType = "login",
+    userId?: string // For email_change, pass the user ID directly
   ): Promise<{ success: boolean; message: string }> {
     await connectDB();
 
-    // Find user by email
-    const user = await User.findOne({ email: email.toLowerCase() });
+    let user: IUser | null = null;
+
+    // For email_change type, find user by userId (since email is the new email, not current)
+    if (type === "email_change" && userId) {
+      user = await User.findById(userId);
+      if (!user) {
+        return {
+          success: false,
+          message: "User not found",
+        };
+      }
+    } else {
+      // For other types, find user by email
+      user = await User.findOne({ email: email.toLowerCase() });
+    }
 
     // For login type, user must exist
     if (type === "login" && !user) {
@@ -80,16 +95,25 @@ class OTPService {
     }
 
     // For password reset, we can allow non-existent emails (same security behavior)
-    if (!user) {
+    if (!user && type !== "email_change") {
       return {
         success: true,
         message: "If an account exists with this email, a code has been sent.",
       };
     }
 
-    // Check rate limit
+    // For email_change, user must exist (we pass userId)
+    if (!user) {
+      return {
+        success: false,
+        message: "User not found",
+      };
+    }
+
+    // Check rate limit (use user's current email for rate limiting, not the new email for email_change)
     console.log("[OTPService.createAndSend] Checking rate limit");
-    const rateLimit = await this.checkRateLimit(email);
+    const emailForRateLimit = type === "email_change" ? user.email : email;
+    const rateLimit = await this.checkRateLimit(emailForRateLimit);
     console.log("[OTPService.createAndSend] Rate limit result:", rateLimit);
     if (!rateLimit.allowed) {
       console.log("[OTPService.createAndSend] Rate limit exceeded");
@@ -132,7 +156,8 @@ class OTPService {
     console.log("[OTPService.createAndSend] OTP saved", { otpId: otp._id ? otp._id.toString() : "unknown", expiresAt: expiresAt.toISOString() });
 
     // Send email with plain code
-    console.log("[OTPService.createAndSend] Attempting to send email", { to: user.email, type });
+    const emailToSend = type === "email_change" ? email.toLowerCase() : user.email;
+    console.log("[OTPService.createAndSend] Attempting to send email", { to: emailToSend, type });
     try {
       if (type === "login") {
         await sendOTPLoginEmail({
@@ -141,13 +166,20 @@ class OTPService {
           username: user.username,
         });
         console.log("[OTPService.createAndSend] Email sent successfully", { to: user.email });
+      } else if (type === "email_change") {
+        await sendEmailChangeOTP({
+          to: emailToSend,
+          code: plainCode,
+          username: user.username,
+        });
+        console.log("[OTPService.createAndSend] Email change OTP sent successfully", { to: emailToSend });
       }
       // For password_reset, we'd use a different email template if needed
     } catch (error) {
       console.error("[OTPService.createAndSend] Failed to send OTP email:", {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
-        to: user.email,
+        to: emailToSend,
         timestamp: new Date().toISOString(),
       });
       // Delete the OTP if email fails
@@ -197,12 +229,24 @@ class OTPService {
     const normalizedEmail = email.toLowerCase();
     console.log("[OTPService.verify] Starting verification", { email, normalizedEmail, type, timestamp: new Date().toISOString() });
     
-    const user: IUser | null = await User.findOne({ email: normalizedEmail });
-    console.log("[OTPService.verify] User lookup:", { 
-      found: !!user, 
-      userId: user?._id?.toString(),
-      email: user?.email 
-    });
+    let user: IUser | null = null;
+    
+    // For email_change, find user by tempNewEmail (since email is the new email, not current)
+    if (type === "email_change") {
+      user = await User.findOne({ tempNewEmail: normalizedEmail });
+      console.log("[OTPService.verify] User lookup by tempNewEmail:", { 
+        found: !!user, 
+        userId: user?._id?.toString(),
+        tempNewEmail: user?.tempNewEmail 
+      });
+    } else {
+      user = await User.findOne({ email: normalizedEmail });
+      console.log("[OTPService.verify] User lookup by email:", { 
+        found: !!user, 
+        userId: user?._id?.toString(),
+        email: user?.email 
+      });
+    }
     
     if (!user || !user._id) {
       console.log("[OTPService.verify] User not found or missing _id");
