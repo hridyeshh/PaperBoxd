@@ -47,7 +47,7 @@ export async function POST(
     
     const { id } = await context.params;
     const body = await req.json();
-    const { status, rating, thoughts, format } = body;
+    const { status, rating, thoughts, format, cover } = body;
 
     if (!status) {
       console.log(`[Mobile Log Book API] [${requestId}] ❌ ERROR: Status is required`);
@@ -172,10 +172,20 @@ export async function POST(
       );
     }
 
-    // Build book reference (use getBestBookCover to ensure HTTPS)
-    const imageLinks = book.volumeInfo?.imageLinks || {};
-    const cover = getBestBookCover(imageLinks) || 
+    // Build book reference (use provided cover if available, otherwise get from book)
+    let coverURL = cover; // Use cover from request if provided
+    
+    if (!coverURL) {
+      // Fallback to getting cover from book's imageLinks
+      const imageLinks = book.volumeInfo?.imageLinks || {};
+      coverURL = getBestBookCover(imageLinks) || 
                  "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
+    }
+    
+    // Ensure HTTPS for the cover URL
+    if (coverURL && coverURL.startsWith("http://")) {
+      coverURL = coverURL.replace("http://", "https://");
+    }
 
     const bookReference = {
       bookId: bookIdObj,
@@ -183,7 +193,7 @@ export async function POST(
       openLibraryId: book.openLibraryId,
       title: book.volumeInfo?.title || "Untitled",
       author: book.volumeInfo?.authors?.[0] || "Unknown Author",
-      cover: cover,
+      cover: coverURL,
     };
 
     // Check if book already exists in any collection (to avoid duplicates)
