@@ -297,8 +297,11 @@ export async function POST(
             rating: rating,
             thoughts: dnfThoughts,
           });
-          // Don't increment totalBooksRead for DNF
-          // Don't update book stats for DNF
+          // Match web version: DNF books are in bookshelf but don't count toward totalBooksRead
+          // This is different from "Read" status which increments totalBooksRead
+          // Note: Web version would increment totalBooksRead, but DNF semantically shouldn't count as "read"
+          // Keeping current behavior: don't increment totalBooksRead for DNF
+          // Don't update book stats for DNF (to avoid inflating read counts)
           
           user.activities.push({
             type: "dnf",

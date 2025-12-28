@@ -240,7 +240,7 @@ const DiaryEntrySchema = new Schema({
 const ActivitySchema = new Schema({
   type: {
     type: String,
-    enum: ["read", "rated", "liked", "added_to_list", "started_reading", "reviewed", "shared_list", "shared_book", "collaboration_request", "granted_access", "liked_diary_entry"],
+    enum: ["read", "rated", "liked", "added_to_list", "started_reading", "reviewed", "shared_list", "shared_book", "collaboration_request", "granted_access", "liked_diary_entry", "dnf"],
     required: true,
   },
   bookId: { type: Schema.Types.ObjectId, ref: "Book" },
