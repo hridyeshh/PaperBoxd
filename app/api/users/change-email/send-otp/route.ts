@@ -3,7 +3,6 @@ import OTPService from "@/lib/services/OTPService";
 import { getUserFromRequest } from "@/lib/auth-token";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
-import { sendOTPLoginEmail } from "@/lib/email/otp-login";
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -82,71 +81,51 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check rate limit
-    const rateLimit = await OTPService.checkRateLimit(normalizedNewEmail);
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        { error: "Too many requests. Please try again later." },
-        { status: 429 }
-      );
-    }
-
-    // Generate OTP code
-    const plainCode = OTPService.generateCode();
-    const hashedCode = await OTPService.hashCode(plainCode);
-
-    // Delete any existing unused OTPs for email change
-    const OTPModel = (await import("@/lib/db/models/OTP")).default;
-    await OTPModel.deleteMany({
-      userId: user._id,
-      type: "email_change",
-      used: false,
-    });
-
-    // Create new OTP
-    const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + 10); // 10 minutes expiry
-
-    const otp = new OTPModel({
-      userId: user._id,
-      code: hashedCode,
-      expiresAt,
-      attempts: 0,
-      used: false,
-      type: "email_change",
-    });
-
-    await otp.save();
-
-    // Store the new email temporarily in the OTP document
-    // We'll need to update the OTP model to support this, or use a separate collection
-    // For now, we'll store it in a temporary field on the user model
+    // Store the new email temporarily before sending OTP
     user.tempNewEmail = normalizedNewEmail;
     await user.save();
 
-    // Send email with OTP code
+    // Use OTPService to create and send OTP (it handles rate limiting, OTP creation, and email sending)
+    console.log("[Change Email Send OTP] Calling OTPService.createAndSend", { 
+      newEmail: normalizedNewEmail, 
+      userId: user._id?.toString(),
+      type: "email_change" 
+    });
+    
     try {
-      await sendOTPLoginEmail({
-        to: normalizedNewEmail,
-        code: plainCode,
-        username: user.username || "User",
-      });
-      console.log("[Change Email Send OTP] Email sent successfully", { to: normalizedNewEmail });
-    } catch (error) {
-      console.error("[Change Email Send OTP] Failed to send email:", error);
-      await OTPModel.findByIdAndDelete(otp._id);
+      const result = await OTPService.createAndSend(normalizedNewEmail, "email_change", user._id?.toString());
+      
+      if (!result.success) {
+        // Clean up temp email if OTP sending failed
+        user.tempNewEmail = undefined;
+        await user.save();
+        
+        return NextResponse.json(
+          { error: result.message },
+          { status: 429 } // Too Many Requests
+        );
+      }
+      
+      console.log("[Change Email Send OTP] OTP sent successfully", { to: normalizedNewEmail });
+    } catch (otpError) {
+      // Clean up temp email if OTP sending failed
       user.tempNewEmail = undefined;
       await user.save();
       
-      if (error instanceof Error && error.message.includes("RESEND_API_KEY")) {
+      console.error("[Change Email Send OTP] OTPService error:", otpError);
+      
+      // Check if it's a Resend API key error
+      if (otpError instanceof Error && otpError.message.includes("RESEND_API_KEY")) {
         return NextResponse.json(
           { error: "Email service is not configured. Please contact support." },
           { status: 500 }
         );
       }
       
+      // Return the error message from OTPService
+      const errorMessage = otpError instanceof Error ? otpError.message : "Failed to send verification code. Please try again.";
       return NextResponse.json(
-        { error: "Failed to send verification code. Please try again." },
+        { error: errorMessage },
         { status: 500 }
       );
     }
