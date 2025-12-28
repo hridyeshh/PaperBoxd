@@ -143,7 +143,8 @@ export async function GET(req: NextRequest) {
     console.log(`[Mobile Profile API] [${requestId}] Reading progress map created: ${readingProgressMap.size} entries`);
 
     // Helper function to populate book details from bookId references
-    const populateBookDetails = async (bookReferences: Array<{ bookId?: mongoose.Types.ObjectId | string }>) => {
+    // Priority: Uses cover/title/author from bookReference if available (saved when logging), otherwise from database
+    const populateBookDetails = async (bookReferences: Array<{ bookId?: mongoose.Types.ObjectId | string; cover?: string; title?: string; author?: string }>) => {
       if (!Array.isArray(bookReferences) || bookReferences.length === 0) {
         return [];
       }
@@ -211,18 +212,31 @@ export async function GET(req: NextRequest) {
         const book = bookId ? booksMap.get(bookId) : null;
 
         if (book) {
-          const imageLinks = book.volumeInfo?.imageLinks || {};
-          const cover = getBestBookCover(imageLinks) || 
-                       "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
+          // Priority: Use cover from bookReference if available (saved when logging), otherwise get from database
+          let cover = (ref as { cover?: string }).cover; // Use cover from bookReference first (saved when logging)
+          
+          if (!cover) {
+            // Fallback to database cover
+            const imageLinks = book.volumeInfo?.imageLinks || {};
+            cover = getBestBookCover(imageLinks) || 
+                   "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
+          }
+          
+          // Ensure HTTPS for cover URL
+          if (cover && cover.startsWith("http://")) {
+            cover = cover.replace("http://", "https://");
+          }
+          
+          const authors = book.volumeInfo?.authors || [];
+          const author = authors.length > 0 ? authors[0] : undefined;
+          const refWithDetails = ref as { title?: string; author?: string; cover?: string };
           
           return {
             ...ref,
             _id: book._id ? (typeof book._id === 'string' ? book._id : book._id.toString()) : ref.bookId?.toString(),
-            title: book.volumeInfo?.title || "Unknown Title",
-            author: Array.isArray(book.volumeInfo?.authors) && book.volumeInfo.authors.length > 0
-              ? book.volumeInfo.authors[0]
-              : "Unknown Author",
-            authors: book.volumeInfo?.authors || [],
+            title: refWithDetails.title || book.volumeInfo?.title || "Unknown Title",
+            author: refWithDetails.author || author || "Unknown Author",
+            authors: authors,
             cover: cover,
             isbn: book.isbn,
             isbn13: book.isbn13,
@@ -231,11 +245,19 @@ export async function GET(req: NextRequest) {
           };
         }
 
+        // If book not found, use saved details from bookReference or placeholder
+        const refWithDetails = ref as { title?: string; author?: string; cover?: string };
         return {
           ...ref,
-          title: undefined,
-          author: undefined,
-          cover: undefined,
+          _id: ref.bookId ? (typeof ref.bookId === 'string' ? ref.bookId : ref.bookId.toString()) : undefined,
+          title: refWithDetails.title || "Unknown Title",
+          author: refWithDetails.author || "Unknown Author",
+          authors: [],
+          cover: refWithDetails.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+          isbn: undefined,
+          isbn13: undefined,
+          openLibraryId: undefined,
+          isbndbId: undefined,
         };
       });
     };
@@ -394,8 +416,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Enhanced DNF detection - check multiple sources (matching web version logic)
-    console.log(`[Mobile Profile API] [${requestId}] Identifying DNF books with enhanced detection...`);
+    // Simple DNF detection: Only books logged with status "DNF" (which adds "DNF: " prefix to thoughts)
+    console.log(`[Mobile Profile API] [${requestId}] Identifying DNF books (simple logic: only books logged as DNF)...`);
     type PopulatedBook = {
       bookId?: mongoose.Types.ObjectId | string;
       title?: string;
@@ -405,65 +427,20 @@ export async function GET(req: NextRequest) {
       thoughts?: string;
       reason?: string;
       finishedDate?: Date | string;
-      pagesRead?: number; // For TBR books with reading progress
+      pagesRead?: number;
       [key: string]: unknown;
     };
     
-    // Source 1: Bookshelf books with "DNF" in thoughts (explicit DNF)
-    const dnfFromBookshelf = populatedBookshelf.filter((book: PopulatedBook) => {
-      // Check thoughts field for DNF indicators
+    // Only check bookshelf books with "DNF:" prefix in thoughts (books logged with status "DNF")
+    const dnfBooks = populatedBookshelf.filter((book: PopulatedBook) => {
+      // Simple check: if thoughts starts with "DNF:" (case-insensitive), it's a DNF book
       if (book.thoughts) {
-        const thoughtsLower = book.thoughts.toLowerCase();
-        if (thoughtsLower.includes("dnf") || 
-            thoughtsLower.includes("did not finish") ||
-            thoughtsLower.includes("didn't finish") ||
-            thoughtsLower.includes("couldn't finish") ||
-            thoughtsLower.includes("could not finish")) {
-          return true;
-        }
+        const thoughtsTrimmed = book.thoughts.trim();
+        return thoughtsTrimmed.toLowerCase().startsWith("dnf:");
       }
-      
-      // Check if there's a reason field (some books might have this)
-      if (book.reason) {
-        const reasonLower = String(book.reason).toLowerCase();
-        if (reasonLower.includes("dnf") || reasonLower.includes("did not finish")) {
-          return true;
-        }
-      }
-      
       return false;
     });
-    console.log(`[Mobile Profile API] [${requestId}] Found ${dnfFromBookshelf.length} DNF books from bookshelf (explicit DNF)`);
-    
-    // Source 2: TBR books with reading progress > 0 (automatic DNF)
-    const dnfFromTBR = populatedTbrBooks.filter((book: PopulatedBook) => {
-      const pagesRead = book.pagesRead || 0;
-      // TBR books with pagesRead > 0 are considered DNF (started but not finished)
-      return pagesRead > 0;
-    });
-    console.log(`[Mobile Profile API] [${requestId}] Found ${dnfFromTBR.length} DNF books from TBR (with reading progress)`);
-    
-    // Combine both sources and deduplicate by bookId
-    const dnfBooksMap = new Map<string, PopulatedBook>();
-    
-    // Add bookshelf DNF books
-    dnfFromBookshelf.forEach((book: PopulatedBook) => {
-      const bookId = book.bookId ? (typeof book.bookId === 'string' ? book.bookId : book.bookId.toString()) : null;
-      if (bookId) {
-        dnfBooksMap.set(bookId, book);
-      }
-    });
-    
-    // Add TBR DNF books (won't overwrite if already in map from bookshelf)
-    dnfFromTBR.forEach((book: PopulatedBook) => {
-      const bookId = book.bookId ? (typeof book.bookId === 'string' ? book.bookId : book.bookId.toString()) : null;
-      if (bookId && !dnfBooksMap.has(bookId)) {
-        dnfBooksMap.set(bookId, book);
-      }
-    });
-    
-    const dnfBooks = Array.from(dnfBooksMap.values());
-    console.log(`[Mobile Profile API] [${requestId}] Total DNF books (deduplicated): ${dnfBooks.length} (${dnfFromBookshelf.length} from bookshelf + ${dnfFromTBR.length} from TBR)`);
+    console.log(`[Mobile Profile API] [${requestId}] Found ${dnfBooks.length} DNF books (books logged with status "DNF")`);
     
     // Log sample DNF books for debugging
     if (dnfBooks.length > 0) {

@@ -67,7 +67,7 @@ export interface IDiaryEntry {
 }
 
 export interface IActivity {
-  type: "read" | "rated" | "liked" | "added_to_list" | "started_reading" | "reviewed" | "shared_list" | "shared_book" | "collaboration_request" | "granted_access" | "liked_diary_entry";
+  type: "read" | "rated" | "liked" | "added_to_list" | "started_reading" | "reviewed" | "shared_list" | "shared_book" | "collaboration_request" | "granted_access" | "liked_diary_entry" | "dnf";
   bookId?: mongoose.Types.ObjectId;
   listId?: string;
   listTitle?: string; // Title of the list for granted_access activities

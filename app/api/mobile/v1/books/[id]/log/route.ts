@@ -288,7 +288,8 @@ export async function POST(
         removeFromCollection(user.bookshelf);
         
         if (!checkInCollection(user.bookshelf)) {
-          const dnfThoughts = thoughts ? `DNF: ${thoughts}` : "DNF";
+          // Always prefix with "DNF: " to make detection simple
+          const dnfThoughts = thoughts ? `DNF: ${thoughts}` : "DNF: Did not finish";
           user.bookshelf.push({
             ...bookReference,
             finishedOn: new Date(),
@@ -296,11 +297,11 @@ export async function POST(
             rating: rating,
             thoughts: dnfThoughts,
           });
-          user.totalBooksRead += 1;
-          await book.updateStats("read");
+          // Don't increment totalBooksRead for DNF
+          // Don't update book stats for DNF
           
           user.activities.push({
-            type: "read",
+            type: "dnf",
             bookId: bookIdObj,
             timestamp: new Date(),
           });

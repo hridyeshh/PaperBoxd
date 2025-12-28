@@ -181,11 +181,14 @@ export async function GET(req: NextRequest) {
         console.log(`[Mobile Personalized Books API] [${requestId}] Total genres: ${genreNames.length}, Total authors: ${authorNames.length}`);
 
         // Build query based on preferences
+        // Filter: Only show books from ISBNdb or Open Library (exclude Google Books)
         const query: {
           "volumeInfo.imageLinks.thumbnail": { $exists: boolean; $ne: null };
+          apiSource: { $in: string[] };
           $or?: Array<{ "volumeInfo.categories"?: { $regex: string; $options: string }; "volumeInfo.authors"?: { $regex: string; $options: string } }>;
         } = {
           "volumeInfo.imageLinks.thumbnail": { $exists: true, $ne: null },
+          apiSource: { $in: ["isbndb", "open_library"] }, // Only ISBNdb and Open Library, exclude Google Books
         };
 
         if (genreNames.length > 0 || authorNames.length > 0) {
@@ -212,7 +215,8 @@ export async function GET(req: NextRequest) {
         console.log(`[Mobile Personalized Books API] [${requestId}] Query structure:`, JSON.stringify(query, null, 2));
         
         // Fetch books sorted by rating (personalized recommendations)
-        console.log(`[Mobile Personalized Books API] [${requestId}] Fetching books from database...`);
+        // Filter: Only show books from ISBNdb or Open Library (exclude Google Books)
+        console.log(`[Mobile Personalized Books API] [${requestId}] Fetching books from database (ISBNdb and Open Library only)...`);
         const queryStartTime = Date.now();
         books = await Book.find(query)
           .sort({ "volumeInfo.averageRating": -1, createdAt: -1 })
@@ -227,6 +231,7 @@ export async function GET(req: NextRequest) {
           const popularBooks = await Book.find({
             "volumeInfo.imageLinks.thumbnail": { $exists: true, $ne: null },
             "volumeInfo.averageRating": { $gte: 4.0 },
+            apiSource: { $in: ["isbndb", "open_library"] }, // Only ISBNdb and Open Library, exclude Google Books
           })
             .sort({ "volumeInfo.averageRating": -1, "volumeInfo.ratingsCount": -1 })
             .limit(limit)

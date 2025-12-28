@@ -44,10 +44,13 @@ export async function GET(req: NextRequest) {
     console.log(`[Mobile Latest Books API] [${requestId}] Query params:`, { page, pageSize, skip });
 
     // Fetch latest books with minimal projection for mobile speed
+    // Filter: Only show books from ISBNdb or Open Library (exclude Google Books)
     // Sort by publishedDate (descending), then by createdAt (descending)
-    console.log(`[Mobile Latest Books API] [${requestId}] Fetching books from database...`);
+    console.log(`[Mobile Latest Books API] [${requestId}] Fetching books from database (ISBNdb and Open Library only)...`);
     const queryStartTime = Date.now();
-    const books = await Book.find({})
+    const books = await Book.find({
+      apiSource: { $in: ["isbndb", "open_library"] } // Only ISBNdb and Open Library, exclude Google Books
+    })
       .sort({
         "volumeInfo.publishedDate": -1,
         createdAt: -1,
