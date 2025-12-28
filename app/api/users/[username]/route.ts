@@ -349,11 +349,30 @@ export async function PATCH(
     // Connect to database
     await connectDB();
 
+    // Authenticate user (supports both Bearer token and session)
+    const { getUserFromRequest } = await import("@/lib/auth-token");
+    const authUser = await getUserFromRequest(request);
+    
+    if (!authUser) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     // Find user
     const user = await User.findOne({ username });
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Verify the authenticated user owns this profile
+    if (user.email !== authUser.email) {
+      return NextResponse.json(
+        { error: "Unauthorized - You can only edit your own profile" },
+        { status: 403 }
+      );
     }
 
     // Handle username change separately to enforce uniqueness
