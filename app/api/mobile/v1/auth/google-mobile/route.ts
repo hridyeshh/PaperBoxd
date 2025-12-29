@@ -9,14 +9,10 @@ import User from "@/lib/db/models/User";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// Initialize OAuth2Client with Google Client ID
-// Support both web and iOS client IDs
+// Initialize OAuth2Client - no client ID needed for verification
+// We'll specify the audience in verifyIdToken instead
 const getOAuth2Client = () => {
-  const clientId = process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_IOS_CLIENT_ID;
-  if (!clientId) {
-    throw new Error("GOOGLE_CLIENT_ID or GOOGLE_IOS_CLIENT_ID must be set");
-  }
-  return new OAuth2Client(clientId);
+  return new OAuth2Client();
 };
 
 /**
@@ -40,24 +36,63 @@ export async function POST(req: NextRequest) {
 
     console.log("[Google Mobile Auth] Verifying Google ID token...");
 
+    // Get all possible client IDs (web and iOS)
+    const possibleClientIds = [
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_IOS_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_ID_WEB,
+      process.env.GOOGLE_CLIENT_ID_IOS,
+    ].filter(Boolean) as string[];
+
+    if (possibleClientIds.length === 0) {
+      console.error("[Google Mobile Auth] No Google Client IDs configured");
+      return NextResponse.json(
+        { error: "Server configuration error: Google Client IDs not set" },
+        { status: 500 }
+      );
+    }
+
+    console.log("[Google Mobile Auth] Checking token against client IDs:", possibleClientIds.map(id => id.substring(0, 20) + "..."));
+
     // Verify the Google ID token
     const client = getOAuth2Client();
     let ticket;
     
     try {
       // Verify the token - this will throw if invalid
-      ticket = await client.verifyIdToken({
-        idToken,
-        // Accept both web and iOS client IDs
-        audience: [
-          process.env.GOOGLE_CLIENT_ID,
-          process.env.GOOGLE_IOS_CLIENT_ID,
-        ].filter(Boolean) as string[],
-      });
+      // Try each client ID until one works (tokens are issued for a specific client ID)
+      let lastError: Error | null = null;
+      
+      for (const clientId of possibleClientIds) {
+        try {
+          ticket = await client.verifyIdToken({
+            idToken,
+            audience: clientId,
+          });
+          console.log("[Google Mobile Auth] Token verified successfully with client ID:", clientId.substring(0, 20) + "...");
+          break; // Success, exit loop
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          console.log("[Google Mobile Auth] Token verification failed for client ID:", clientId.substring(0, 20) + "...", "Error:", lastError.message);
+          // Continue to next client ID
+        }
+      }
+      
+      if (!ticket) {
+        throw lastError || new Error("Token verification failed for all client IDs");
+      }
     } catch (error) {
       console.error("[Google Mobile Auth] Token verification failed:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      console.error("[Google Mobile Auth] Error details:", {
+        message: errorMessage,
+        clientIdsChecked: possibleClientIds.length,
+      });
       return NextResponse.json(
-        { error: "Invalid or expired Google ID token" },
+        { 
+          error: "Invalid or expired Google ID token",
+          details: "The token could not be verified. Please ensure you're using the correct Google Client ID.",
+        },
         { status: 401 }
       );
     }
