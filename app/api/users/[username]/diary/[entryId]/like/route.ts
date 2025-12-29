@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { getUserFromRequest } from '@/lib/auth-token';
 import connectDB from '@/lib/db/mongodb';
 import User from '@/lib/db/models/User';
 import type { IDiaryEntry } from '@/lib/db/models/User';
@@ -24,12 +25,44 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ username: string; entryId: string }> }
 ) {
+  const requestId = Math.random().toString(36).substring(7);
+  
   try {
-    const session = await auth();
+    console.log(`[Diary Like API] [${requestId}] === REQUEST START ===`);
+    console.log(`[Diary Like API] [${requestId}] Path: ${request.nextUrl.pathname}`);
+    
     const { username, entryId } = await context.params;
+    console.log(`[Diary Like API] [${requestId}] Username: ${username}, EntryId: ${entryId}`);
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Support both Bearer token (mobile) and NextAuth session (web)
+    let currentUserId: string | null = null;
+    let currentUsername: string | null = null;
+
+    // Try Bearer token first (for mobile)
+    const authUser = await getUserFromRequest(request);
+    if (authUser?.id) {
+      currentUserId = authUser.id;
+      currentUsername = authUser.username || null;
+      console.log(`[Diary Like API] [${requestId}] ✅ Authenticated via Bearer token:`, {
+        id: currentUserId,
+        username: currentUsername,
+      });
+    } else {
+      // Fall back to NextAuth session (for web)
+      const session = await auth();
+      if (session?.user?.id) {
+        currentUserId = session.user.id;
+        currentUsername = session.user.username || null;
+        console.log(`[Diary Like API] [${requestId}] ✅ Authenticated via NextAuth session:`, {
+          id: currentUserId,
+          username: currentUsername,
+        });
+      }
+    }
+
+    if (!currentUserId) {
+      console.log(`[Diary Like API] [${requestId}] ❌ AUTH FAILED: No authentication found`);
+      return NextResponse.json({ error: 'Unauthorized', details: 'Please sign in to like diary entries' }, { status: 401 });
     }
 
     await connectDB();
@@ -94,8 +127,8 @@ export async function POST(
     }
 
     const entry = user.diaryEntries[entryIndex] as DiaryEntryWithId;
-    const userId = new mongoose.Types.ObjectId(session.user.id);
-    const userIdStr = session.user.id;
+    const userId = new mongoose.Types.ObjectId(currentUserId);
+    const userIdStr = currentUserId;
 
     // Initialize likes array if it doesn't exist
     if (!entry.likes) {

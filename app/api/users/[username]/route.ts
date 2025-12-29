@@ -60,8 +60,24 @@ export async function GET(
     await connectDB();
 
     // Check authentication to determine if user is the owner
-    const session = await auth();
-    const currentUser = session?.user?.email ? await User.findOne({ email: session.user.email }).select("username").lean() : null;
+    // Support both Bearer token (mobile) and NextAuth session (web)
+    let currentUserEmail: string | null = null;
+    
+    // Try Bearer token first (for mobile)
+    const { getUserFromRequest } = await import("@/lib/auth-token");
+    const authUser = await getUserFromRequest(request);
+    if (authUser?.email) {
+      currentUserEmail = authUser.email;
+    } else {
+      // Fall back to NextAuth session (for web)
+      const session = await auth();
+      if (session?.user?.email) {
+        currentUserEmail = session.user.email;
+      }
+    }
+    
+    // Find current user to check ownership
+    const currentUser = currentUserEmail ? await User.findOne({ email: currentUserEmail }).select("username").lean() : null;
     const isOwner = currentUser?.username === username;
 
     // Find user by username - optimized query with lean() and selective field projection
