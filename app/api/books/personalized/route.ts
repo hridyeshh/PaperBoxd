@@ -665,7 +665,7 @@ export async function GET(request: NextRequest) {
         description: book.volumeInfo?.description || '',
         publishedDate: book.volumeInfo?.publishedDate || '',
         cover: getBestBookCover(book.volumeInfo?.imageLinks) || 
-               'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80',
+          'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80',
         isbn: book.isbn,
         isbn13: book.isbn13,
         openLibraryId: book.openLibraryId,

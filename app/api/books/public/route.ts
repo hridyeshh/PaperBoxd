@@ -268,7 +268,7 @@ export async function GET(request: NextRequest) {
         title: book.volumeInfo?.title || 'Unknown Title',
         author: book.volumeInfo?.authors?.[0] || 'Unknown Author',
         cover: getBestBookCover(book.volumeInfo?.imageLinks) || 
-               'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80',
+          'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80',
       }))
       .filter((book) => {
         // Create a unique key from title and author (case-insensitive, normalized)
