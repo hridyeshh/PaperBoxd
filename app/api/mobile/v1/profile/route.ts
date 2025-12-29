@@ -290,6 +290,13 @@ export async function GET(req: NextRequest) {
     const currentlyReading = Array.isArray(user.currentlyReading) ? user.currentlyReading : [];
     const populatedCurrentlyReading = await populateBookDetails(currentlyReading);
 
+    // Populate book details for likedBooks
+    console.log(`[Mobile Profile API] [${requestId}] Populating liked books...`);
+    const likedBooksStartTime = Date.now();
+    const likedBooks = Array.isArray(user.likedBooks) ? user.likedBooks : [];
+    const populatedLikedBooks = await populateBookDetails(likedBooks);
+    console.log(`[Mobile Profile API] [${requestId}] Liked books populated (${Date.now() - likedBooksStartTime}ms)`);
+
     // Populate book details for tbrBooks and enrich with reading progress
     console.log(`[Mobile Profile API] [${requestId}] Populating TBR books...`);
     const tbrBooks = Array.isArray(user.tbrBooks) ? user.tbrBooks : [];
@@ -510,7 +517,7 @@ export async function GET(req: NextRequest) {
         favoriteBooks: populatedFavorites,
         bookshelf: populatedBookshelf,
         dnfBooks: dnfBooks, // Separate DNF books array for easy access
-        likedBooks: Array.isArray(user.likedBooks) ? user.likedBooks : [], // Liked books don't need population for now
+        likedBooks: populatedLikedBooks, // Populated liked books with full details
         tbrBooks: populatedTbrBooks,
         currentlyReading: populatedCurrentlyReading,
         readingLists: populatedReadingLists,

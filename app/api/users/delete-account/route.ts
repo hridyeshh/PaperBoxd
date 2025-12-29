@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { getUserFromRequest } from "@/lib/auth-token";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
 import AccountDeletion from "@/lib/db/models/AccountDeletion";
@@ -12,9 +13,27 @@ import AccountDeletion from "@/lib/db/models/AccountDeletion";
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await auth();
+    // Support both Bearer token (mobile) and NextAuth session (web)
+    let userEmail: string | null = null;
+    let userId: string | null = null;
+    
+    // Try Bearer token first (for mobile apps)
+    const authUser = await getUserFromRequest(request);
+    if (authUser) {
+      userEmail = authUser.email;
+      userId = authUser.id;
+      console.log('[Delete Account] Authenticated via Bearer token:', { userId, userEmail });
+    } else {
+      // Fall back to NextAuth session (for web)
+      const session = await auth();
+      if (session?.user?.email) {
+        userEmail = session.user.email;
+        userId = session.user.id;
+        console.log('[Delete Account] Authenticated via NextAuth session:', { userId, userEmail });
+      }
+    }
 
-    if (!session?.user?.email) {
+    if (!userEmail || !userId) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -33,8 +52,8 @@ export async function DELETE(request: NextRequest) {
 
     await connectDB();
 
-    // Find the user
-    const user = await User.findOne({ email: session.user.email });
+    // Find the user by email (more reliable than ID for cross-platform)
+    const user = await User.findOne({ email: userEmail.toLowerCase() });
 
     if (!user) {
       return NextResponse.json(
@@ -43,19 +62,19 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const userId = user._id;
-    const userEmail = user.email;
+    const userMongoId = user._id;
+    const userEmailFromDB = user.email;
     const username = user.username;
 
     // Save deletion reason to database before deleting the account
     try {
       await AccountDeletion.create({
-        email: userEmail,
+        email: userEmailFromDB,
         username: username,
         reasons: reasons,
         deletedAt: new Date(),
       });
-      console.log(`[Delete Account] Saved deletion record for user: ${userEmail}`);
+      console.log(`[Delete Account] Saved deletion record for user: ${userEmailFromDB}`);
     } catch (error) {
       console.error("[Delete Account] Failed to save deletion record:", error);
       // Continue with deletion even if saving the record fails
@@ -68,20 +87,20 @@ export async function DELETE(request: NextRequest) {
 
     // Remove user from all followers' following lists
     await User.updateMany(
-      { following: userId },
-      { $pull: { following: userId } }
+      { following: userMongoId },
+      { $pull: { following: userMongoId } }
     );
 
     // Remove user from all following users' followers lists
     await User.updateMany(
-      { followers: userId },
-      { $pull: { followers: userId } }
+      { followers: userMongoId },
+      { $pull: { followers: userMongoId } }
     );
 
     // Delete the user account
-    await User.findByIdAndDelete(userId);
+    await User.findByIdAndDelete(userMongoId);
 
-    console.log(`[Delete Account] Successfully deleted user: ${session.user.email}`);
+    console.log(`[Delete Account] Successfully deleted user: ${userEmailFromDB}`);
 
     return NextResponse.json({
       message: "Account deleted successfully",
