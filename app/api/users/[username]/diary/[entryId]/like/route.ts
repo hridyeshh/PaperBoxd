@@ -31,6 +31,15 @@ export async function POST(
     console.log(`[Diary Like API] [${requestId}] === REQUEST START ===`);
     console.log(`[Diary Like API] [${requestId}] Path: ${request.nextUrl.pathname}`);
     
+    // Log headers for debugging
+    const authHeader = request.headers.get("authorization") || request.headers.get("Authorization");
+    const customAuthHeader = request.headers.get("x-user-authorization") || request.headers.get("X-User-Authorization");
+    console.log(`[Diary Like API] [${requestId}] Authorization header present: ${!!authHeader}`);
+    console.log(`[Diary Like API] [${requestId}] X-User-Authorization header present: ${!!customAuthHeader}`);
+    if (authHeader) {
+      console.log(`[Diary Like API] [${requestId}] Authorization header (first 30 chars): ${authHeader.substring(0, 30)}...`);
+    }
+    
     const { username, entryId } = await context.params;
     console.log(`[Diary Like API] [${requestId}] Username: ${username}, EntryId: ${entryId}`);
 
@@ -39,6 +48,7 @@ export async function POST(
     let currentUsername: string | null = null;
 
     // Try Bearer token first (for mobile)
+    console.log(`[Diary Like API] [${requestId}] Attempting Bearer token authentication...`);
     const authUser = await getUserFromRequest(request);
     if (authUser?.id) {
       currentUserId = authUser.id;
@@ -48,6 +58,7 @@ export async function POST(
         username: currentUsername,
       });
     } else {
+      console.log(`[Diary Like API] [${requestId}] Bearer token authentication failed, trying NextAuth session...`);
       // Fall back to NextAuth session (for web)
       const session = await auth();
       if (session?.user?.id) {
@@ -57,11 +68,19 @@ export async function POST(
           id: currentUserId,
           username: currentUsername,
         });
+      } else {
+        console.log(`[Diary Like API] [${requestId}] NextAuth session also failed`);
       }
     }
 
     if (!currentUserId) {
       console.log(`[Diary Like API] [${requestId}] ❌ AUTH FAILED: No authentication found`);
+      console.log(`[Diary Like API] [${requestId}] Auth headers:`, {
+        hasAuthHeader: !!authHeader,
+        hasCustomAuthHeader: !!customAuthHeader,
+        authHeaderLength: authHeader?.length || 0,
+        customAuthHeaderLength: customAuthHeader?.length || 0,
+      });
       return NextResponse.json({ error: 'Unauthorized', details: 'Please sign in to like diary entries' }, { status: 401 });
     }
 
