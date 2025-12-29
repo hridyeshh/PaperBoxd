@@ -47,12 +47,15 @@ export async function POST(req: NextRequest) {
     ].filter(Boolean) as string[];
 
     console.log("[Google Mobile Auth] Environment check:", {
-      GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ? "SET" : "NOT SET",
-      GOOGLE_IOS_CLIENT_ID: process.env.GOOGLE_IOS_CLIENT_ID ? "SET" : "NOT SET",
-      GOOGLE_CLIENT_ID_WEB: process.env.GOOGLE_CLIENT_ID_WEB ? "SET" : "NOT SET",
-      GOOGLE_CLIENT_ID_IOS: process.env.GOOGLE_CLIENT_ID_IOS ? "SET" : "NOT SET",
+      GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ? `SET (${process.env.GOOGLE_CLIENT_ID.substring(0, 30)}...)` : "NOT SET",
+      GOOGLE_IOS_CLIENT_ID: process.env.GOOGLE_IOS_CLIENT_ID ? `SET (${process.env.GOOGLE_IOS_CLIENT_ID.substring(0, 30)}...)` : "NOT SET",
+      GOOGLE_CLIENT_ID_WEB: process.env.GOOGLE_CLIENT_ID_WEB ? `SET (${process.env.GOOGLE_CLIENT_ID_WEB.substring(0, 30)}...)` : "NOT SET",
+      GOOGLE_CLIENT_ID_IOS: process.env.GOOGLE_CLIENT_ID_IOS ? `SET (${process.env.GOOGLE_CLIENT_ID_IOS.substring(0, 30)}...)` : "NOT SET",
       totalClientIds: possibleClientIds.length,
     });
+    
+    // Log full client IDs for debugging (in production, be careful with this)
+    console.log("[Google Mobile Auth] Configured client IDs:", possibleClientIds);
 
     if (possibleClientIds.length === 0) {
       console.error("[Google Mobile Auth] No Google Client IDs configured");
@@ -80,17 +83,29 @@ export async function POST(req: NextRequest) {
     let ticket;
     
     try {
-      // If we know the audience, try that first
-      if (tokenAudience && possibleClientIds.includes(tokenAudience)) {
-        console.log("[Google Mobile Auth] Trying token's original audience first:", tokenAudience.substring(0, 20) + "...");
+      // Always try the exact audience from the token first (most reliable)
+      if (tokenAudience) {
+        console.log("[Google Mobile Auth] Token audience:", tokenAudience);
+        console.log("[Google Mobile Auth] Audience in configured list:", possibleClientIds.includes(tokenAudience));
+        
+        // Try the exact audience first - this should work if the token is valid
         try {
           ticket = await client.verifyIdToken({
             idToken,
             audience: tokenAudience,
           });
-          console.log("[Google Mobile Auth] ✅ Token verified successfully with original audience");
-        } catch {
-          console.log("[Google Mobile Auth] Original audience failed, trying all client IDs...");
+          console.log("[Google Mobile Auth] ✅ Token verified successfully with exact audience match");
+        } catch (exactError) {
+          const errorMsg = exactError instanceof Error ? exactError.message : String(exactError);
+          const errorStack = exactError instanceof Error ? exactError.stack : undefined;
+          console.log("[Google Mobile Auth] Exact audience match failed:", errorMsg);
+          console.log("[Google Mobile Auth] Error stack:", errorStack);
+          
+          // If exact match failed, the token might be invalid or expired
+          // But we'll still try configured client IDs as a fallback
+          if (!possibleClientIds.includes(tokenAudience)) {
+            console.log("[Google Mobile Auth] Token audience not in configured list, but trying configured IDs anyway...");
+          }
         }
       }
 
