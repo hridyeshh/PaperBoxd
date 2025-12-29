@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       console.log('[Avatar Upload] Authenticated via Bearer token:', { userId, userEmail });
     } else {
       // Fall back to NextAuth session (for web)
-      const session = await auth();
+    const session = await auth();
       if (session?.user?.id) {
         userId = session.user.id;
         userEmail = session.user.email || null;
@@ -76,33 +76,33 @@ export async function POST(request: NextRequest) {
     } else {
       // Handle JSON with base64 data URI (web)
       console.log('[Avatar Upload] Parsing JSON body');
-      const body = await request.json();
-      const { image } = body;
+    const body = await request.json();
+    const { image } = body;
 
-      if (!image) {
-        return NextResponse.json(
-          { error: 'No image provided' },
-          { status: 400 }
-        );
-      }
+    if (!image) {
+      return NextResponse.json(
+        { error: 'No image provided' },
+        { status: 400 }
+      );
+    }
 
-      // Validate image is base64 or data URI
-      if (!image.startsWith('data:image/')) {
-        return NextResponse.json(
-          { error: 'Invalid image format. Must be a data URI.' },
-          { status: 400 }
-        );
-      }
+    // Validate image is base64 or data URI
+    if (!image.startsWith('data:image/')) {
+      return NextResponse.json(
+        { error: 'Invalid image format. Must be a data URI.' },
+        { status: 400 }
+      );
+    }
 
-      // Check file size (limit to 5MB in base64)
-      const sizeInBytes = (image.length * 3) / 4;
-      const sizeInMB = sizeInBytes / (1024 * 1024);
+    // Check file size (limit to 5MB in base64)
+    const sizeInBytes = (image.length * 3) / 4;
+    const sizeInMB = sizeInBytes / (1024 * 1024);
 
-      if (sizeInMB > 5) {
-        return NextResponse.json(
-          { error: 'Image too large. Maximum size is 5MB.' },
-          { status: 400 }
-        );
+    if (sizeInMB > 5) {
+      return NextResponse.json(
+        { error: 'Image too large. Maximum size is 5MB.' },
+        { status: 400 }
+      );
       }
 
       imageDataUri = image;
@@ -208,7 +208,7 @@ export async function DELETE(request: NextRequest) {
       console.log('[Avatar Delete] Authenticated via Bearer token:', { userId });
     } else {
       // Fall back to NextAuth session (for web)
-      const session = await auth();
+    const session = await auth();
       if (session?.user?.id) {
         userId = session.user.id;
         console.log('[Avatar Delete] Authenticated via NextAuth session:', { userId });

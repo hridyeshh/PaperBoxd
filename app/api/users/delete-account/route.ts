@@ -25,7 +25,7 @@ export async function DELETE(request: NextRequest) {
       console.log('[Delete Account] Authenticated via Bearer token:', { userId, userEmail });
     } else {
       // Fall back to NextAuth session (for web)
-      const session = await auth();
+    const session = await auth();
       if (session?.user?.email) {
         userEmail = session.user.email;
         userId = session.user.id;

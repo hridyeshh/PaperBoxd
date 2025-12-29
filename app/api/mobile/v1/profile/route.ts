@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-token";
 import connectDB from "@/lib/db/mongodb";
-import User, { IReadingList } from "@/lib/db/models/User";
+import User, { IReadingList, IDiaryEntry } from "@/lib/db/models/User";
 import Book from "@/lib/db/models/Book";
 import mongoose from "mongoose";
 import { getBestBookCover } from "@/lib/utils";
@@ -527,6 +527,29 @@ export async function GET(req: NextRequest) {
         totalPagesRead: user.totalPagesRead ?? 0,
         followers: Array.isArray(user.followers) ? user.followers.map((id) => String(id)) : [],
         following: Array.isArray(user.following) ? user.following.map((id) => String(id)) : [],
+        
+        // Diary Entries
+        diaryEntries: Array.isArray(user.diaryEntries) ? user.diaryEntries.map((entry: IDiaryEntry & { _id?: mongoose.Types.ObjectId | string }) => {
+          const entryId = entry._id ? (typeof entry._id === 'string' ? entry._id : entry._id.toString()) : undefined;
+          return {
+            id: entryId,
+            _id: entryId,
+            bookId: entry.bookId ? (typeof entry.bookId === 'string' ? entry.bookId : entry.bookId.toString()) : null,
+            bookTitle: entry.bookTitle || null,
+            bookAuthor: entry.bookAuthor || null,
+            bookCover: entry.bookCover || null,
+            subject: entry.subject || null,
+            content: entry.content || '',
+            createdAt: entry.createdAt ? (entry.createdAt instanceof Date ? entry.createdAt.toISOString() : entry.createdAt) : new Date().toISOString(),
+            updatedAt: entry.updatedAt ? (entry.updatedAt instanceof Date ? entry.updatedAt.toISOString() : entry.updatedAt) : new Date().toISOString(),
+            likesCount: Array.isArray(entry.likes) ? entry.likes.length : 0,
+            isLiked: false, // Will be set based on current user if needed
+          };
+        }).sort((a, b) => {
+          const dateA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+          const dateB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+          return dateB - dateA; // Newest first
+        }) : [],
       },
     };
 
@@ -540,6 +563,7 @@ export async function GET(req: NextRequest) {
       bookshelfCount: responseData.user.bookshelf.length,
       readingListsCount: responseData.user.readingLists.length,
       dnfCount: dnfBooks.length,
+      diaryEntriesCount: responseData.user.diaryEntries.length,
       readingListsWithBooks: responseData.user.readingLists.filter((list) => list.books && Array.isArray(list.books) && list.books.length > 0).length,
     });
     

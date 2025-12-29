@@ -177,7 +177,7 @@ export async function POST(
     
     if (!coverURL) {
       // Fallback to getting cover from book's imageLinks
-      const imageLinks = book.volumeInfo?.imageLinks || {};
+    const imageLinks = book.volumeInfo?.imageLinks || {};
       coverURL = getBestBookCover(imageLinks) || 
                  "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
     }
