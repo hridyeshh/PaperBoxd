@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import { auth } from '@/lib/auth';
+import { getUserFromRequest } from '@/lib/auth-token';
 import { uploadToCloudinary, deleteFromCloudinary, getPublicIdFromUrl } from '@/lib/cloudinary';
 import connectDB from '@/lib/db/mongodb';
 import User from '@/lib/db/models/User';
@@ -12,78 +13,124 @@ import User from '@/lib/db/models/User';
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
+    // Support both Bearer token (mobile) and NextAuth session (web)
+    let userId: string | null = null;
+    let userEmail: string | null = null;
+    
+    // Try Bearer token first (for mobile apps)
+    const authUser = await getUserFromRequest(request);
+    if (authUser) {
+      userId = authUser.id;
+      userEmail = authUser.email;
+      console.log('[Avatar Upload] Authenticated via Bearer token:', { userId, userEmail });
+    } else {
+      // Fall back to NextAuth session (for web)
+      const session = await auth();
+      if (session?.user?.id) {
+        userId = session.user.id;
+        userEmail = session.user.email || null;
+        console.log('[Avatar Upload] Authenticated via NextAuth session:', { userId, userEmail });
+      }
+    }
 
-    console.log('[Avatar Upload] Raw session:', {
-      hasSession: !!session,
-      hasUser: !!session?.user,
-      userId: session?.user?.id,
-      userEmail: session?.user?.email,
-      userUsername: session?.user?.username,
-    });
-
-    if (!session?.user?.id) {
-      console.error('[Avatar Upload] No session or user ID');
+    if (!userId) {
+      console.error('[Avatar Upload] No authentication found');
       return NextResponse.json(
         { error: 'Unauthorized', details: 'Please sign in to upload an avatar' },
         { status: 401 }
       );
     }
 
-    const body = await request.json();
-    const { image } = body;
+    // Support both JSON (web) and multipart/form-data (iOS)
+    let imageDataUri: string;
+    const contentType = request.headers.get('content-type') || '';
 
-    if (!image) {
-      return NextResponse.json(
-        { error: 'No image provided' },
-        { status: 400 }
-      );
-    }
+    if (contentType.includes('multipart/form-data')) {
+      // Handle multipart form data (iOS app)
+      console.log('[Avatar Upload] Parsing multipart form data');
+      const formData = await request.formData();
+      const avatarFile = formData.get('avatar') as File | null;
 
-    // Validate image is base64 or data URI
-    if (!image.startsWith('data:image/')) {
-      return NextResponse.json(
-        { error: 'Invalid image format. Must be a data URI.' },
-        { status: 400 }
-      );
-    }
+      if (!avatarFile) {
+        return NextResponse.json(
+          { error: 'No image provided. Expected field name: "avatar"' },
+          { status: 400 }
+        );
+      }
 
-    // Check file size (limit to 5MB in base64)
-    const sizeInBytes = (image.length * 3) / 4;
-    const sizeInMB = sizeInBytes / (1024 * 1024);
+      // Check file size (limit to 5MB)
+      if (avatarFile.size > 5 * 1024 * 1024) {
+        return NextResponse.json(
+          { error: 'Image too large. Maximum size is 5MB.' },
+          { status: 400 }
+        );
+      }
 
-    if (sizeInMB > 5) {
-      return NextResponse.json(
-        { error: 'Image too large. Maximum size is 5MB.' },
-        { status: 400 }
-      );
+      // Convert File to base64 data URI
+      const arrayBuffer = await avatarFile.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const base64 = buffer.toString('base64');
+      const mimeType = avatarFile.type || 'image/jpeg';
+      imageDataUri = `data:${mimeType};base64,${base64}`;
+      console.log('[Avatar Upload] Converted multipart file to data URI, size:', avatarFile.size, 'bytes');
+    } else {
+      // Handle JSON with base64 data URI (web)
+      console.log('[Avatar Upload] Parsing JSON body');
+      const body = await request.json();
+      const { image } = body;
+
+      if (!image) {
+        return NextResponse.json(
+          { error: 'No image provided' },
+          { status: 400 }
+        );
+      }
+
+      // Validate image is base64 or data URI
+      if (!image.startsWith('data:image/')) {
+        return NextResponse.json(
+          { error: 'Invalid image format. Must be a data URI.' },
+          { status: 400 }
+        );
+      }
+
+      // Check file size (limit to 5MB in base64)
+      const sizeInBytes = (image.length * 3) / 4;
+      const sizeInMB = sizeInBytes / (1024 * 1024);
+
+      if (sizeInMB > 5) {
+        return NextResponse.json(
+          { error: 'Image too large. Maximum size is 5MB.' },
+          { status: 400 }
+        );
+      }
+
+      imageDataUri = image;
     }
 
     await connectDB();
 
     // Debug logging
-    console.log('[Avatar Upload] Session user ID:', session.user.id);
-    console.log('[Avatar Upload] Session user:', {
-      id: session.user.id,
-      email: session.user.email,
-      username: session.user.username,
+    console.log('[Avatar Upload] User ID:', userId);
+    console.log('[Avatar Upload] User:', {
+      id: userId,
+      email: userEmail,
     });
 
     // Get user's current avatar to delete old one
     // Try to find user by ID
-    let user = await User.findById(session.user.id).select('avatar');
+    let user = await User.findById(userId).select('avatar');
     
     // If not found by ID, try to find by email as fallback
-    if (!user && session.user.email) {
-      console.log('[Avatar Upload] User not found by ID, trying email:', session.user.email);
-      user = await User.findOne({ email: session.user.email.toLowerCase() }).select('avatar');
+    if (!user && userEmail) {
+      console.log('[Avatar Upload] User not found by ID, trying email:', userEmail);
+      user = await User.findOne({ email: userEmail.toLowerCase() }).select('avatar');
     }
 
     if (!user) {
       console.error('[Avatar Upload] User not found in database:', {
-        userId: session.user.id,
-        email: session.user.email,
-        username: session.user.username,
+        userId,
+        email: userEmail,
       });
       return NextResponse.json(
         { 
@@ -116,9 +163,9 @@ export async function POST(request: NextRequest) {
     // Upload new avatar to Cloudinary
     // Use user ID as public ID for easy management
     const result = await uploadToCloudinary(
-      image,
+      imageDataUri,
       'paperboxd/avatars',
-      `user_${session.user.id}`
+      `user_${userId}`
     );
 
     // Update user's avatar in database
@@ -149,11 +196,26 @@ export async function POST(request: NextRequest) {
  * Delete user avatar
  * Requires authentication
  */
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   try {
-    const session = await auth();
+    // Support both Bearer token (mobile) and NextAuth session (web)
+    let userId: string | null = null;
+    
+    // Try Bearer token first (for mobile apps)
+    const authUser = await getUserFromRequest(request);
+    if (authUser) {
+      userId = authUser.id;
+      console.log('[Avatar Delete] Authenticated via Bearer token:', { userId });
+    } else {
+      // Fall back to NextAuth session (for web)
+      const session = await auth();
+      if (session?.user?.id) {
+        userId = session.user.id;
+        console.log('[Avatar Delete] Authenticated via NextAuth session:', { userId });
+      }
+    }
 
-    if (!session?.user?.id) {
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -162,7 +224,7 @@ export async function DELETE() {
 
     await connectDB();
 
-    const user = await User.findById(session.user.id).select('avatar');
+    const user = await User.findById(userId).select('avatar');
 
     if (!user) {
       return NextResponse.json(
