@@ -156,8 +156,10 @@ const providers: Provider[] = [
           }
 
           // Update last active
+          // Use validateBeforeSave: false to avoid validating existing activities
+          // that might have been created before schema updates
           user.lastActive = new Date();
-          await user.save();
+          await user.save({ validateBeforeSave: false });
 
           // Return user object
           // Don't include avatar image in JWT - it can be too large (base64 images)
@@ -250,8 +252,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         user.username = existingUser.username;
 
         // Update last active
+        // Use validateBeforeSave: false to avoid validating existing activities
+        // that might have been created before schema updates
         existingUser.lastActive = new Date();
-        await existingUser.save();
+        await existingUser.save({ validateBeforeSave: false });
       }
 
       return true;
