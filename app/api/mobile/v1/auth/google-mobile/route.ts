@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { OAuth2Client } from "google-auth-library";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import mongoose from "mongoose";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
 
@@ -71,7 +72,6 @@ export async function POST(req: NextRequest) {
 
     const email = payload.email;
     const name = payload.name || email?.split("@")[0] || "User";
-    const picture = payload.picture;
 
     if (!email) {
       return NextResponse.json(
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
 
     const token = jwt.sign(
       {
-        userId: user._id.toString(),
+        userId: (user._id as mongoose.Types.ObjectId).toString(),
         email: user.email,
         username: user.username,
       },
@@ -137,12 +137,12 @@ export async function POST(req: NextRequest) {
       { expiresIn: "30d" }
     );
 
-    console.log("[Google Mobile Auth] JWT token generated for user:", user._id);
+    console.log("[Google Mobile Auth] JWT token generated for user:", (user._id as mongoose.Types.ObjectId).toString());
 
     return NextResponse.json({
       token,
       user: {
-        id: user._id.toString(),
+        id: (user._id as mongoose.Types.ObjectId).toString(),
         email: user.email,
         username: user.username,
         name: user.name,
