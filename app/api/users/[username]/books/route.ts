@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { getUserFromRequest } from "@/lib/auth-token";
 import mongoose from "mongoose";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/User";
@@ -90,6 +92,40 @@ export async function POST(
     // Connect to database
     await connectDB();
 
+    // Support both Bearer token (mobile) and NextAuth session (web)
+    let currentUserId: string | null = null;
+    let currentUserEmail: string | null = null;
+    let currentUsername: string | null = null;
+
+    // Try Bearer token first (for mobile)
+    const authUser = await getUserFromRequest(request);
+    if (authUser?.id) {
+      currentUserId = authUser.id;
+      currentUserEmail = authUser.email || null;
+      currentUsername = authUser.username || null;
+      console.log('[User Books API] ✅ Authenticated via Bearer token:', {
+        id: currentUserId,
+        username: currentUsername,
+      });
+    } else {
+      // Fall back to NextAuth session (for web)
+      const session = await auth();
+      if (session?.user?.id) {
+        currentUserId = session.user.id;
+        currentUserEmail = session.user.email || null;
+        currentUsername = session.user.username || null;
+        console.log('[User Books API] ✅ Authenticated via NextAuth session:', {
+          id: currentUserId,
+          username: currentUsername,
+        });
+      }
+    }
+
+    if (!currentUserId) {
+      console.log('[User Books API] Unauthorized - no authentication found');
+      return NextResponse.json({ error: 'Unauthorized', details: 'Please sign in to manage your book collections' }, { status: 401 });
+    }
+
     // Find book by provided identifier (priority: bookId > isbndbId > openLibraryId)
     let book = null;
     if (bookId) {
@@ -177,6 +213,52 @@ export async function POST(
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Verify the authenticated user owns this profile
+    const userUserId = user._id?.toString();
+    const userEmail = user.email;
+    
+    // Enhanced logging for debugging
+    console.log('[User Books API] Authorization check:', {
+      username,
+      userUserId,
+      currentUserId,
+      currentUsername,
+      currentUserEmail,
+      userEmail,
+      idsMatch: userUserId === currentUserId,
+      emailsMatch: userEmail?.toLowerCase() === currentUserEmail?.toLowerCase(),
+      usernamesMatch: username === currentUsername,
+    });
+
+    // Check authorization: either user ID matches OR email matches (handles account recreation)
+    // Also verify username matches for additional security
+    const idsMatch = userUserId && userUserId === currentUserId;
+    const emailsMatch = userEmail?.toLowerCase() === currentUserEmail?.toLowerCase();
+    const usernamesMatch = username === currentUsername;
+
+    if (!idsMatch && !emailsMatch) {
+      console.log('[User Books API] Forbidden - neither ID nor email match:', { 
+        userId: userUserId, 
+        currentId: currentUserId,
+        userEmail,
+        currentEmail: currentUserEmail,
+        username,
+        currentUsername,
+      });
+      return NextResponse.json({ error: 'Forbidden', details: 'You can only manage your own book collections' }, { status: 403 });
+    }
+
+    // Additional check: username should also match session username
+    if (!usernamesMatch) {
+      console.log('[User Books API] Forbidden - username mismatch:', { 
+        urlUsername: username,
+        currentUsername,
+        userId: userUserId,
+        emailMatch: emailsMatch,
+      });
+      return NextResponse.json({ error: 'Forbidden', details: 'Username mismatch' }, { status: 403 });
     }
 
     // Prepare book reference

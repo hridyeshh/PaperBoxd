@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { getUserFromRequest } from '@/lib/auth-token';
 import connectDB from '@/lib/db/mongodb';
 import User from '@/lib/db/models/User';
 import type { IDiaryEntry } from '@/lib/db/models/User';
@@ -101,7 +102,6 @@ export async function POST(
   context: { params: Promise<{ username: string }> }
 ) {
   try {
-    const session = await auth();
     const { username } = await context.params;
     const body = await request.json();
     const { bookId, content, subject, bookTitle: providedTitle, bookAuthor: providedAuthor, bookCover: providedCover, volumeInfo } = body;
@@ -115,9 +115,38 @@ export async function POST(
       subjectType: typeof subject
     });
 
-    if (!session?.user?.id) {
-      console.log('[Diary API] Unauthorized - no session');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Support both Bearer token (mobile) and NextAuth session (web)
+    let currentUserId: string | null = null;
+    let currentUserEmail: string | null = null;
+    let currentUsername: string | null = null;
+
+    // Try Bearer token first (for mobile)
+    const authUser = await getUserFromRequest(request);
+    if (authUser?.id) {
+      currentUserId = authUser.id;
+      currentUserEmail = authUser.email || null;
+      currentUsername = authUser.username || null;
+      console.log('[Diary API] ✅ Authenticated via Bearer token:', {
+        id: currentUserId,
+        username: currentUsername,
+      });
+    } else {
+      // Fall back to NextAuth session (for web)
+      const session = await auth();
+      if (session?.user?.id) {
+        currentUserId = session.user.id;
+        currentUserEmail = session.user.email || null;
+        currentUsername = session.user.username || null;
+        console.log('[Diary API] ✅ Authenticated via NextAuth session:', {
+          id: currentUserId,
+          username: currentUsername,
+        });
+      }
+    }
+
+    if (!currentUserId) {
+      console.log('[Diary API] Unauthorized - no authentication found');
+      return NextResponse.json({ error: 'Unauthorized', details: 'Please sign in to create diary entries' }, { status: 401 });
     }
 
     if (!content) {
@@ -140,48 +169,45 @@ export async function POST(
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const currentUserId = user._id?.toString();
-    const sessionUserId = session.user.id;
-    const sessionUsername = session.user.username;
-    const sessionEmail = session.user.email;
+    const userUserId = user._id?.toString();
     const userEmail = user.email;
     
     // Enhanced logging for debugging
     console.log('[Diary API] Authorization check:', {
       username,
+      userUserId,
       currentUserId,
-      sessionUserId,
-      sessionUsername,
-      sessionEmail,
+      currentUsername,
+      currentUserEmail,
       userEmail,
-      idsMatch: currentUserId === sessionUserId,
-      emailsMatch: userEmail?.toLowerCase() === sessionEmail?.toLowerCase(),
-      usernamesMatch: username === sessionUsername,
+      idsMatch: userUserId === currentUserId,
+      emailsMatch: userEmail?.toLowerCase() === currentUserEmail?.toLowerCase(),
+      usernamesMatch: username === currentUsername,
     });
 
     // Check authorization: either user ID matches OR email matches (handles account recreation)
     // Also verify username matches for additional security
-    const idsMatch = currentUserId && currentUserId === sessionUserId;
-    const emailsMatch = userEmail?.toLowerCase() === sessionEmail?.toLowerCase();
-    const usernamesMatch = username === sessionUsername;
+    const idsMatch = userUserId && userUserId === currentUserId;
+    const emailsMatch = userEmail?.toLowerCase() === currentUserEmail?.toLowerCase();
+    const usernamesMatch = username === currentUsername;
 
     if (!idsMatch && !emailsMatch) {
       console.log('[Diary API] Forbidden - neither ID nor email match:', { 
-        userId: currentUserId, 
-        sessionId: sessionUserId,
+        userUserId,
+        currentUserId, 
         userEmail,
-        sessionEmail,
+        currentUserEmail,
         username,
-        sessionUsername,
+        currentUsername,
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Additional check: username should also match session username
+    // Additional check: username should also match current username
     if (!usernamesMatch) {
       console.log('[Diary API] Forbidden - username mismatch:', { 
         urlUsername: username,
-        sessionUsername,
+        currentUsername,
         userId: currentUserId,
         emailMatch: emailsMatch,
       });
@@ -507,14 +533,9 @@ export async function DELETE(
   context: { params: Promise<{ username: string }> }
 ) {
   try {
-    const session = await auth();
     const { username } = await context.params;
     const body = await request.json();
     const { bookId } = body;
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const { entryId } = body;
 
@@ -527,54 +548,85 @@ export async function DELETE(
 
     await connectDB();
 
+    // Support both Bearer token (mobile) and NextAuth session (web)
+    let currentUserId: string | null = null;
+    let currentUserEmail: string | null = null;
+    let currentUsername: string | null = null;
+
+    // Try Bearer token first (for mobile)
+    const authUser = await getUserFromRequest(request);
+    if (authUser?.id) {
+      currentUserId = authUser.id;
+      currentUserEmail = authUser.email || null;
+      currentUsername = authUser.username || null;
+      console.log('[Diary API] DELETE ✅ Authenticated via Bearer token:', {
+        id: currentUserId,
+        username: currentUsername,
+      });
+    } else {
+      // Fall back to NextAuth session (for web)
+      const session = await auth();
+      if (session?.user?.id) {
+        currentUserId = session.user.id;
+        currentUserEmail = session.user.email || null;
+        currentUsername = session.user.username || null;
+        console.log('[Diary API] DELETE ✅ Authenticated via NextAuth session:', {
+          id: currentUserId,
+          username: currentUsername,
+        });
+      }
+    }
+
+    if (!currentUserId) {
+      console.log('[Diary API] DELETE Unauthorized - no authentication found');
+      return NextResponse.json({ error: 'Unauthorized', details: 'Please sign in to delete diary entries' }, { status: 401 });
+    }
+
     const user = await User.findOne({ username });
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const currentUserId = user._id?.toString();
-    const sessionUserId = session.user.id;
-    const sessionUsername = session.user.username;
-    const sessionEmail = session.user.email;
+    const userUserId = user._id?.toString();
     const userEmail = user.email;
     
     // Enhanced logging for debugging
     console.log('[Diary API] DELETE Authorization check:', {
       username,
+      userUserId,
       currentUserId,
-      sessionUserId,
-      sessionUsername,
-      sessionEmail,
+      currentUsername,
+      currentUserEmail,
       userEmail,
-      idsMatch: currentUserId === sessionUserId,
-      emailsMatch: userEmail?.toLowerCase() === sessionEmail?.toLowerCase(),
-      usernamesMatch: username === sessionUsername,
+      idsMatch: userUserId === currentUserId,
+      emailsMatch: userEmail?.toLowerCase() === currentUserEmail?.toLowerCase(),
+      usernamesMatch: username === currentUsername,
     });
 
     // Check authorization: either user ID matches OR email matches (handles account recreation)
     // Also verify username matches for additional security
-    const idsMatch = currentUserId && currentUserId === sessionUserId;
-    const emailsMatch = userEmail?.toLowerCase() === sessionEmail?.toLowerCase();
-    const usernamesMatch = username === sessionUsername;
+    const idsMatch = userUserId && userUserId === currentUserId;
+    const emailsMatch = userEmail?.toLowerCase() === currentUserEmail?.toLowerCase();
+    const usernamesMatch = username === currentUsername;
 
     if (!idsMatch && !emailsMatch) {
       console.log('[Diary API] DELETE Forbidden - neither ID nor email match:', { 
-        userId: currentUserId, 
-        sessionId: sessionUserId,
+        userUserId,
+        currentUserId, 
         userEmail,
-        sessionEmail,
+        currentUserEmail,
         username,
-        sessionUsername,
+        currentUsername,
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Additional check: username should also match session username
+    // Additional check: username should also match current username
     if (!usernamesMatch) {
       console.log('[Diary API] DELETE Forbidden - username mismatch:', { 
         urlUsername: username,
-        sessionUsername,
-        userId: currentUserId,
+        currentUsername,
+        userUserId,
         emailMatch: emailsMatch,
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

@@ -27,17 +27,17 @@ export default auth((req) => {
   const isProtectedRoute = protectedRoutes.some((route) =>
     nextUrl.pathname.startsWith(route)
   );
-  
+
   // Check if it's a setup route (should be accessible even when logged in)
   const isSetupRoute = setupRoutes.some((route) =>
     nextUrl.pathname.startsWith(route)
   );
-  
+
   // Check if it's a public auth route (should be accessible even when logged in)
   const isPublicAuthRoute = publicAuthRoutes.some((route) =>
     nextUrl.pathname.startsWith(route)
   );
-  
+
   const isAuthRoute = authRoutes.some((route) =>
     nextUrl.pathname.startsWith(route)
   );
