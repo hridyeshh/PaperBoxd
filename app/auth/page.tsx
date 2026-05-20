@@ -1,98 +1,147 @@
 "use client";
 
 import * as React from "react";
-import { AuthShell } from "@/components/ui/auth/auth-shell";
 import { Auth } from "@/components/ui/auth/auth-form-1";
-import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
-import { Header } from "@/components/ui/layout/header-with-search";
+import { Pinyon_Script } from "next/font/google";
+import { cn } from "@/lib/utils";
 
-// Video player component that ensures autoplay on mobile
-function VideoPlayer({ src }: { src: string }) {
-  const videoRef = React.useRef<HTMLVideoElement>(null);
+const pinyonScript = Pinyon_Script({ weight: "400", subsets: ["latin"], display: "swap" });
 
-  React.useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+// Open Library cover URLs for well-known books
+const BOOK_COVERS = [
+  "https://covers.openlibrary.org/b/isbn/9780439708180-L.jpg", // Harry Potter 1
+  "https://covers.openlibrary.org/b/isbn/9780451524935-L.jpg", // 1984
+  "https://covers.openlibrary.org/b/isbn/9780743273565-L.jpg", // Great Gatsby
+  "https://covers.openlibrary.org/b/isbn/9780061935466-L.jpg", // To Kill a Mockingbird
+  "https://covers.openlibrary.org/b/isbn/9780141439518-L.jpg", // Pride and Prejudice
+  "https://covers.openlibrary.org/b/isbn/9780062315007-L.jpg", // The Alchemist
+  "https://covers.openlibrary.org/b/isbn/9780441013593-L.jpg", // Dune
+  "https://covers.openlibrary.org/b/isbn/9780439023481-L.jpg", // Hunger Games
+  "https://covers.openlibrary.org/b/isbn/9780345391803-L.jpg", // Hitchhiker's Guide
+  "https://covers.openlibrary.org/b/isbn/9781451626650-L.jpg", // Catch-22
+  "https://covers.openlibrary.org/b/isbn/9780385490818-L.jpg", // Handmaid's Tale
+  "https://covers.openlibrary.org/b/isbn/9781451673319-L.jpg", // Fahrenheit 451
+  "https://covers.openlibrary.org/b/isbn/9780062316097-L.jpg", // Sapiens
+  "https://covers.openlibrary.org/b/isbn/9780307588371-L.jpg", // Gone Girl
+  "https://covers.openlibrary.org/b/isbn/9780307454546-L.jpg", // Girl w/ Dragon Tattoo
+  "https://covers.openlibrary.org/b/isbn/9780316769174-L.jpg", // Catcher in the Rye
+  "https://covers.openlibrary.org/b/isbn/9780060850524-L.jpg", // Brave New World
+  "https://covers.openlibrary.org/b/isbn/9780307387899-L.jpg", // The Road
+  "https://covers.openlibrary.org/b/isbn/9781594631931-L.jpg", // Kite Runner
+  "https://covers.openlibrary.org/b/isbn/9780375842207-L.jpg", // The Book Thief
+  "https://covers.openlibrary.org/b/isbn/9780316160179-L.jpg", // Twilight
+  "https://covers.openlibrary.org/b/isbn/9780679745587-L.jpg", // Anna Karenina
+  "https://covers.openlibrary.org/b/isbn/9780156027328-L.jpg", // Life of Pi
+  "https://covers.openlibrary.org/b/isbn/9780307474278-L.jpg", // The Da Vinci Code
+  "https://covers.openlibrary.org/b/isbn/9781524763138-L.jpg", // Becoming
+  "https://covers.openlibrary.org/b/isbn/9780399590504-L.jpg", // Educated
+  "https://covers.openlibrary.org/b/isbn/9781594483851-L.jpg", // A Thousand Splendid Suns
+  "https://covers.openlibrary.org/b/isbn/9780618640157-L.jpg", // Lord of the Rings
+  "https://covers.openlibrary.org/b/isbn/9780486415871-L.jpg", // Crime and Punishment
+  "https://covers.openlibrary.org/b/isbn/9780385737951-L.jpg", // The Maze Runner
+  "https://covers.openlibrary.org/b/isbn/9780439064873-L.jpg", // Harry Potter 2
+  "https://covers.openlibrary.org/b/isbn/9780439136365-L.jpg", // Harry Potter 3
+];
 
-    // Force play on mount for mobile browsers
-    const playPromise = video.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(() => {
-        // Auto-play was prevented, try again on user interaction
-        const handleInteraction = () => {
-          video.play().catch(() => {});
-          document.removeEventListener('touchstart', handleInteraction);
-          document.removeEventListener('click', handleInteraction);
-        };
-        document.addEventListener('touchstart', handleInteraction, { once: true });
-        document.addEventListener('click', handleInteraction, { once: true });
-      });
-    }
-  }, []);
-
+function CoverColumn({
+  direction,
+  speed,
+  covers,
+}: {
+  direction: "up" | "down";
+  speed: number;
+  covers: string[];
+}) {
+  const doubled = [...covers, ...covers];
   return (
-    <video
-      ref={videoRef}
-      src={src}
-      autoPlay
-      loop
-      muted
-      playsInline
-      className="w-full h-auto"
-      style={{ maxWidth: '100%', height: 'auto' }}
-    >
-      Your browser does not support the video tag.
-    </video>
+    <div className="relative flex-1 overflow-hidden">
+      <div
+        className={direction === "up" ? "animate-auth-scroll-up" : "animate-auth-scroll-down"}
+        style={{ animationDuration: `${speed}s` }}
+      >
+        {doubled.map((src, i) => (
+          <div
+            key={i}
+            className="w-full mb-2 rounded-md overflow-hidden"
+            style={{ aspectRatio: "2/3" }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={src}
+              alt=""
+              className="w-full h-full object-cover"
+              loading={i < 8 ? "eager" : "lazy"}
+              draggable={false}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
 export default function AuthPage() {
+  // Distribute 32 covers across 4 columns, offset so columns look varied
+  const col1 = BOOK_COVERS.slice(0, 8);
+  const col2 = BOOK_COVERS.slice(7, 16);
+  const col3 = BOOK_COVERS.slice(14, 23);
+  const col4 = BOOK_COVERS.slice(22, 32);
+
   return (
-    <main className="relative min-h-screen overflow-hidden bg-background">
-      <Header />
-      <AnimatedGridPattern
-        numSquares={120}
-        maxOpacity={0.08}
-        duration={4}
-        repeatDelay={0.75}
-        className="text-slate-500 dark:text-slate-400"
-      />
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-12 md:px-8 pt-24">
-        <AuthShell
-          title="Welcome to PaperBoxd"
-          description="Sign in or create an account to start tracking, organizing, and sharing the books you love."
-          badge="Get started"
-          sideContent={
-            <div className="flex flex-col gap-4">
-              <div className="space-y-4">
-                <h2 className="text-3xl font-semibold text-foreground">
-                  Your reading universe, organised.
-                </h2>
-                <p className="text-sm text-foreground/80">
-                  Build shelves, capture notes, and follow friends to discover what everyone is reading right now.
-                </p>
-              </div>
-              <div className="relative w-full overflow-hidden rounded-2xl">
-                <VideoPlayer src="/auth-video.mov" />
-              </div>
-            </div>
-          }
-          footer={
-            <p>
-              Need help?{" "}
-              <a
-                href="mailto:paperboxd@gmail.com"
-                className="font-medium text-primary underline-offset-4 hover:underline"
-              >
-                Contact support
-              </a>
+    <main className="fixed inset-0 flex overflow-hidden bg-background">
+      {/* ── Left panel: dark book-cover mosaic ── */}
+      <div
+        className="relative hidden md:block flex-shrink-0 overflow-hidden"
+        style={{ width: "54%", background: "#0c0a0a" }}
+      >
+        {/* Scrolling book columns */}
+        <div className="absolute inset-0 flex gap-2 px-2">
+          <CoverColumn direction="up" speed={50} covers={col1} />
+          <CoverColumn direction="down" speed={68} covers={col2} />
+          <CoverColumn direction="up" speed={42} covers={col3} />
+          <CoverColumn direction="down" speed={58} covers={col4} />
+        </div>
+
+        {/* Top fade */}
+        <div
+          className="absolute inset-x-0 top-0 h-28 pointer-events-none z-10"
+          style={{ background: "linear-gradient(to bottom, #0c0a0a, transparent)" }}
+        />
+        {/* Bottom fade */}
+        <div
+          className="absolute inset-x-0 bottom-0 h-52 pointer-events-none z-10"
+          style={{ background: "linear-gradient(to top, #0c0a0a, transparent)" }}
+        />
+        {/* Right edge fade */}
+        <div
+          className="absolute inset-y-0 right-0 w-20 pointer-events-none z-10"
+          style={{ background: "linear-gradient(to right, transparent, #0c0a0a)" }}
+        />
+
+        {/* Wordmark */}
+        <div className="absolute bottom-8 left-8 z-20 select-none">
+          <p className={cn("text-[2.6rem] leading-none text-white", pinyonScript.className)}>
+            PaperBoxd
+          </p>
+          <p className="mt-1 text-[10px] uppercase tracking-[0.22em] text-white/40 font-medium">
+            Your reading universe
+          </p>
+        </div>
+      </div>
+
+      {/* ── Right panel: form ── */}
+      <div className="flex-1 overflow-y-auto flex items-center justify-center py-12 px-6">
+        <div className="w-full max-w-[420px]">
+          {/* Mobile-only wordmark */}
+          <div className="mb-8 md:hidden text-center select-none">
+            <p className={cn("text-[2.4rem] leading-none text-foreground", pinyonScript.className)}>
+              PaperBoxd
             </p>
-          }
-        >
+          </div>
+
           <Auth />
-        </AuthShell>
+        </div>
       </div>
     </main>
   );
 }
-

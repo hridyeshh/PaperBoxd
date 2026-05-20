@@ -2,6 +2,14 @@
 
 import * as React from "react";
 import { motion, useAnimation } from "framer-motion";
+import { Playfair_Display } from "next/font/google";
+
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  display: "swap",
+  weight: ["400", "700"],
+  style: ["normal", "italic"],
+});
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -50,20 +58,19 @@ const BookCard = ({ book }: { book: BookCarouselBook }) => {
     >
       <div className="overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm">
         <div className="relative aspect-[2/3] overflow-hidden">
-          <Image
-            src={book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80"}
-            alt={`${book.title} cover`}
-            fill
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
-            sizes="140px"
-            quality={100}
-            unoptimized={
-              book.cover?.includes('isbndb.com') ||
-              book.cover?.includes('images.isbndb.com') ||
-              book.cover?.includes('covers.isbndb.com') ||
-              true
-            }
-          />
+          {book.cover ? (
+            <Image
+              src={book.cover}
+              alt={`${book.title} cover`}
+              fill
+              className="object-cover transition-transform duration-300 group-hover:scale-105"
+              sizes="140px"
+              quality={100}
+              unoptimized
+            />
+          ) : (
+            <div className="h-full w-full bg-muted" />
+          )}
         </div>
         <div className="p-3">
           <h3 className="text-sm font-semibold leading-tight line-clamp-2">{book.title}</h3>
@@ -113,20 +120,17 @@ const ViewAllBooksDialog = ({
                 }}
               >
                 <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-sm">
-                  <Image
-                    src={book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80"}
-                    alt={`${book.title} cover`}
-                    fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
-                    quality={100}
-                    unoptimized={
-                      book.cover?.includes('isbndb.com') ||
-                      book.cover?.includes('images.isbndb.com') ||
-                      book.cover?.includes('covers.isbndb.com') ||
-                      true
-                    }
-                  />
+                  {book.cover && (
+                    <Image
+                      src={book.cover}
+                      alt={`${book.title} cover`}
+                      fill
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
+                      quality={100}
+                      unoptimized
+                    />
+                  )}
                 </div>
                 <div>
                   <h3 className="text-xs font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
@@ -202,8 +206,8 @@ export const BookCarousel = React.forwardRef<HTMLDivElement, BookCarouselProps>(
           <div className="grid grid-cols-1 items-center gap-4 lg:grid-cols-12">
             {/* Left: Title Section */}
             <div className="flex flex-col items-center text-center lg:col-span-3 lg:items-start lg:text-left">
-              <h2 className="mt-2 text-lg font-bold text-primary">{title}</h2>
-              <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
+              <h2 className={cn("mt-2 text-lg font-bold tracking-tight text-foreground", playfair.className)}>{title}</h2>
+              <p className={cn("mt-1 text-xs text-muted-foreground", playfair.className)} style={{ fontStyle: "italic" }}>{subtitle}</p>
               <Button 
                 variant="outline" 
                 className="mt-6 w-full max-w-xs lg:w-auto" 

@@ -11,6 +11,7 @@ import {
   KeyRound,
   ArrowLeft,
 } from "lucide-react";
+import { Playfair_Display } from "next/font/google";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/primitives/button";
@@ -20,17 +21,22 @@ import { Separator } from "@/components/ui/primitives/separator";
 import { Checkbox } from "@/components/ui/primitives/checkbox";
 import { cn } from "@/lib/utils";
 import { PasswordInput } from "@/components/ui/auth/password-input-2";
-import {
-  signInWithCredentials,
-  signInWithGoogle,
-  registerUser,
-} from "@/lib/auth-client";
+import { signInWithGoogle } from "@/lib/auth-client";
+import { loginAction } from "@/lib/auth/actions";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/providers/auth-provider";
 import { PrivacyPolicyDialog } from "@/components/ui/dialogs/privacy-policy-dialog";
 import { TermsOfServiceDialog } from "@/components/ui/dialogs/terms-of-service-dialog";
 import { useIsMobile } from "@/hooks/use-media-query";
-import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
-import { signIn as nextAuthSignIn } from "next-auth/react";
+import TetrisLoading from "@/components/ui/features/tetris-loader";
+
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  display: "swap",
+  weight: ["400", "700"],
+  style: ["normal", "italic"],
+});
 
 enum AuthView {
   SIGN_IN = "sign-in",
@@ -57,6 +63,11 @@ const signInSchema = z.object({
 
 const signUpSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
+  username: z
+    .string()
+    .min(3, "Username must be at least 3 characters")
+    .max(50, "Username must be at most 50 characters")
+    .regex(/^[a-z0-9_-]+$/, "Only lowercase letters, numbers, underscores, and hyphens"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   terms: z
@@ -68,6 +79,17 @@ const signUpSchema = z.object({
 
 type SignInFormValues = z.infer<typeof signInSchema>;
 type SignUpFormValues = z.infer<typeof signUpSchema>;
+
+const otpEmailSchema = z.object({
+  email: z.string().email("Invalid email address"),
+});
+
+const otpCodeSchema = z.object({
+  code: z.string().length(6, "Code must be 6 digits"),
+});
+
+type OTPEmailFormValues = z.infer<typeof otpEmailSchema>;
+type OTPCodeFormValues = z.infer<typeof otpCodeSchema>;
 
 function Auth({ className, ...props }: React.ComponentProps<"div">) {
   const [state, setState] = React.useState<AuthState>({
@@ -81,49 +103,44 @@ function Auth({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="auth"
-      className={cn("mx-auto w-full max-w-md", className)}
+      className={cn("w-full", className)}
       {...props}
     >
-      <div className="relative min-h-[560px] overflow-hidden rounded-3xl border border-border/70 bg-background/95 shadow-lg shadow-primary/5 backdrop-blur">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-secondary/5" />
-        <div className="relative z-10">
-          <AnimatePresence mode="wait">
-            {state.view === AuthView.SIGN_IN && (
-              <AuthSignIn
-                key="sign-in"
-                onSignUp={() => setView(AuthView.SIGN_UP)}
-                onForgotPassword={() => setView(AuthView.FORGOT_PASSWORD)}
-              />
-            )}
-            {state.view === AuthView.SIGN_UP && (
-              <AuthSignUp
-                key="sign-up"
-                onSignIn={() => setView(AuthView.SIGN_IN)}
-              />
-            )}
-            {state.view === AuthView.FORGOT_PASSWORD && (
-              <ForgotPasswordCard
-                key="forgot-password"
-                onBack={() => setView(AuthView.SIGN_IN)}
-                onOTPLogin={() => setView(AuthView.OTP_LOGIN)}
-                onResetPassword={() => setView(AuthView.RESET_PASSWORD)}
-              />
-            )}
-            {state.view === AuthView.OTP_LOGIN && (
-              <OTPLoginCard
-                key="otp-login"
-                onBack={() => setView(AuthView.SIGN_IN)}
-              />
-            )}
-            {state.view === AuthView.RESET_PASSWORD && (
-              <ResetPasswordCard
-                key="reset-password"
-                onBack={() => setView(AuthView.SIGN_IN)}
-              />
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
+      <AnimatePresence mode="wait">
+        {state.view === AuthView.SIGN_IN && (
+          <AuthSignIn
+            key="sign-in"
+            onSignUp={() => setView(AuthView.SIGN_UP)}
+            onForgotPassword={() => setView(AuthView.FORGOT_PASSWORD)}
+          />
+        )}
+        {state.view === AuthView.SIGN_UP && (
+          <AuthSignUp
+            key="sign-up"
+            onSignIn={() => setView(AuthView.SIGN_IN)}
+          />
+        )}
+        {state.view === AuthView.FORGOT_PASSWORD && (
+          <ForgotPasswordCard
+            key="forgot-password"
+            onBack={() => setView(AuthView.SIGN_IN)}
+            onOTPLogin={() => setView(AuthView.OTP_LOGIN)}
+            onResetPassword={() => setView(AuthView.RESET_PASSWORD)}
+          />
+        )}
+        {state.view === AuthView.OTP_LOGIN && (
+          <OTPLoginCard
+            key="otp-login"
+            onBack={() => setView(AuthView.SIGN_IN)}
+          />
+        )}
+        {state.view === AuthView.RESET_PASSWORD && (
+          <ResetPasswordCard
+            key="reset-password"
+            onBack={() => setView(AuthView.SIGN_IN)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -268,7 +285,8 @@ function VideoPlayer({ src }: { src: string }) {
 function AuthSignIn({ onSignUp, onForgotPassword }: AuthSignInProps) {
   const isMobile = useIsMobile();
   const router = useRouter();
-  const { update: updateSession } = useSession();
+  const { setAuthUser } = useAuth();
+  const [isNavigating, setIsNavigating] = React.useState(false);
   const [formState, setFormState] = React.useState<FormState>({
     isLoading: false,
     error: null,
@@ -287,76 +305,42 @@ function AuthSignIn({ onSignUp, onForgotPassword }: AuthSignInProps) {
   const onSubmit = async (data: SignInFormValues) => {
     setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
-      const result = await signInWithCredentials(data.email, data.password);
-      
-      // Check if sign-in was successful
-      if (result?.error) {
-        // Error should have been thrown already, but handle it just in case
-        const errorMessage = "Invalid email or password";
+      const result = await loginAction(data.email, data.password);
+
+      if (!result.success) {
+        const errorMessage = result.error || "Invalid email or password";
         toast.error(errorMessage);
-        setFormState((prev) => ({
-          ...prev,
-          error: errorMessage,
-        }));
+        setFormState((prev) => ({ ...prev, error: errorMessage }));
         return;
       }
-      
-      if (result?.ok) {
-        toast.success("Signed in successfully!");
-        
-        // Update session to ensure it's fresh
-        await updateSession();
-        
-        // Wait a moment for session to be established, then check onboarding status
-        setTimeout(async () => {
-          try {
-            const response = await fetch("/api/onboarding/status");
-            if (response.ok) {
-              const data = await response.json();
-              
-              // Determine redirect URL based on onboarding status
-              let redirectUrl = "/";
-              
-              if (!data.hasUsername) {
-                // No username - go to choose username
-                redirectUrl = "/choose-username";
-              } else if (data.isNewUser && !data.completed) {
-                // New user who hasn't completed onboarding - go to onboarding
-                // (setup-profile is only shown right after username selection)
-                redirectUrl = "/onboarding";
-              } else if (data.username) {
-                // Has username - go to profile
-                redirectUrl = `/u/${data.username}`;
-              } else {
-                // Fallback to home
-                redirectUrl = "/";
-              }
-              
-              router.push(redirectUrl);
-            } else {
-              // If API fails, redirect to home (it will check and redirect)
-              router.push("/");
-            }
-          } catch (error) {
-            console.error("Failed to check onboarding status:", error);
-            // On error, redirect to home (it will check and redirect)
-            router.push("/");
+
+      toast.success("Signed in successfully!");
+      if (result.user) {
+        setAuthUser(result.user);
+      }
+      setIsNavigating(true);
+
+      try {
+        const response = await fetch("/api/onboarding/status");
+        if (response.ok) {
+          const data = await response.json();
+          let redirectUrl = "/";
+          if (!data.hasUsername) {
+            redirectUrl = "/choose-username";
+          } else if (data.isNewUser && !data.completed) {
+            redirectUrl = "/onboarding";
           }
-        }, 100);
+          router.push(redirectUrl);
+        } else {
+          router.push("/");
+        }
+      } catch {
+        router.push("/");
       }
     } catch (error) {
-      // Set error message from the caught error
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : "Invalid email or password";
-      
-      // Show toast notification
+      const errorMessage = error instanceof Error ? error.message : "Invalid email or password";
       toast.error(errorMessage);
-      
-      setFormState((prev) => ({
-        ...prev,
-        error: errorMessage,
-      }));
+      setFormState((prev) => ({ ...prev, error: errorMessage }));
     } finally {
       setFormState((prev) => ({ ...prev, isLoading: false }));
     }
@@ -379,19 +363,25 @@ function AuthSignIn({ onSignUp, onForgotPassword }: AuthSignInProps) {
   };
 
   return (
+    <>
+    {isNavigating && (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
+        <TetrisLoading size="sm" speed="fast" loadingText="Signing in..." />
+      </div>
+    )}
     <motion.div
       data-slot="auth-sign-in"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="flex h-full flex-col p-6 md:p-8"
+      className="flex flex-col gap-6"
     >
-      <div className="flex-1 space-y-6 overflow-y-auto pr-2">
-        <div className="text-center">
-          <h1 className="text-3xl font-semibold text-foreground">Read anything new?</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Sign in to your account & save it!
+      <div className="space-y-6">
+        <div>
+          <h1 className={cn("text-[1.75rem] font-bold tracking-[-0.02em] text-foreground", playfair.className)}>Read anything new?</h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Sign in to your account &amp; save it!
           </p>
         </div>
 
@@ -483,6 +473,7 @@ function AuthSignIn({ onSignUp, onForgotPassword }: AuthSignInProps) {
         </p>
       </div>
     </motion.div>
+    </>
   );
 }
 
@@ -490,7 +481,14 @@ interface AuthSignUpProps {
   onSignIn: () => void;
 }
 
+type RegisterStep = "form" | "verify";
+
 function AuthSignUp({ onSignIn }: AuthSignUpProps) {
+  const router = useRouter();
+  const { setAuthUser } = useAuth();
+  const [step, setStep] = React.useState<RegisterStep>("form");
+  const [pendingEmail, setPendingEmail] = React.useState("");
+  const [isNavigating, setIsNavigating] = React.useState(false);
   const [formState, setFormState] = React.useState<FormState>({
     isLoading: false,
     error: null,
@@ -498,16 +496,24 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
   });
   const [privacyDialogOpen, setPrivacyDialogOpen] = React.useState(false);
   const [termsDialogOpen, setTermsDialogOpen] = React.useState(false);
+  const isSubmittingRef = React.useRef(false);
+  const hasSucceededRef = React.useRef(false);
 
   const {
     register,
     handleSubmit,
     setValue,
     watch,
+    getValues,
     formState: { errors },
   } = useForm<SignUpFormValues>({
     resolver: zodResolver(signUpSchema),
-    defaultValues: { name: "", email: "", password: "", terms: false },
+    defaultValues: { name: "", username: "", email: "", password: "", terms: false },
+  });
+
+  const codeForm = useForm<OTPCodeFormValues>({
+    resolver: zodResolver(otpCodeSchema),
+    defaultValues: { code: "" },
   });
 
   const terms = watch("terms");
@@ -515,37 +521,125 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
   const onSubmit = async (data: SignUpFormValues) => {
     setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
-      // Register the user
-      await registerUser({
-        name: data.name,
-        email: data.email,
-        password: data.password,
+      const response = await fetch("/api/auth/register/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: data.name,
+          username: data.username,
+          email: data.email,
+          password: data.password,
+        }),
       });
 
-      // Automatically sign in after successful registration
-      const signInResult = await signInWithCredentials(data.email, data.password);
-      
-      if (signInResult?.ok) {
-        // Redirect to choose username page after successful registration
-        toast.success("Account created successfully!");
-        // Use a small delay to ensure session is established
-        setTimeout(() => {
-          window.location.href = "/choose-username";
-        }, 100);
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        setPendingEmail(data.email);
+        setStep("verify");
+        toast.success("Verification code sent to your email!");
       } else {
-        throw new Error("Failed to sign in after registration");
+        const errorMessage = result.message || "Failed to send verification code";
+        toast.error(errorMessage);
+        setFormState((prev) => ({ ...prev, error: errorMessage }));
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Registration failed. Please try again.";
       toast.error(errorMessage);
-      setFormState((prev) => ({
-        ...prev,
-        error: errorMessage,
-      }));
+      setFormState((prev) => ({ ...prev, error: errorMessage }));
     } finally {
       setFormState((prev) => ({ ...prev, isLoading: false }));
     }
   };
+
+  const onCodeSubmit = async (data: OTPCodeFormValues) => {
+    if (isSubmittingRef.current || formState.isLoading || hasSucceededRef.current) return;
+
+    isSubmittingRef.current = true;
+    setFormState((prev) => ({ ...prev, isLoading: true }));
+    try {
+      const response = await fetch("/api/auth/register/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingEmail, code: data.code }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        hasSucceededRef.current = true;
+        toast.success("Account created successfully!");
+        if (result.user) {
+          setAuthUser(result.user);
+        }
+        setIsNavigating(true);
+        router.push("/onboarding");
+        return;
+      }
+
+      if (!hasSucceededRef.current) {
+        toast.error(result.message || "Invalid verification code");
+      }
+    } catch {
+      if (!hasSucceededRef.current) {
+        toast.error("An error occurred. Please try again.");
+      }
+    } finally {
+      setFormState((prev) => ({ ...prev, isLoading: false }));
+      isSubmittingRef.current = false;
+    }
+  };
+
+  const handleResendCode = async () => {
+    const formValues = getValues();
+    setFormState((prev) => ({ ...prev, isLoading: true }));
+    try {
+      const response = await fetch("/api/auth/register/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formValues.name,
+          username: formValues.username,
+          email: pendingEmail,
+          password: formValues.password,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        toast.success("New code sent! Check your email.");
+        codeForm.reset({ code: "" });
+      } else {
+        toast.error(result.message || "Failed to resend code");
+      }
+    } catch {
+      toast.error("An error occurred. Please try again.");
+    } finally {
+      setFormState((prev) => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  const codeValue = codeForm.watch("code");
+  React.useEffect(() => {
+    if (
+      codeValue &&
+      codeValue.length === 6 &&
+      /^\d{6}$/.test(codeValue) &&
+      !formState.isLoading &&
+      !isSubmittingRef.current &&
+      !hasSucceededRef.current &&
+      step === "verify"
+    ) {
+      const timer = setTimeout(() => {
+        if (!isSubmittingRef.current && !formState.isLoading && !hasSucceededRef.current) {
+          onCodeSubmit({ code: codeValue });
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codeValue, formState.isLoading, step]);
 
   const handleGoogleSignIn = async () => {
     try {
@@ -564,159 +658,296 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
   };
 
   return (
+    <>
+    {isNavigating && (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
+        <TetrisLoading size="sm" speed="fast" loadingText="Creating account..." />
+      </div>
+    )}
     <motion.div
       data-slot="auth-sign-up"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="flex h-full flex-col p-6 md:p-8"
+      className="flex flex-col gap-6"
     >
-      <div className="flex-1 space-y-6 overflow-y-auto pr-2">
-        <div className="text-center">
-          <h1 className="text-3xl font-semibold text-foreground">
-            Create account
+      <div className="space-y-6">
+        <div>
+          <h1 className={cn("text-[1.75rem] font-bold tracking-[-0.02em] text-foreground", playfair.className)}>
+            {step === "form" ? "Create account" : "Verify your email"}
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Get started with your account
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            {step === "form"
+              ? "Get started with your account"
+              : `We sent a code to ${pendingEmail}. Enter it below to create your account.`}
           </p>
         </div>
 
         <AuthError message={formState.error} />
 
-        <AuthForm onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              type="text"
-              placeholder="John Doe"
-              disabled={formState.isLoading}
-              className={cn(
-                "border border-border bg-background/95 px-4 focus-visible:border-black focus-visible:ring-0 focus-visible:ring-offset-0",
-                errors.name && "border-destructive",
-              )}
-              {...register("name")}
-            />
-            {errors.name ? (
-              <p className="text-xs text-destructive">{errors.name.message}</p>
-            ) : null}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="name@example.com"
-              disabled={formState.isLoading}
-              className={cn(
-                "border border-border bg-background/95 px-4 focus-visible:border-black focus-visible:ring-0 focus-visible:ring-offset-0",
-                errors.email && "border-destructive",
-              )}
-              {...register("email")}
-            />
-            {errors.email ? (
-              <p className="text-xs text-destructive">{errors.email.message}</p>
-            ) : null}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <PasswordInput
-              id="password"
-              placeholder="Create a password"
-              disabled={formState.isLoading}
-              inputClassName={cn(
-                "border border-border bg-background/95 focus-visible:border-black",
-                errors.password && "border-destructive focus-visible:ring-destructive",
-              )}
-              strengthLabel="Must contain"
-              wrapperClassName="space-y-2"
-              {...register("password")}
-            />
-            {errors.password ? (
-              <p className="text-xs text-destructive">
-                {errors.password.message}
-              </p>
-            ) : null}
-          </div>
-          <div className="flex items-start space-x-2">
-            <Checkbox
-              id="terms"
-              checked={terms}
-              onCheckedChange={(checked) =>
-                setValue("terms", checked as boolean, { shouldValidate: true })
-              }
-              disabled={formState.isLoading}
-            />
-            <div className="space-y-1">
-              <Label htmlFor="terms" className="text-sm">
-                I agree to the terms
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                By signing up, you agree to our{" "}
-                <Button 
-                  variant="link" 
-                  className="h-auto p-0 text-xs" 
-                  type="button"
-                  onClick={() => setTermsDialogOpen(true)}
-                >
-                  Terms
-                </Button>{" "}
-                and{" "}
-                <Button 
-                  variant="link" 
-                  className="h-auto p-0 text-xs" 
-                  type="button"
-                  onClick={() => setPrivacyDialogOpen(true)}
-                >
-                  Privacy Policy
-                </Button>
-                .
-              </p>
-            </div>
-          </div>
-          {errors.terms ? (
-            <p className="text-xs text-destructive">{errors.terms.message}</p>
-          ) : null}
+        <AnimatePresence mode="wait">
+          {step === "form" ? (
+            <motion.div
+              key="form"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <AuthForm onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    placeholder="John Doe"
+                    disabled={formState.isLoading}
+                    className={cn(
+                      "border border-border bg-background/95 px-4 focus-visible:border-black focus-visible:ring-0 focus-visible:ring-offset-0",
+                      errors.name && "border-destructive",
+                    )}
+                    {...register("name")}
+                  />
+                  {errors.name ? (
+                    <p className="text-xs text-destructive">{errors.name.message}</p>
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    placeholder="yourhandle"
+                    disabled={formState.isLoading}
+                    className={cn(
+                      "border border-border bg-background/95 px-4 focus-visible:border-black focus-visible:ring-0 focus-visible:ring-offset-0",
+                      errors.username && "border-destructive",
+                    )}
+                    {...register("username")}
+                  />
+                  {errors.username ? (
+                    <p className="text-xs text-destructive">{errors.username.message}</p>
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="name@example.com"
+                    disabled={formState.isLoading}
+                    className={cn(
+                      "border border-border bg-background/95 px-4 focus-visible:border-black focus-visible:ring-0 focus-visible:ring-offset-0",
+                      errors.email && "border-destructive",
+                    )}
+                    {...register("email")}
+                  />
+                  {errors.email ? (
+                    <p className="text-xs text-destructive">{errors.email.message}</p>
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <PasswordInput
+                    id="password"
+                    placeholder="Create a password"
+                    disabled={formState.isLoading}
+                    inputClassName={cn(
+                      "border border-border bg-background/95 focus-visible:border-black",
+                      errors.password && "border-destructive focus-visible:ring-destructive",
+                    )}
+                    strengthLabel="Must contain"
+                    wrapperClassName="space-y-2"
+                    {...register("password")}
+                  />
+                  {errors.password ? (
+                    <p className="text-xs text-destructive">
+                      {errors.password.message}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex items-start space-x-2">
+                  <Checkbox
+                    id="terms"
+                    checked={terms}
+                    onCheckedChange={(checked) =>
+                      setValue("terms", checked as boolean, { shouldValidate: true })
+                    }
+                    disabled={formState.isLoading}
+                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="terms" className="text-sm">
+                      I agree to the terms
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      By signing up, you agree to our{" "}
+                      <Button
+                        variant="link"
+                        className="h-auto p-0 text-xs"
+                        type="button"
+                        onClick={() => setTermsDialogOpen(true)}
+                      >
+                        Terms
+                      </Button>{" "}
+                      and{" "}
+                      <Button
+                        variant="link"
+                        className="h-auto p-0 text-xs"
+                        type="button"
+                        onClick={() => setPrivacyDialogOpen(true)}
+                      >
+                        Privacy Policy
+                      </Button>
+                      .
+                    </p>
+                  </div>
+                </div>
+                {errors.terms ? (
+                  <p className="text-xs text-destructive">{errors.terms.message}</p>
+                ) : null}
 
-          <Button type="submit" className="w-full" disabled={formState.isLoading}>
-            {formState.isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating account...
-              </>
-            ) : (
-              "Create account"
-            )}
-          </Button>
-        </AuthForm>
+                <Button type="submit" className="w-full" disabled={formState.isLoading}>
+                  {formState.isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending code...
+                    </>
+                  ) : (
+                    "Continue"
+                  )}
+                </Button>
+              </AuthForm>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="verify"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <form onSubmit={codeForm.handleSubmit(onCodeSubmit)} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="reg-code">Verification Code</Label>
+                  <Input
+                    id="reg-code"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    placeholder="000000"
+                    disabled={formState.isLoading}
+                    className={cn(
+                      "text-center text-2xl tracking-widest font-mono border border-border bg-background/95 px-4 focus-visible:border-black focus-visible:ring-0 focus-visible:ring-offset-0",
+                      codeForm.formState.errors.code && "border-destructive"
+                    )}
+                    {...codeForm.register("code", {
+                      pattern: {
+                        value: /^\d{6}$/,
+                        message: "Code must be 6 digits",
+                      },
+                    })}
+                  />
+                  {codeForm.formState.errors.code ? (
+                    <p className="text-xs text-destructive">
+                      {codeForm.formState.errors.code.message}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Enter the 6-digit code from your email
+                    </p>
+                  )}
+                </div>
+
+                <Button type="submit" className="w-full" disabled={formState.isLoading}>
+                  {formState.isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="mr-2 h-4 w-4" />
+                      Verify &amp; Create Account
+                    </>
+                  )}
+                </Button>
+
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={handleResendCode}
+                    disabled={formState.isLoading}
+                  >
+                    Didn&apos;t receive code? Send again
+                  </Button>
+
+                  <div className="text-center">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-auto p-0 text-sm"
+                      onClick={() => {
+                        setStep("form");
+                        codeForm.reset();
+                        hasSucceededRef.current = false;
+                        isSubmittingRef.current = false;
+                      }}
+                    >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Back to registration
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      <div className="mt-8 space-y-6">
-        <AuthSeparator />
-        <AuthSocialButtons isLoading={formState.isLoading} onGoogleClick={handleGoogleSignIn} />
-        <p className="text-center text-sm text-muted-foreground">
-          Have an account?{" "}
+      {step === "form" ? (
+        <div className="mt-8 space-y-6">
+          <AuthSeparator />
+          <AuthSocialButtons isLoading={formState.isLoading} onGoogleClick={handleGoogleSignIn} />
+          <p className="text-center text-sm text-muted-foreground">
+            Have an account?{" "}
+            <Button
+              variant="link"
+              className="h-auto p-0 text-sm"
+              onClick={onSignIn}
+              disabled={formState.isLoading}
+            >
+              Sign in
+            </Button>
+          </p>
+        </div>
+      ) : (
+        <div className="mt-8">
           <Button
-            variant="link"
-            className="h-auto p-0 text-sm"
+            variant="ghost"
+            className="w-full"
             onClick={onSignIn}
             disabled={formState.isLoading}
           >
-            Sign in
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to sign in
           </Button>
-        </p>
-      </div>
+        </div>
+      )}
 
-      <PrivacyPolicyDialog 
-        open={privacyDialogOpen} 
-        onOpenChange={setPrivacyDialogOpen} 
+      <PrivacyPolicyDialog
+        open={privacyDialogOpen}
+        onOpenChange={setPrivacyDialogOpen}
       />
-      <TermsOfServiceDialog 
-        open={termsDialogOpen} 
-        onOpenChange={setTermsDialogOpen} 
+      <TermsOfServiceDialog
+        open={termsDialogOpen}
+        onOpenChange={setTermsDialogOpen}
       />
     </motion.div>
+    </>
   );
 }
 
@@ -742,14 +973,14 @@ function ForgotPasswordCard({ onBack, onOTPLogin, onResetPassword }: ForgotPassw
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="flex h-full flex-col p-6 md:p-8"
+      className="flex flex-col gap-6"
     >
-      <div className="flex-1 space-y-6 overflow-y-auto pr-2">
-        <div className="text-center">
-          <h1 className="text-3xl font-semibold text-foreground">
+      <div className="space-y-6">
+        <div>
+          <h1 className={cn("text-[1.75rem] font-bold tracking-[-0.02em] text-foreground", playfair.className)}>
             Forgot Password?
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-1.5 text-sm text-muted-foreground">
             Choose an option to recover your account
           </p>
         </div>
@@ -827,23 +1058,14 @@ interface OTPLoginCardProps {
 
 type OTPStep = "email" | "code";
 
-const otpEmailSchema = z.object({
-  email: z.string().email("Invalid email address"),
-});
-
-const otpCodeSchema = z.object({
-  code: z.string().length(6, "Code must be 6 digits"),
-});
-
-type OTPEmailFormValues = z.infer<typeof otpEmailSchema>;
-type OTPCodeFormValues = z.infer<typeof otpCodeSchema>;
-
 function OTPLoginCard({ onBack }: OTPLoginCardProps) {
+  useSession();
   const router = useRouter();
-  const { update: updateSession } = useSession();
+  const { setAuthUser } = useAuth();
   const [step, setStep] = React.useState<OTPStep>("email");
   const [email, setEmail] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isNavigating, setIsNavigating] = React.useState(false);
   const [attemptsRemaining, setAttemptsRemaining] = React.useState<number | undefined>();
   const isSubmittingRef = React.useRef(false);
   const hasSucceededRef = React.useRef(false);
@@ -906,57 +1128,40 @@ function OTPLoginCard({ onBack }: OTPLoginCardProps) {
 
       const result = await response.json();
 
-      if (response.ok && result.success && result.sessionToken) {
-        const signInResult = await nextAuthSignIn("credentials", {
-          email,
-          otpSessionToken: result.sessionToken,
-          redirect: false,
-        });
-
-        if (signInResult?.ok) {
-          hasSucceededRef.current = true;
-          toast.success("Signed in successfully!");
-          await updateSession();
-
-          setTimeout(async () => {
-            try {
-              const onboardingResponse = await fetch("/api/onboarding/status");
-              if (onboardingResponse.ok) {
-                const onboardingData = await onboardingResponse.json();
-                let redirectUrl = "/";
-
-                if (!onboardingData.hasUsername) {
-                  redirectUrl = "/choose-username";
-                } else if (onboardingData.isNewUser && !onboardingData.completed) {
-                  redirectUrl = "/onboarding";
-                } else if (onboardingData.username) {
-                  redirectUrl = `/u/${onboardingData.username}`;
-                }
-
-                router.push(redirectUrl);
-              } else {
-                router.push("/");
-              }
-            } catch (error) {
-              console.error("Failed to check onboarding status:", error);
-              router.push("/");
-            }
-          }, 100);
-          return;
-        } else if (signInResult?.error) {
-          console.error("Sign in error:", signInResult.error);
-          if (signInResult.error !== "Configuration") {
-            toast.error("Failed to create session. Please try again.");
-          }
-          return;
+      if (response.ok && result.success) {
+        hasSucceededRef.current = true;
+        toast.success("Signed in successfully!");
+        if (result.user) {
+          setAuthUser(result.user);
         }
+        setIsNavigating(true);
+
+        try {
+          const onboardingResponse = await fetch("/api/onboarding/status");
+          if (onboardingResponse.ok) {
+            const onboardingData = await onboardingResponse.json();
+            let redirectUrl = "/";
+
+            if (!onboardingData.hasUsername) {
+              redirectUrl = "/choose-username";
+            } else if (onboardingData.isNewUser && !onboardingData.completed) {
+              redirectUrl = "/onboarding";
+            }
+
+            router.push(redirectUrl);
+          } else {
+            router.push("/");
+          }
+        } catch (error) {
+          console.error("Failed to check onboarding status:", error);
+          router.push("/");
+        }
+        return;
       }
 
-      if ((!response.ok || !result.success) && !hasSucceededRef.current) {
+      if (!hasSucceededRef.current) {
         setAttemptsRemaining(result.attemptsRemaining);
-        if (result.message && result.message !== "Code verified successfully") {
-          toast.error(result.message || "Invalid code");
-        }
+        toast.error(result.message || "Invalid code");
       }
     } catch (error) {
       if (hasSucceededRef.current) {
@@ -1023,22 +1228,28 @@ function OTPLoginCard({ onBack }: OTPLoginCardProps) {
   }, [codeValue, isLoading, step]);
 
   return (
+    <>
+    {isNavigating && (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
+        <TetrisLoading size="sm" speed="fast" loadingText="Signing in..." />
+      </div>
+    )}
     <motion.div
       data-slot="auth-otp-login"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="flex h-full flex-col p-6 md:p-8"
+      className="flex flex-col gap-6"
     >
-      <div className="flex-1 space-y-6 overflow-y-auto pr-2">
-        <div className="text-center">
-          <h1 className="text-3xl font-semibold text-foreground">
+      <div className="space-y-6">
+        <div>
+          <h1 className={cn("text-[1.75rem] font-bold tracking-[-0.02em] text-foreground", playfair.className)}>
             {step === "email" ? "Sign in with Code" : "Enter Verification Code"}
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-1.5 text-sm text-muted-foreground">
             {step === "email"
-              ? "Enter your email address and we&apos;ll send you a verification code."
+              ? "Enter your email and we'll send you a verification code."
               : `We sent a code to ${email}. Enter it below to sign in.`}
           </p>
         </div>
@@ -1191,6 +1402,7 @@ function OTPLoginCard({ onBack }: OTPLoginCardProps) {
         </Button>
       </div>
     </motion.div>
+    </>
   );
 }
 
@@ -1251,15 +1463,15 @@ function ResetPasswordCard({ onBack }: ResetPasswordCardProps) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="flex h-full flex-col p-6 md:p-8"
+      className="flex flex-col gap-6"
     >
-      <div className="flex-1 space-y-6 overflow-y-auto pr-2">
-        <div className="text-center">
-          <h1 className="text-3xl font-semibold text-foreground">
+      <div className="space-y-6">
+        <div>
+          <h1 className={cn("text-[1.75rem] font-bold tracking-[-0.02em] text-foreground", playfair.className)}>
             Reset Your Password
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Enter your email address and we&apos;ll send you a link to reset your password.
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Enter your email and we&apos;ll send you a link to reset your password.
           </p>
         </div>
 

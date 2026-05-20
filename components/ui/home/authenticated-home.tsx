@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/providers/auth-provider";
 import { BookCarouselBook } from "@/components/ui/home/book-carousel";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
-import { Footerdemo } from "@/components/ui/features/footer-section";
 import { PinterestGrid } from "@/components/ui/home/pinterest-grid";
 import { useIsMobile } from "@/hooks/use-media-query";
 
@@ -48,7 +47,7 @@ const carousels: CarouselData[] = [
 ];
 
 export function AuthenticatedHome() {
-  const { data: session } = useSession();
+  const { isAuthenticated } = useAuth();
   const isMobile = useIsMobile();
   const [carouselData, setCarouselData] = useState<Record<string, BookCarouselBook[]>>({});
   const [loading, setLoading] = useState(true);
@@ -67,7 +66,7 @@ export function AuthenticatedHome() {
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!session?.user) {
+    if (!isAuthenticated) {
       setLoading(false);
       return;
     }
@@ -95,8 +94,8 @@ export function AuthenticatedHome() {
         
         // Update cache silently
         if (typeof window !== 'undefined' && Object.keys(data).length > 0) {
-          localStorage.setItem('home_carousel_data', JSON.stringify(data));
-          localStorage.setItem('home_carousel_timestamp', Date.now().toString());
+          localStorage.setItem('home_carousel_data_v2', JSON.stringify(data));
+          localStorage.setItem('home_carousel_timestamp_v2', Date.now().toString());
           // Update state if component is still mounted
           setCarouselData(data);
         }
@@ -111,31 +110,23 @@ export function AuthenticatedHome() {
        (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming)?.type === 'reload');
 
     // Check if we have cached data in localStorage (persists across sessions)
-    const cachedData = typeof window !== 'undefined' ? localStorage.getItem('home_carousel_data') : null;
-    const cachedTimestamp = typeof window !== 'undefined' ? localStorage.getItem('home_carousel_timestamp') : null;
+    const cachedData = typeof window !== 'undefined' ? localStorage.getItem('home_carousel_data_v2') : null;
+    const cachedTimestamp = typeof window !== 'undefined' ? localStorage.getItem('home_carousel_timestamp_v2') : null;
     
-    // Use cached data if it exists and:
-    // 1. Not an explicit refresh, OR
-    // 2. Cache is less than 30 minutes old (even on refresh, use cache if fresh)
-    if (cachedData && cachedTimestamp) {
+    // Use cached data only on non-refresh navigations and only if fresh (5 min)
+    if (!isExplicitRefresh && cachedData && cachedTimestamp) {
       const age = Date.now() - parseInt(cachedTimestamp);
-      const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
-      
-      if (!isExplicitRefresh || age < CACHE_DURATION) {
+      const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+      if (age < CACHE_DURATION) {
         try {
           const parsed = JSON.parse(cachedData);
           setCarouselData(parsed);
           setLoading(false);
           hasLoadedRef.current = true;
-          
-          // If cache is old but we're using it, refresh in background
-          if (age >= CACHE_DURATION) {
-            // Fetch fresh data in background without showing loading
-            fetchCarouselsInBackground();
-          }
           return;
         } catch {
-          // If parsing fails, continue to fetch
+          // parsing failed — fall through to fetch
         }
       }
     }
@@ -148,37 +139,33 @@ export function AuthenticatedHome() {
 
     const fetchCarousels = async () => {
       try {
-      setLoading(true);
-      const data: Record<string, BookCarouselBook[]> = {};
+        setLoading(true);
+        const data: Record<string, BookCarouselBook[]> = {};
 
-      // Fetch all carousels in parallel
-      const promises = carousels.map(async (carousel) => {
-        try {
-          const response = await fetch(
-            `/api/books/personalized?type=${carousel.type}&limit=20`
-          );
-          if (!response.ok) {
-            throw new Error(`Failed to fetch ${carousel.type}`);
+        const promises = carousels.map(async (carousel) => {
+          try {
+            const response = await fetch(
+              `/api/books/personalized?type=${carousel.type}&limit=20`
+            );
+            if (!response.ok) throw new Error(`Failed to fetch ${carousel.type}`);
+            const result = await response.json();
+            data[carousel.type] = result.books || [];
+          } catch (error) {
+            console.error(`Error fetching ${carousel.type}:`, error);
+            data[carousel.type] = [];
           }
-          const result = await response.json();
-          data[carousel.type] = result.books || [];
-        } catch (error) {
-          console.error(`Error fetching ${carousel.type}:`, error);
-          data[carousel.type] = [];
-        }
-      });
+        });
 
-      await Promise.all(promises);
-      setCarouselData(data);
-      
-      // Cache data in localStorage (persists across sessions)
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('home_carousel_data', JSON.stringify(data));
-        localStorage.setItem('home_carousel_timestamp', Date.now().toString());
-      }
-      
-      setLoading(false);
-      hasLoadedRef.current = true;
+        await Promise.all(promises);
+        setCarouselData(data);
+
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('home_carousel_data_v2', JSON.stringify(data));
+          localStorage.setItem('home_carousel_timestamp_v2', Date.now().toString());
+        }
+
+        setLoading(false);
+        hasLoadedRef.current = true;
       } catch (error) {
         console.error("Error in fetchCarousels:", error);
         setLoading(false);
@@ -189,7 +176,7 @@ export function AuthenticatedHome() {
     fetchCarousels().catch((error) => {
       console.error("Unhandled error in fetchCarousels:", error);
     });
-  }, [session?.user]);
+  }, [isAuthenticated]);
 
   // Combine all books for Pinterest grid (both desktop and mobile)
   React.useEffect(() => {
@@ -200,150 +187,116 @@ export function AuthenticatedHome() {
       const books = carouselData[carousel.type] || [];
       combined.push(...books);
     });
-        // Remove duplicates based on book ID
-        const uniqueBooks = Array.from(
-          new Map(combined.map(book => [book.id || Math.random().toString(), book])).values()
-        );
+    // Remove duplicates based on book ID, then shuffle for variety on each load
+    const uniqueBooks = Array.from(
+      new Map(combined.map(book => [book.id || Math.random().toString(), book])).values()
+    );
+    for (let i = uniqueBooks.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [uniqueBooks[i], uniqueBooks[j]] = [uniqueBooks[j], uniqueBooks[i]];
+    }
     setAllBooks(uniqueBooks);
     setDisplayedBooks(uniqueBooks);
-    // Initialize offsets
-    const initialOffsets: Record<string, number> = {};
-    carousels.forEach((carousel) => {
-      initialOffsets[carousel.type] = (carouselData[carousel.type] || []).length;
-    });
-    setCarouselOffsets(initialOffsets);
   }, [carouselData, isMobile]);
 
-  // Track which carousels we've fetched and their offsets
-  const [carouselOffsets, setCarouselOffsets] = useState<Record<string, number>>({});
   const [hasMoreData, setHasMoreData] = useState(true);
+  // Tracks the last server page fetched from the onboarding endless-feed endpoint.
+  // The initial carousel loads don't use this, so we start at 0.
+  const onboardingPageRef = React.useRef(0);
+  // Skip the onboarding phase entirely — it overlaps too heavily with the initial
+  // carousel pool. Go straight to ISBNdb for scroll, starting from a random page
+  // offset so every session scrolls through a different set of books.
+  const emptyStreakRef = React.useRef(2); // pre-trip the onboarding drain threshold
+  const useIsbndbRef = React.useRef(true); // start on ISBNdb immediately
+  const isbndbPageRef = React.useRef(Math.floor(Math.random() * 50)); // random start
+  // Consecutive empty ISBNdb responses. Only stop the feed after several misses
+  // so a single slow genre-page can't terminate "worldwide" scrolling.
+  const isbndbEmptyStreakRef = React.useRef(0);
 
-  // Load more books for Pinterest grid - fetch more from API
+  // Load more books for the Pinterest grid.
+  // Strategy:
+  //  1. Drain the onboarding endless-feed endpoint (DB-backed, tier 1/2/3).
+  //  2. After 2 consecutive empty onboarding pages, flip to /api/books/from-isbndb
+  //     which pulls fresh books from ISBNdb worldwide and persists them.
+  //  3. Only give up after several empty ISBNdb pages in a row.
   const handleLoadMore = React.useCallback(async () => {
-    if (isLoadingMore || !hasMoreData) {
-      console.log('[LoadMore] Skipping - isLoadingMore:', isLoadingMore, 'hasMoreData:', hasMoreData);
-      return;
-    }
-    
-    console.log('[LoadMore] Starting to load more books...');
+    if (isLoadingMore || !hasMoreData) return;
     setIsLoadingMore(true);
-    try {
-      const data: Record<string, BookCarouselBook[]> = {};
-      const newOffsets = { ...carouselOffsets };
-      
-      // Create a set of existing book IDs for quick lookup
-      const existingBookIds = new Set<string>();
-      allBooks.forEach(book => {
-        if (book.id) existingBookIds.add(book.id);
-      });
-      
-      // Fetch more books from each carousel type with increased limits
-      const promises = carousels.map(async (carousel) => {
-        const currentCount = (carouselData[carousel.type] || []).length;
-        const newLimit = currentCount + 40; // Fetch 40 more each time
-        
-        try {
-          const response = await fetch(
-            `/api/books/personalized?type=${carousel.type}&limit=${newLimit}`
-          );
-          if (response.ok) {
-            const result = await response.json();
-            const fetchedBooks = result.books || [];
-            
-            // Since API returns books from the beginning, slice to get only new books
-            // Take books starting from the count we already have
-            const newBooks = fetchedBooks.slice(currentCount);
-            
-            // Also filter out any duplicates that might exist across carousels
-            const trulyNewBooks = newBooks.filter((book: BookCarouselBook) => {
-              return book.id && !existingBookIds.has(book.id);
-            });
-            
-            // If we got new books, add them to the data
-            if (trulyNewBooks.length > 0) {
-              // Merge with existing books for this carousel type
-              const existingCarouselBooks = carouselData[carousel.type] || [];
-              data[carousel.type] = [...existingCarouselBooks, ...trulyNewBooks];
-              newOffsets[carousel.type] = newLimit;
-              console.log(`[LoadMore] ${carousel.type}: Got ${trulyNewBooks.length} new books (requested ${newLimit}, had ${currentCount})`);
-            } else {
-              // No new books, keep existing data
-              data[carousel.type] = carouselData[carousel.type] || [];
-              console.log(`[LoadMore] ${carousel.type}: No new books found`);
-            }
-            
-            // Check if we got fewer books than requested (no more data)
-            if (fetchedBooks.length < newLimit && trulyNewBooks.length === 0) {
-              console.log(`[LoadMore] ${carousel.type}: Carousel exhausted (got ${fetchedBooks.length}, requested ${newLimit})`);
-            }
-          }
-        } catch (error) {
-          console.error(`Error fetching more ${carousel.type}:`, error);
-          // Keep existing data on error
-          data[carousel.type] = carouselData[carousel.type] || [];
-        }
-      });
 
-      await Promise.all(promises);
-      
-      // Track how many new books we found across all carousels
-      let totalNewBooks = 0;
-      
-      // Combine all books from all carousels, tracking new ones
-      const combined: BookCarouselBook[] = [];
-      carousels.forEach((carousel) => {
-        const books = data[carousel.type] || [];
-        const existingCarouselBooks = carouselData[carousel.type] || [];
-        const existingIds = new Set(existingCarouselBooks.map(b => b.id));
-        
-        // Count new books for this carousel
-        const newBooksInCarousel = books.filter(b => b.id && !existingIds.has(b.id));
-        totalNewBooks += newBooksInCarousel.length;
-        
-        combined.push(...books);
-      });
-      
-      // Remove duplicates based on book ID
-      const bookMap = new Map<string, BookCarouselBook>();
-      combined.forEach(book => {
-        const key = book.id || Math.random().toString();
-        if (!bookMap.has(key)) {
-          bookMap.set(key, book);
+    try {
+      const existingBookIds = new Set<string>();
+      allBooks.forEach((b) => { if (b.id) existingBookIds.add(b.id); });
+
+      if (!useIsbndbRef.current) {
+        const nextServerPage = onboardingPageRef.current + 1;
+        const response = await fetch(
+          `/api/books/personalized?type=onboarding&page=${nextServerPage}&limit=60`
+        );
+        if (response.ok) {
+          const result = await response.json() as { books?: BookCarouselBook[]; hasMore?: boolean };
+          const fetched = result.books || [];
+          const newBooks = fetched.filter((b) => b.id && !existingBookIds.has(b.id));
+
+          if (newBooks.length > 0) {
+            const combined = [...allBooks, ...newBooks];
+            setAllBooks(combined);
+            setDisplayedBooks(combined);
+            onboardingPageRef.current = nextServerPage;
+            emptyStreakRef.current = 0;
+            return;
+          }
+
+          onboardingPageRef.current = nextServerPage;
+          emptyStreakRef.current += 1;
+          if (emptyStreakRef.current < 2) {
+            return;
+          }
+          // 2 empties in a row → DB pool is drained, flip to ISBNdb.
+          useIsbndbRef.current = true;
+        } else {
+          // Treat HTTP error as a miss and flip immediately to the fallback.
+          useIsbndbRef.current = true;
         }
-      });
-      const uniqueBooks = Array.from(bookMap.values());
-      
-      // Check if we got any new books
-      console.log('[LoadMore] Total new books found:', totalNewBooks, 'Unique books:', uniqueBooks.length, 'All books:', allBooks.length);
-      
-      if (totalNewBooks > 0 || uniqueBooks.length > allBooks.length) {
-        console.log('[LoadMore] Adding new books to display');
-        setAllBooks(uniqueBooks);
-        setDisplayedBooks(uniqueBooks);
-        setCarouselData(data); // Update carousel data with new books
-        setCarouselOffsets(newOffsets);
-        // Keep hasMoreData as true to allow more loading
+      }
+
+      const nextIsbndbPage = isbndbPageRef.current + 1;
+      const isbndbResp = await fetch(
+        `/api/books/from-isbndb?page=${nextIsbndbPage}&limit=20`
+      );
+      if (!isbndbResp.ok) {
+        isbndbEmptyStreakRef.current += 1;
+        isbndbPageRef.current = nextIsbndbPage;
+        if (isbndbEmptyStreakRef.current >= 5) {
+          setHasMoreData(false);
+        }
+        return;
+      }
+
+      const isbndbResult = await isbndbResp.json() as { books?: BookCarouselBook[] };
+      const isbndbFetched = isbndbResult.books || [];
+      const isbndbNewBooks = isbndbFetched.filter(
+        (b) => b.id && !existingBookIds.has(b.id)
+      );
+
+      if (isbndbNewBooks.length > 0) {
+        const combined = [...allBooks, ...isbndbNewBooks];
+        setAllBooks(combined);
+        setDisplayedBooks(combined);
+        isbndbPageRef.current = nextIsbndbPage;
+        isbndbEmptyStreakRef.current = 0;
       } else {
-        console.log('[LoadMore] No new books found');
-        // No new books found, check if we should stop trying
-        // If all carousels returned the same number of books as we already had, likely exhausted
-        const allCarouselsExhausted = carousels.every(carousel => {
-          const books = data[carousel.type] || [];
-          const existingBooks = carouselData[carousel.type] || [];
-          // If we got the same or fewer books than we already had, likely exhausted
-          return books.length <= existingBooks.length;
-        });
-        
-        if (allCarouselsExhausted) {
+        isbndbPageRef.current = nextIsbndbPage;
+        isbndbEmptyStreakRef.current += 1;
+        if (isbndbEmptyStreakRef.current >= 5) {
           setHasMoreData(false);
         }
       }
-    } catch (error) {
-      console.error("Error loading more books:", error);
+    } catch {
+      setHasMoreData(false);
     } finally {
       setIsLoadingMore(false);
     }
-  }, [allBooks, carouselOffsets, carouselData, isLoadingMore, hasMoreData]);
+  }, [allBooks, isLoadingMore, hasMoreData]);
 
   const hasMore = hasMoreData;
 
@@ -402,8 +355,8 @@ export function AuthenticatedHome() {
         
         // Clear cache and reload
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('home_carousel_data');
-          localStorage.removeItem('home_carousel_timestamp');
+          localStorage.removeItem('home_carousel_data_v2');
+          localStorage.removeItem('home_carousel_timestamp_v2');
         }
         
         hasLoadedRef.current = false;
@@ -432,8 +385,8 @@ export function AuthenticatedHome() {
           
           // Cache new data
           if (typeof window !== 'undefined') {
-            localStorage.setItem('home_carousel_data', JSON.stringify(data));
-            localStorage.setItem('home_carousel_timestamp', Date.now().toString());
+            localStorage.setItem('home_carousel_data_v2', JSON.stringify(data));
+            localStorage.setItem('home_carousel_timestamp_v2', Date.now().toString());
           }
         } catch (error) {
           console.error("Error refreshing:", error);
@@ -553,7 +506,7 @@ export function AuthenticatedHome() {
             authors: book.author ? [book.author] : [],
             description: '',
             publishedDate: '',
-            cover: book.cover || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80',
+            cover: book.cover || '',
           }))}
           onLoadMore={handleLoadMore}
           hasMore={hasMore}
@@ -561,8 +514,6 @@ export function AuthenticatedHome() {
             />
       </div>
 
-      {/* Footer */}
-      <Footerdemo />
     </div>
   );
 }

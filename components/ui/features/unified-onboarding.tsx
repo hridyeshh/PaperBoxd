@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-media-query";
@@ -20,13 +20,13 @@ interface UnifiedOnboardingProps {
 }
 
 export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
-  const { data: session } = useSession();
+  const { user } = useAuth();
   const router = useRouter();
   const isMobile = useIsMobile();
   
   // Initialize step based on whether user already has username
   const getInitialStep = (): OnboardingStep => {
-    if (session?.user?.username) {
+    if (user?.username) {
       console.log("[UnifiedOnboarding] User already has username, starting at profile step");
       return "profile";
     }
@@ -37,12 +37,12 @@ export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
   const [profileData, setProfileData] = React.useState<EditableProfile | null>(null);
   const [isSavingProfile, setIsSavingProfile] = React.useState(false);
   const [currentUsername, setCurrentUsername] = React.useState<string | null>(
-    session?.user?.username || null
+    user?.username || null
   );
 
   // Update step and username when session updates
   React.useEffect(() => {
-    const sessionUsername = session?.user?.username;
+    const sessionUsername = user?.username;
     if (sessionUsername) {
       // If we have a session username but not in currentUsername, update it
       if (sessionUsername !== currentUsername) {
@@ -57,7 +57,7 @@ export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
         setStep("profile");
       }
     }
-  }, [session?.user?.username, currentUsername, step]);
+  }, [user?.username, currentUsername, step]);
 
   // Debug: Log step changes
   React.useEffect(() => {
@@ -66,27 +66,27 @@ export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
       step,
       currentUsername,
       hasProfileData: !!profileData,
-      hasSession: !!session,
-      sessionUsername: session?.user?.username,
+      hasSession: !!user,
+      sessionUsername: user?.username,
     });
-  }, [step, currentUsername, profileData, session]);
+  }, [step, currentUsername, profileData, user]);
 
   // Load profile data when moving to profile step
   React.useEffect(() => {
     console.log("[UnifiedOnboarding] Profile loading useEffect triggered:", {
       step,
-      hasSession: !!session?.user,
+      hasSession: !!user,
       hasProfileData: !!profileData,
       currentUsername,
       conditions: {
         stepIsProfile: step === "profile",
-        hasSession: !!session?.user,
+        hasSession: !!user,
         noProfileData: !profileData,
         hasUsername: !!currentUsername,
       },
     });
 
-    if (step === "profile" && session?.user && !profileData && currentUsername) {
+    if (step === "profile" && user && !profileData && currentUsername) {
       console.log("[UnifiedOnboarding] ✅ All conditions met, loading profile for username:", currentUsername);
       const loadProfile = async () => {
         try {
@@ -102,9 +102,9 @@ export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
             if (data.user) {
               const profile: EditableProfile = {
                 username: data.user.username || "",
-                name: data.user.name || session.user.name || "",
+                name: data.user.name || user?.name || "",
                 birthday: data.user.birthday ? new Date(data.user.birthday).toISOString().split('T')[0] : "",
-                email: data.user.email || session.user.email || "",
+                email: data.user.email || user?.email || "",
                 bio: data.user.bio || "",
                 pronouns: Array.isArray(data.user.pronouns) ? data.user.pronouns : [],
                 links: Array.isArray(data.user.links) ? data.user.links.join(", ") : (data.user.links || ""),
@@ -119,9 +119,9 @@ export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
               // Use defaults
               const defaultProfile = {
                 username: username,
-                name: session.user.name || "",
+                name: user?.name || "",
                 birthday: "",
-                email: session.user.email || "",
+                email: user?.email || "",
                 bio: "",
                 pronouns: [],
                 links: "",
@@ -139,9 +139,9 @@ export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
             // Use defaults
             const defaultProfile = {
               username: username,
-              name: session.user.name || "",
+              name: user?.name || "",
               birthday: "",
-              email: session.user.email || "",
+              email: user?.email || "",
               bio: "",
               pronouns: [],
               links: "",
@@ -159,10 +159,10 @@ export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
           });
           // Use defaults on error
           const defaultProfile = {
-            username: currentUsername || session?.user?.username || "",
-            name: session?.user?.name || "",
+            username: currentUsername || user?.username || "",
+            name: user?.name || "",
             birthday: "",
-            email: session?.user?.email || "",
+            email: user?.email || "",
             bio: "",
             pronouns: [],
             links: "",
@@ -181,7 +181,7 @@ export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
       if (step !== "profile") {
         console.log("[UnifiedOnboarding]   - Step is not 'profile', it is:", step);
       }
-      if (!session?.user) {
+      if (!user) {
         console.log("[UnifiedOnboarding]   - No session or user");
       }
       if (profileData) {
@@ -191,14 +191,14 @@ export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
         console.log("[UnifiedOnboarding]   - No currentUsername set");
       }
     }
-  }, [step, session, profileData, currentUsername]);
+  }, [step, user, profileData, currentUsername]);
 
   const handleUsernameComplete = (username: string) => {
     console.log("[UnifiedOnboarding] 🎯 handleUsernameComplete called with username:", username);
     console.log("[UnifiedOnboarding] Current state before update:", {
       step,
       currentUsername,
-      sessionUsername: session?.user?.username,
+      sessionUsername: user?.username,
     });
     
     // Store the username immediately
@@ -223,7 +223,7 @@ export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
   const handleProfileSave = async () => {
     console.log("[UnifiedOnboarding] 🎯 handleProfileSave called");
     console.log("[UnifiedOnboarding] Profile data:", profileData);
-    console.log("[UnifiedOnboarding] Session username:", session?.user?.username);
+    console.log("[UnifiedOnboarding] Session username:", user?.username);
     
     if (!profileData) {
       console.error("[UnifiedOnboarding] ❌ No profile data to save");
@@ -231,7 +231,7 @@ export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
       return;
     }
     
-    if (!session?.user?.username) {
+    if (!user?.username) {
       console.error("[UnifiedOnboarding] ❌ No session username available");
       toast.error("Session error. Please try again.");
       return;
@@ -271,9 +271,9 @@ export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
       };
 
       console.log("[UnifiedOnboarding] Profile payload:", payload);
-      console.log("[UnifiedOnboarding] Fetching to:", `/api/users/${encodeURIComponent(session.user.username)}`);
+      console.log("[UnifiedOnboarding] Fetching to:", `/api/users/${encodeURIComponent(user?.username)}`);
 
-      const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}`, {
+      const response = await fetch(`/api/users/${encodeURIComponent(user?.username)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -352,7 +352,7 @@ export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
 
   const progress = getProgress();
 
-  if (!session?.user) {
+  if (!user) {
     return null;
   }
 
@@ -400,8 +400,8 @@ export function UnifiedOnboarding({ onComplete }: UnifiedOnboardingProps) {
                 transition={{ duration: 0.3 }}
               >
                 <UsernameSelection
-                  name={session.user.name || ""}
-                  email={session.user.email || ""}
+                  name={user?.name || ""}
+                  email={user?.email || ""}
                   onComplete={handleUsernameComplete}
                 />
               </motion.div>

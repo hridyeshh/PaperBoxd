@@ -1,478 +1,478 @@
 import { NextRequest, NextResponse } from "next/server";
-import connectDB from "@/lib/db/mongodb";
-import User from "@/lib/db/models/User";
-import type { IActivity } from "@/lib/db/models/User";
-import Book from "@/lib/db/models/Book"; // Import Book model to register it with Mongoose
-import { auth } from "@/lib/auth";
-import mongoose from "mongoose";
+import { goFetch, bookshelfApi, favoritesApi, diaryApi, listsApi, activityApi } from "@/lib/api/endpoints";
+import { cookies } from "next/headers";
 
-// Enable caching for this route
-export const revalidate = 30; // Revalidate every 30 seconds
+export const revalidate = 30;
 
-// Type for activity from MongoDB (includes _id and createdAt)
-type ActivityFromDB = IActivity & {
-  _id?: mongoose.Types.ObjectId | string;
-  createdAt?: Date;
-};
+// ── Go backend response shapes ────────────────────────────────────────────────
 
-// Type for activity with _id and book info
-type ActivityWithBook = IActivity & {
-  _id?: mongoose.Types.ObjectId | string;
-  createdAt?: Date;
-  bookTitle?: string;
-  bookCover?: string;
-};
+interface GoVolumeInfo {
+  title: string;
+  authors?: string[];
+  imageLinks?: { thumbnail?: string; smallThumbnail?: string; medium?: string };
+}
 
-// Type for reading list with allowedUsers
-type ReadingListWithAccess = {
-  _id?: mongoose.Types.ObjectId | string;
+interface GoBookResponse {
+  id: string;
+  _id: string;
+  volumeInfo: GoVolumeInfo;
+  googleBooksId?: string;
+  isbndbId?: string;
+  openLibraryId?: string;
+  slug?: string;
+}
+
+interface GoBookWithStatus extends GoBookResponse {
+  status: string;
+  rating?: number | null;
+  finished_at?: string | null;
+  added_at: string;
+}
+
+interface GoBookshelfResponse {
+  books: GoBookWithStatus[];
+  total_count: number;
+  page: number;
+  page_size: number;
+}
+
+interface GoFavoriteResponse {
+  id: string;
+  book_id: string;
+  display_order: number;
+  note?: string;
+  book: GoBookResponse;
+  created_at: string;
+}
+
+interface GoTBREntry {
+  id: string;
+  book_id: string;
+  book: GoBookResponse;
+  status: string;
+  tbr_notes?: string;
+  tbr_priority?: string;
+  tbr_added_at?: string;
+  created_at: string;
+  // Optional — populated by Go only when the user has reading progress on a
+  // book that is marked DNF. Drives the progress bar in the DNF tab.
+  current_page?: number | null;
+}
+
+interface GoLikesResponse {
+  books: (GoBookResponse & { liked_at: string })[];
+  total_count: number;
+}
+
+interface GoListResponse {
+  id: string;
+  user_id: string;
+  username: string;
   title: string;
   description?: string;
-  books: mongoose.Types.ObjectId[];
-  isPublic: boolean;
-  allowedUsers?: string[];
-  collaborators?: mongoose.Types.ObjectId[];
-  createdAt: Date;
-  updatedAt: Date;
-};
+  is_private: boolean;
+  book_count: number;
+  save_count: number;
+  is_saved: boolean;
+  can_edit: boolean;
+  can_view: boolean;
+  cover_urls?: string[];
+  created_at: string;
+  updated_at: string;
+}
 
-/**
- * Get user profile by username
- *
- * GET /api/users/[username]
- */
+interface GoUserListsResponse {
+  own_lists: GoListResponse[];
+  saved_lists: GoListResponse[];
+}
+
+interface GoDiaryEntry {
+  id: string;
+  user_id: string;
+  username: string;
+  book_id?: string;
+  book?: GoBookResponse;
+  title?: string;
+  content: string;
+  is_private: boolean;
+  rating?: number;
+  likes_count: number;
+  is_liked: boolean;
+  can_edit: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface GoDiaryEntriesResponse {
+  entries: GoDiaryEntry[];
+  total_count: number;
+}
+
+interface GoActivityResponse {
+  id: string;
+  user_id: string;
+  username: string;
+  name: string;
+  avatar_url?: string;
+  activity_type: string;
+  book_id?: string;
+  book_title?: string;
+  book_slug?: string;
+  list_id?: string;
+  list_title?: string;
+  entry_id?: string;
+  entry_title?: string;
+  target_user_id?: string;
+  target_username?: string;
+  created_at: string;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const DEFAULT_COVER = "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
+
+function bookCover(vi?: GoVolumeInfo): string {
+  return vi?.imageLinks?.thumbnail ?? vi?.imageLinks?.smallThumbnail ?? vi?.imageLinks?.medium ?? DEFAULT_COVER;
+}
+
+function bookAuthor(vi?: GoVolumeInfo): string {
+  return vi?.authors?.[0] ?? "Unknown Author";
+}
+
+function flatBook(book: GoBookResponse, extra?: Record<string, unknown>) {
+  return {
+    bookId: book.id,
+    _id: book._id ?? book.id,
+    title: book.volumeInfo?.title ?? "Unknown Title",
+    author: bookAuthor(book.volumeInfo),
+    cover: bookCover(book.volumeInfo),
+    isbndbId: book.isbndbId,
+    openLibraryId: book.openLibraryId,
+    googleBooksId: book.googleBooksId,
+    slug: book.slug,
+    ...extra,
+  };
+}
+
+// ── GET /api/users/[username] ─────────────────────────────────────────────────
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ username: string }> }
 ) {
   try {
     const { username } = await context.params;
-
     if (!username) {
-      return NextResponse.json(
-        { error: "Username is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Username is required" }, { status: 400 });
     }
 
-    // Connect to database
-    await connectDB();
+    const cookieStore = await cookies();
+    const hasToken = !!cookieStore.get("pb_access_token")?.value;
 
-    // Check authentication to determine if user is the owner
-    const session = await auth();
-    const currentUser = session?.user?.email ? await User.findOne({ email: session.user.email }).select("username").lean() : null;
-    const isOwner = currentUser?.username === username;
+    // Fetch all data in parallel
+    const [
+      userResult,
+      bookshelfResult,
+      favoritesResult,
+      tbrResult,
+      readingResult,
+      likesResult,
+      listsResult,
+      diaryResult,
+      activitiesResult,
+    ] = await Promise.allSettled([
+      goFetch(`/api/v1/users/${encodeURIComponent(username)}`),
+      bookshelfApi.get(username, 1, 100),
+      favoritesApi.get(username),
+      bookshelfApi.getTBR(username, 1, 100),
+      bookshelfApi.getCurrentlyReading(username, 1, 20),
+      goFetch(`/api/v1/users/${encodeURIComponent(username)}/likes?page=1&page_size=100`),
+      listsApi.getUserLists(username),
+      diaryApi.getEntries(username, 1, 50),
+      hasToken ? activityApi.getMyActivities(1, 20) : Promise.resolve({ data: null, status: 401 }),
+    ]);
 
-    // Find user by username - optimized query with lean() and selective field projection
-    let userPlain;
-    try {
-      // Use lean() for better performance and select only needed fields
-      userPlain = await User.findOne({ username })
-        .select("-password -__v") // Exclude password and version
-        .lean();
-      
-      // Populate readingLists.books if needed (only if user has reading lists)
-      if (userPlain?.readingLists && Array.isArray(userPlain.readingLists) && userPlain.readingLists.length > 0) {
-        try {
-          // Populate reading lists books in batch
-          const populatedLists = await Promise.all(
-            userPlain.readingLists.map(async (list: ReadingListWithAccess) => {
-              if (list.books && Array.isArray(list.books) && list.books.length > 0) {
-                try {
-                  // Convert book IDs to ObjectIds
-                  const bookIds = list.books.map((id: mongoose.Types.ObjectId | string) => {
-                    if (typeof id === 'string') {
-                      return new mongoose.Types.ObjectId(id);
-                    }
-                    return id;
-                  });
-                  
-                  const books = await Book.find({
-                    _id: { $in: bookIds }
-                  })
-                    .select("volumeInfo.title volumeInfo.authors volumeInfo.imageLinks")
-                    .lean();
-                  
-                  return {
-                    ...list,
-                    books: (books as unknown as Array<{ _id?: mongoose.Types.ObjectId; volumeInfo?: { title?: string; authors?: string[]; imageLinks?: { thumbnail?: string; smallThumbnail?: string; medium?: string } } }>).map((b) => ({
-                      _id: b._id,
-                      volumeInfo: b.volumeInfo
-                    }))
-                  };
-                } catch (bookError) {
-                  console.warn("Failed to populate books for list:", bookError);
-                  return list; // Return original list if population fails
-                }
-              }
-              return list;
-            })
-          );
-          userPlain.readingLists = populatedLists as typeof userPlain.readingLists;
-        } catch (populateError) {
-          console.warn("Failed to populate readingLists.books:", populateError);
-        }
-      }
-    } catch (error) {
-      console.error("Error finding user:", error);
-      userPlain = null;
-    }
-
-    if (!userPlain) {
+    // User must exist
+    if (userResult.status === "rejected" || (userResult.status === "fulfilled" && userResult.value.status === 404)) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+    if (userResult.status === "fulfilled" && userResult.value.status >= 400) {
+      return NextResponse.json({ error: "Failed to fetch user" }, { status: userResult.value.status });
+    }
 
-    // Removed excessive logging for performance
+    const goUser = userResult.status === "fulfilled" ? (userResult.value.data as Record<string, unknown>) : {};
 
-    // Update lastActive separately using updateOne (non-blocking)
-    if (userPlain?._id) {
-      User.updateOne(
-        { _id: userPlain._id },
-        { $set: { lastActive: new Date() } }
-      ).catch((saveError) => {
-        console.warn("Failed to update lastActive:", saveError);
-        // Continue even if save fails - this is not critical
+    // ── Bookshelf ─────────────────────────────────────────────────────────────
+    const bookshelf: unknown[] = [];
+    if (bookshelfResult.status === "fulfilled" && bookshelfResult.value.status < 400) {
+      const bs = bookshelfResult.value.data as GoBookshelfResponse;
+      (bs?.books ?? [])
+        .filter((b) => b.status === "read")
+        .forEach((b) => {
+          bookshelf.push(flatBook(b, {
+            finishedOn: b.finished_at ?? b.added_at,
+            rating: b.rating ?? undefined,
+            status: b.status,
+          }));
+        });
+    }
+
+    // ── Favorites ─────────────────────────────────────────────────────────────
+    const favoriteBooks: unknown[] = [];
+    if (favoritesResult.status === "fulfilled" && favoritesResult.value.status < 400) {
+      const favs = favoritesResult.value.data as GoFavoriteResponse[];
+      (Array.isArray(favs) ? favs : []).forEach((fav) => {
+        favoriteBooks.push(flatBook(fav.book, { note: fav.note, displayOrder: fav.display_order }));
       });
     }
 
-    // Use userPlain (plain object) instead of user (Mongoose document)
-    // Safely extract arrays and handle undefined values
-    const activities = (Array.isArray(userPlain.activities) ? userPlain.activities : []) as ActivityFromDB[];
-    const followers = Array.isArray(userPlain.followers) ? userPlain.followers : [];
-    const following = Array.isArray(userPlain.following) ? userPlain.following : [];
-
-    // Populate activities with book information - optimized batch query
-    const activitiesWithBooks = await (async () => {
-      const recentActivities = activities.slice(-20).reverse();
-      
-      // Extract all unique book IDs
-      const bookIds = recentActivities
-        .map(a => a.bookId?.toString())
-        .filter((id): id is string => Boolean(id));
-      
-      // Batch fetch all books in one query
-      type BookLean = {
-        _id: mongoose.Types.ObjectId | { toString(): string } | string;
-        volumeInfo?: {
-          title?: string;
-          imageLinks?: {
-            thumbnail?: string;
-            smallThumbnail?: string;
-            medium?: string;
-            large?: string;
-          };
-        };
+    // ── TBR ───────────────────────────────────────────────────────────────────
+    // Build a lookup of current_page by book_id from the bookshelf so we can
+    // attach reading progress to DNF/TBR entries. The bookshelf endpoint is the
+    // only place the Go backend exposes `current_page` today.
+    const currentPageByBookId = new Map<string, number>();
+    if (bookshelfResult.status === "fulfilled" && bookshelfResult.value.status < 400) {
+      const bs = bookshelfResult.value.data as GoBookshelfResponse & {
+        books: Array<GoBookWithStatus & { current_page?: number | null }>;
       };
-      const booksMap = new Map<string, BookLean>();
-      if (bookIds.length > 0) {
-        try {
-          const books = await Book.find({
-            _id: { $in: bookIds.map(id => new mongoose.Types.ObjectId(id)) }
-          })
-            .select('volumeInfo.title volumeInfo.imageLinks')
-            .lean();
-          
-          (books as unknown as BookLean[]).forEach(book => {
-            if (book._id) {
-              const bookId = typeof book._id === 'string' 
-                ? book._id 
-                : book._id.toString();
-              booksMap.set(bookId, book);
-            }
-          });
-        } catch (error) {
-          console.warn('Failed to batch fetch books for activities:', error);
+      for (const b of bs?.books ?? []) {
+        if (typeof b.current_page === "number" && b.current_page > 0) {
+          currentPageByBookId.set(b.id, b.current_page);
         }
       }
-      
-      // Map activities to include book data
-      return recentActivities.map((activity): ActivityWithBook => {
-        const activityData: ActivityWithBook = {
-          _id: activity._id,
-          type: activity.type,
-          bookId: activity.bookId,
-          timestamp: activity.timestamp || activity.createdAt || undefined,
-          rating: activity.rating,
-        };
-        
-        if (activity.bookId) {
-          const bookId = typeof activity.bookId === 'string' 
-            ? activity.bookId 
-            : activity.bookId.toString();
-          const book = booksMap.get(bookId);
-          if (book) {
-            activityData.bookTitle = book.volumeInfo?.title || undefined;
-            activityData.bookCover = book.volumeInfo?.imageLinks?.thumbnail || 
-                      book.volumeInfo?.imageLinks?.smallThumbnail ||
-                      book.volumeInfo?.imageLinks?.medium ||
-                      undefined;
-          }
-        }
-        return activityData;
-      });
-    })();
+    }
 
-    // Create a map for reading progress lookup (O(1) instead of O(n))
-    const readingProgressMap = new Map<string, { pagesRead: number; updatedAt: Date | null }>();
-    if (Array.isArray(userPlain.readingProgress)) {
-      userPlain.readingProgress.forEach((p: { bookId?: mongoose.Types.ObjectId | string; pagesRead?: number; updatedAt?: Date }) => {
-        const bookId = p.bookId?.toString() || (typeof p.bookId === 'string' ? p.bookId : null);
-        if (bookId) {
-          readingProgressMap.set(bookId, {
-            pagesRead: p.pagesRead || 0,
-            updatedAt: p.updatedAt || null,
-          });
-        }
+    const tbrBooks: unknown[] = [];
+    if (tbrResult.status === "fulfilled" && tbrResult.value.status < 400) {
+      const entries = tbrResult.value.data as GoTBREntry[];
+      (Array.isArray(entries) ? entries : []).forEach((t) => {
+        const pagesRead = t.current_page ?? currentPageByBookId.get(t.book.id) ?? 0;
+        tbrBooks.push(flatBook(t.book, {
+          addedOn: t.tbr_added_at ?? t.created_at,
+          urgency: t.tbr_priority,
+          whyNow: t.tbr_notes,
+          pagesRead,
+        }));
       });
     }
 
-    const response = NextResponse.json({
-      user: {
-        id: userPlain._id?.toString() || userPlain._id,
-        username: userPlain.username,
-        name: userPlain.name,
-        email: userPlain.email,
-        avatar: userPlain.avatar,
-        bio: userPlain.bio,
-        birthday: userPlain.birthday,
-        gender: userPlain.gender,
-        pronouns: Array.isArray(userPlain.pronouns) ? userPlain.pronouns : [],
-        links: Array.isArray(userPlain.links) ? userPlain.links : [],
-        isPublic: userPlain.isPublic,
+    // ── Currently reading ─────────────────────────────────────────────────────
+    const currentlyReading: unknown[] = [];
+    if (readingResult.status === "fulfilled" && readingResult.value.status < 400) {
+      const entries = readingResult.value.data as Array<{ id: string; book: GoBookResponse; current_page?: number; progress_percentage: number; started_at?: string }>;
+      (Array.isArray(entries) ? entries : []).forEach((r) => {
+        currentlyReading.push(flatBook(r.book, {
+          currentPage: r.current_page,
+          progressPercentage: r.progress_percentage,
+          startedAt: r.started_at,
+        }));
+      });
+    }
 
-        // Books & Reading
-        topBooks: Array.isArray(userPlain.topBooks) ? userPlain.topBooks : [],
-        favoriteBooks: Array.isArray(userPlain.favoriteBooks) ? userPlain.favoriteBooks : [],
-        bookshelf: Array.isArray(userPlain.bookshelf) ? userPlain.bookshelf : [],
-        likedBooks: Array.isArray(userPlain.likedBooks) ? userPlain.likedBooks : [],
-        // Enrich tbrBooks with reading progress data (optimized with Map lookup)
-        tbrBooks: Array.isArray(userPlain.tbrBooks) 
-          ? userPlain.tbrBooks.map((tbrBook: { bookId?: mongoose.Types.ObjectId | string; [key: string]: unknown }) => {
-              const tbrBookId = tbrBook.bookId?.toString() || (typeof tbrBook.bookId === 'string' ? tbrBook.bookId : null);
-              const progress = tbrBookId ? readingProgressMap.get(tbrBookId) : null;
-              
-              return {
-                ...tbrBook,
-                pagesRead: progress?.pagesRead || 0,
-                progressUpdatedAt: progress?.updatedAt || null,
-              };
-            })
-          : [],
-        currentlyReading: Array.isArray(userPlain.currentlyReading) ? userPlain.currentlyReading : [],
-        // Filter reading lists: if not owner, return public lists OR private lists the user has access to
-        readingLists: Array.isArray(userPlain.readingLists) 
-          ? (isOwner 
-              ? userPlain.readingLists 
-              : (() => {
-                  const currentUsername = currentUser?.username;
-                  return userPlain.readingLists.filter((list) => {
-                    const listWithAccess = list as unknown as ReadingListWithAccess;
-                    // Include public lists
-                    if (listWithAccess.isPublic !== false) return true;
-                    // Include private lists if user has been granted access
-                    if (currentUsername && Array.isArray(listWithAccess.allowedUsers) && listWithAccess.allowedUsers.includes(currentUsername)) {
-                      return true;
-                    }
-                    return false;
-                  });
-                })())
-          : [],
-        diaryEntries: Array.isArray(userPlain.diaryEntries) ? userPlain.diaryEntries : [],
+    // Also include "reading" status books from bookshelf in currentlyReading if not already there
+    if (bookshelfResult.status === "fulfilled" && bookshelfResult.value.status < 400) {
+      const bs = bookshelfResult.value.data as GoBookshelfResponse;
+      (bs?.books ?? [])
+        .filter((b) => b.status === "reading")
+        .forEach((b) => {
+          currentlyReading.push(flatBook(b, { addedOn: b.added_at }));
+        });
+    }
 
-        // Social
-        followers: followers.map((id) => id.toString()),
-        following: following.map((id) => id.toString()),
-        followersCount: followers.length,
-        followingCount: following.length,
+    // ── Liked books ───────────────────────────────────────────────────────────
+    const likedBooks: unknown[] = [];
+    if (likesResult.status === "fulfilled" && likesResult.value.status < 400) {
+      const lr = likesResult.value.data as GoLikesResponse;
+      (lr?.books ?? []).forEach((b) => {
+        likedBooks.push(flatBook(b, { likedOn: b.liked_at }));
+      });
+    }
 
-        // Stats
-        totalBooksRead: userPlain.totalBooksRead ?? 0,
-        totalPagesRead: userPlain.totalPagesRead ?? 0,
-        readingGoal: userPlain.readingGoal ?? null,
-        authorsRead: Array.isArray(userPlain.authorsRead) ? userPlain.authorsRead : [],
+    // ── Reading lists ─────────────────────────────────────────────────────────
+    const readingLists: unknown[] = [];
+    if (listsResult.status === "fulfilled" && listsResult.value.status < 400) {
+      const lr = listsResult.value.data as GoUserListsResponse;
+      [...(lr?.own_lists ?? []), ...(lr?.saved_lists ?? [])].forEach((list) => {
+        // Go returns up to 3 cover URLs per list so the profile's list card can
+        // render the first-three-covers preview without a second fetch.
+        const books = (list.cover_urls ?? []).map((url, i) => ({
+          _id: `cover-${i}`,
+          cover: url,
+          thumbnail: url,
+        }));
+        readingLists.push({
+          _id: list.id,
+          id: list.id,
+          title: list.title,
+          description: list.description,
+          books,
+          isPublic: !list.is_private,
+          bookCount: list.book_count,
+          updatedAt: list.updated_at,
+          createdAt: list.created_at,
+          isSaved: list.is_saved,
+          canEdit: list.can_edit,
+        });
+      });
+    }
 
-        // Activity - with populated book information
-        recentActivities: activitiesWithBooks,
+    // ── Diary entries ─────────────────────────────────────────────────────────
+    const diaryEntries: unknown[] = [];
+    if (diaryResult.status === "fulfilled" && diaryResult.value.status < 400) {
+      const dr = diaryResult.value.data as GoDiaryEntriesResponse;
+      (dr?.entries ?? []).forEach((e) => {
+        diaryEntries.push({
+          _id: e.id,
+          id: e.id,
+          bookId: e.book_id ?? null,
+          bookTitle: e.book?.volumeInfo?.title ?? null,
+          bookAuthor: bookAuthor(e.book?.volumeInfo),
+          bookCover: e.book ? bookCover(e.book.volumeInfo) : null,
+          subject: e.title ?? null,
+          content: e.content,
+          isPrivate: e.is_private,
+          rating: e.rating ?? null,
+          likes: [],
+          likesCount: e.likes_count,
+          isLiked: e.is_liked,
+          createdAt: e.created_at,
+          updatedAt: e.updated_at,
+        });
+      });
+    }
 
-        // Metadata
-        createdAt: userPlain.createdAt,
-        lastActive: userPlain.lastActive,
-      },
-    });
+    // ── Activities ────────────────────────────────────────────────────────────
+    const recentActivities: unknown[] = [];
+    if (activitiesResult.status === "fulfilled" && activitiesResult.value.status < 400) {
+      const ar = activitiesResult.value.data as { activities: GoActivityResponse[] };
+      (ar?.activities ?? []).forEach((a) => {
+        recentActivities.push({
+          _id: a.id,
+          type: a.activity_type,
+          bookId: a.book_id ?? null,
+          bookTitle: a.book_title ?? null,
+          bookCover: null,
+          listId: a.list_id ?? null,
+          listName: a.list_title ?? null,
+          entryId: a.entry_id ?? null,
+          entryTitle: a.entry_title ?? null,
+          targetUsername: a.target_username ?? null,
+          timestamp: a.created_at,
+          rating: null,
+        });
+      });
+    }
 
-    // Add caching headers for better performance
-    // Cache for 30 seconds, revalidate in background
-    response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
-    
-    return response;
+    // ── TBR books from bookshelf (status "to-read") ───────────────────────────
+    if (bookshelfResult.status === "fulfilled" && bookshelfResult.value.status < 400) {
+      const bs = bookshelfResult.value.data as GoBookshelfResponse;
+      (bs?.books ?? [])
+        .filter((b) => b.status === "to-read")
+        .forEach((b) => {
+          // Only add if not already in tbrBooks (from dedicated TBR endpoint)
+          const alreadyIn = (tbrBooks as Array<{ bookId: string }>).some((t) => t.bookId === b.id);
+          if (!alreadyIn) {
+            tbrBooks.push(flatBook(b, {
+              addedOn: b.added_at,
+              pagesRead: currentPageByBookId.get(b.id) ?? 0,
+            }));
+          }
+        });
+    }
+
+    // ── Compose response ──────────────────────────────────────────────────────
+    const user = {
+      // Identity
+      id: goUser.id,
+      _id: goUser._id ?? goUser.id,
+      username: goUser.username,
+      email: goUser.email,
+      name: goUser.name,
+      // Profile fields — Go uses snake_case for some
+      avatar: (goUser.avatar_url as string | null) ?? undefined,
+      bio: goUser.bio,
+      birthday: goUser.birthday,
+      gender: goUser.gender,
+      pronouns: Array.isArray(goUser.pronouns) ? goUser.pronouns : [],
+      links: Array.isArray(goUser.links) ? goUser.links : [],
+      isPublic: goUser.is_public ?? true,
+
+      // Stats
+      totalBooksRead: goUser.books_read_count ?? bookshelf.length,
+      totalPagesRead: goUser.total_pages_read ?? 0,
+      followersCount: goUser.followers_count ?? 0,
+      followingCount: goUser.following_count ?? 0,
+      listsCount: goUser.lists_count ?? 0,
+      favoritesCount: goUser.favorites_count ?? 0,
+      diaryEntriesCount: goUser.diary_entries_count ?? 0,
+
+      // Collections
+      bookshelf,
+      favoriteBooks,
+      topBooks: favoriteBooks, // topBooks maps to favorites in the new schema
+      likedBooks,
+      tbrBooks,
+      currentlyReading,
+      readingLists,
+      diaryEntries,
+      recentActivities,
+
+      // Metadata
+      createdAt: goUser.created_at,
+    };
+
+    const res = NextResponse.json({ user });
+    res.headers.set("Cache-Control", "public, s-maxage=30, stale-while-revalidate=60");
+    return res;
   } catch (error) {
     console.error("User fetch error:", error);
-    if (error instanceof Error) {
-      console.error("Error message:", error.message);
-      console.error("Error stack:", error.stack);
-    }
     return NextResponse.json(
-      {
-        error: "Failed to fetch user",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
+      { error: "Failed to fetch user", details: error instanceof Error ? error.message : "Unknown" },
       { status: 500 }
     );
   }
 }
 
-/**
- * Update user profile
- *
- * PATCH /api/users/[username]
- * Body: { name?, bio?, avatar?, pronouns?, links?, isPublic?, etc. }
- */
+// ── PATCH /api/users/[username] ───────────────────────────────────────────────
+
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ username: string }> }
 ) {
   try {
     const { username } = await context.params;
+    if (!username) {
+      return NextResponse.json({ error: "Username is required" }, { status: 400 });
+    }
+
     const body = await request.json();
 
-    if (!username) {
+    // Map frontend field names → Go backend field names
+    const goBody: Record<string, unknown> = {};
+    if (body.name !== undefined) goBody.name = body.name;
+    if (body.bio !== undefined) goBody.bio = body.bio;
+    if (body.pronouns !== undefined) goBody.pronouns = body.pronouns;
+    if (body.links !== undefined) goBody.links = body.links;
+    if (body.birthday !== undefined) goBody.birthday = body.birthday;
+    if (body.gender !== undefined) goBody.gender = body.gender;
+    if (body.avatar !== undefined) goBody.avatar_url = body.avatar;
+    if (body.username !== undefined) goBody.username = body.username;
+
+    const { data, status } = await (await import("@/lib/api/endpoints")).userApi.update(username, goBody);
+
+    if (status >= 400) {
+      const err = data as { error?: { message?: string }; message?: string };
       return NextResponse.json(
-        { error: "Username is required" },
-        { status: 400 }
+        { error: err?.error?.message ?? err?.message ?? "Failed to update profile" },
+        { status }
       );
     }
 
-    // Connect to database
-    await connectDB();
-
-    // Find user
-    const user = await User.findOne({ username });
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    // Handle username change separately to enforce uniqueness
-    if (body.username && body.username !== user.username) {
-      if (typeof body.username !== "string" || body.username.length < 3 || body.username.length > 30) {
-        return NextResponse.json(
-          { error: "Username must be between 3 and 30 characters" },
-          { status: 400 }
-        );
-      }
-
-      const existingUsername = await User.findOne({ username: body.username });
-      if (existingUsername) {
-        return NextResponse.json(
-          { error: "Username already taken" },
-          { status: 409 }
-        );
-      }
-
-      user.username = body.username;
-    }
-
-    // Normalize arrays - ensure pronouns is always an array
-    if (body.pronouns !== undefined) {
-      if (typeof body.pronouns === "string") {
-        // If it's a string, convert to array (split by comma if needed, or empty array if empty string)
-        body.pronouns = body.pronouns.trim() ? body.pronouns.split(",").map((p: string) => p.trim()).filter(Boolean) : [];
-      } else if (!Array.isArray(body.pronouns)) {
-        body.pronouns = [];
-      } else {
-        // Filter out empty strings from array
-        body.pronouns = body.pronouns.filter((p: string) => p && typeof p === "string" && p.trim().length > 0);
-      }
-    }
-    
-    // Normalize links
-    if (body.links !== undefined) {
-      if (typeof body.links === "string") {
-        body.links = body.links.trim() ? body.links.split(",").map((l: string) => l.trim()).filter(Boolean) : [];
-      } else if (!Array.isArray(body.links)) {
-        body.links = [];
-      } else {
-        // Filter out empty strings from array
-        body.links = body.links.filter((l: string) => l && typeof l === "string" && l.trim().length > 0);
-      }
-    }
-
-    // Update allowed fields
-    // TEMPORARILY DISABLED: Avatar storage to prevent cookie size issues
-    // TODO: Implement proper image upload/storage solution (e.g., Cloudinary, S3)
-    // if (body.avatar !== undefined) {
-    //   if (typeof body.avatar === "string" && body.avatar.trim().length > 0) {
-    //     // Save the avatar (base64 data URL or URL string)
-    //     user.avatar = body.avatar;
-    //   } else if (body.avatar === "" || body.avatar === null) {
-    //     // Empty string or null means remove avatar, set to undefined
-    //     user.avatar = undefined;
-    //   }
-    //   // If avatar is undefined in body, don't update (preserve existing)
-    // }
-
-    // Update other allowed fields
-    const otherAllowedFields = [
-      "name",
-      "bio",
-      "birthday",
-      "gender",
-      "pronouns",
-      "links",
-    ];
-
-    // Type-safe field updates
-    type UserUpdateFields = {
-      name?: string;
-      bio?: string;
-      birthday?: Date;
-      gender?: string;
-      pronouns?: string[];
-      links?: string[];
-    };
-    
-    const updateFields: UserUpdateFields = {};
-    otherAllowedFields.forEach((field) => {
-      if (body[field] !== undefined) {
-        updateFields[field as keyof UserUpdateFields] = body[field];
-      }
-    });
-    
-    // Apply updates
-    if (updateFields.name !== undefined) user.name = updateFields.name;
-    if (updateFields.bio !== undefined) user.bio = updateFields.bio;
-    if (updateFields.birthday !== undefined) user.birthday = updateFields.birthday;
-    if (updateFields.gender !== undefined) user.gender = updateFields.gender;
-    if (updateFields.pronouns !== undefined) user.pronouns = updateFields.pronouns;
-    if (updateFields.links !== undefined) user.links = updateFields.links;
-
-    // Always set isPublic to true (all profiles are public)
-    user.isPublic = true;
-
-    await user.save();
-
-    return NextResponse.json({
-      message: "Profile updated successfully",
-      user: {
-        id: user._id,
-        username: user.username,
-        name: user.name,
-        bio: user.bio,
-        avatar: user.avatar || undefined, // Return existing avatar or undefined
-        birthday: user.birthday,
-        gender: user.gender,
-        pronouns: user.pronouns,
-        links: user.links,
-        isPublic: user.isPublic,
-      },
-    });
+    return NextResponse.json({ message: "Profile updated successfully", user: data });
   } catch (error) {
     console.error("Profile update error:", error);
     return NextResponse.json(
-      {
-        error: "Failed to update profile",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
+      { error: "Failed to update profile", details: error instanceof Error ? error.message : "Unknown" },
       { status: 500 }
     );
   }

@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/primitives/dialog";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/providers/auth-provider";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-media-query";
@@ -49,7 +49,7 @@ export function DiaryEntryDialog({
   onLikeChange,
   onDelete,
 }: DiaryEntryDialogProps) {
-  const { data: session } = useSession();
+  const { user } = useAuth();
   const [isLiked, setIsLiked] = React.useState(entry.isLiked || false);
   const [likesCount, setLikesCount] = React.useState(entry.likesCount || entry.likes?.length || 0);
   const [isLiking, setIsLiking] = React.useState(false);
@@ -74,7 +74,7 @@ export function DiaryEntryDialog({
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    if (!session?.user?.id) {
+    if (!user?.id) {
       toast.info("Please sign in to like diary entries");
       return;
     }
@@ -175,17 +175,10 @@ export function DiaryEntryDialog({
     setShowDeleteConfirm(false);
 
     try {
-      // For book entries, use bookId; for general entries, use entry id
-      const requestBody = entry.bookId 
-        ? { bookId: entry.bookId }
-        : { entryId: entry.id };
-
-      console.log('[DiaryEntryDialog] Deleting entry:', requestBody);
-
       const response = await fetch(`/api/users/${encodeURIComponent(username)}/diary`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({ entryId: entry.id }),
       });
 
       if (!response.ok) {
@@ -199,11 +192,7 @@ export function DiaryEntryDialog({
       onOpenChange(false);
       
       if (onDelete) {
-        try {
-          await onDelete();
-        } catch (callbackError) {
-          console.error("[DiaryEntryDialog] Error in onDelete callback:", callbackError);
-        }
+        onDelete();
       }
     } catch (error) {
       console.error("Error deleting diary entry:", error);

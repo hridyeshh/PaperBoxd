@@ -4,11 +4,13 @@ import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { Plus, Share2, MoreVertical, Link2, Search, Send, Bookmark, X, Edit, Trash2 } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/providers/auth-provider";
 import { toast } from "sonner";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { NotFoundPage } from "@/components/ui/pages/not-found-page";
 import { Header } from "@/components/ui/layout/header-with-search";
+import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
+import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
 import { Button } from "@/components/ui/primitives/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/primitives/dialog";
 import { Input } from "@/components/ui/primitives/input";
@@ -21,6 +23,8 @@ import { cn, DEFAULT_AVATAR } from "@/lib/utils";
 
 interface Book {
   _id: string;
+  id?: string;
+  slug?: string;
   volumeInfo: {
     title: string;
     authors?: string[];
@@ -54,7 +58,7 @@ interface ErrorResponse {
 export default function ListDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { data: session } = useSession();
+  const { user } = useAuth();
   const username = params?.username as string;
   const listId = params?.listId as string;
 
@@ -107,8 +111,8 @@ export default function ListDetailPage() {
   const [isUpdating, setIsUpdating] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
 
-  const isOwnList = session?.user?.username === username;
-  const isSharedList = !isOwnList && session?.user?.username; // Viewing someone else's list while logged in
+  const isOwnList = user?.username === username;
+  const isSharedList = !isOwnList && user?.username; // Viewing someone else's list while logged in
   const isMobile = useIsMobile();
   
   // Check if this is a saved list (has "from @" in description)
@@ -177,7 +181,7 @@ export default function ListDetailPage() {
 
       if (response.ok) {
         toast.success("List deleted successfully!");
-        router.push(`/u/${username}`);
+        router.push("/lists");
       } else {
         const error = await response.json().catch(() => ({}));
         toast.error(error.error || "Failed to delete list");
@@ -264,7 +268,7 @@ export default function ListDetailPage() {
 
   // Check if current user has saved this list
   React.useEffect(() => {
-    const sessionUsername = session?.user?.username;
+    const sessionUsername = user?.username;
     const listId = list?.id;
     const listTitle = list?.title;
     const listDescription = list?.description;
@@ -358,7 +362,7 @@ export default function ListDetailPage() {
     return () => {
       isMounted = false;
     };
-  }, [session?.user?.username, list?.id, list?.title, list?.description, username]);
+  }, [user?.username, list?.id, list?.title, list?.description, username]);
 
 
   // Debounced book search
@@ -549,11 +553,11 @@ export default function ListDetailPage() {
 
   // Fetch following list when share modal opens
   React.useEffect(() => {
-    if (isShareOpen && session?.user?.username) {
+    if (isShareOpen && user?.username) {
       let isMounted = true;
       
       setIsLoadingFollowing(true);
-      fetch(`/api/users/${encodeURIComponent(session.user.username)}/following`)
+      fetch(`/api/users/${encodeURIComponent(user?.username)}/following`)
         .then((res) => {
           if (!isMounted) return null;
           if (!res.ok) {
@@ -563,7 +567,19 @@ export default function ListDetailPage() {
         })
         .then((data) => {
           if (!isMounted || !data) return;
-          setFollowing(Array.isArray(data.following) ? data.following : []);
+          const raw = Array.isArray(data.users)
+            ? data.users
+            : Array.isArray(data.following)
+              ? data.following
+              : [];
+          setFollowing(
+            raw.map((u: { id?: string; username?: string; name?: string; avatar_url?: string; avatar?: string }) => ({
+              id: u.id ?? "",
+              username: u.username ?? "",
+              name: u.name,
+              avatar: u.avatar_url ?? u.avatar,
+            }))
+          );
         })
         .catch((err) => {
           if (!isMounted) return;
@@ -584,7 +600,7 @@ export default function ListDetailPage() {
       setFollowing([]);
       setShareSearchQuery("");
     }
-  }, [isShareOpen, session?.user?.username]);
+  }, [isShareOpen, user?.username]);
 
   const handleCopyLink = async () => {
     try {
@@ -644,7 +660,7 @@ export default function ListDetailPage() {
   };
 
   const handleSendToList = async (targetUsername: string) => {
-    if (!username || !listId || !session?.user?.username) return;
+    if (!username || !listId || !user?.username) return;
 
     // For private lists, grant access instead of sharing
     if (list?.isPublic === false) {
@@ -682,7 +698,7 @@ export default function ListDetailPage() {
   };
 
   const handleGrantAccess = async (targetUsername: string) => {
-    if (!username || !listId || !session?.user?.username) return;
+    if (!username || !listId || !user?.username) return;
 
     setIsGrantingAccess(true);
     try {
@@ -723,7 +739,7 @@ export default function ListDetailPage() {
   };
 
   const handleRevokeAccess = async (targetUsername: string) => {
-    if (!username || !listId || !session?.user?.username) return;
+    if (!username || !listId || !user?.username) return;
 
     try {
       const response = await fetch(`/api/users/${encodeURIComponent(username)}/lists/${listId}/access`, {
@@ -757,7 +773,7 @@ export default function ListDetailPage() {
   };
 
   const handleSaveList = async () => {
-    if (!username || !listId || !session?.user?.username || isSavingList || isListSaved) return;
+    if (!username || !listId || !user?.username || isSavingList || isListSaved) return;
 
     try {
       setIsSavingList(true);
@@ -790,11 +806,11 @@ export default function ListDetailPage() {
   };
 
   const handleRemoveSavedList = async () => {
-    if (!savedListId || !session?.user?.username || isRemovingList) return;
+    if (!savedListId || !user?.username || isRemovingList) return;
 
     try {
       setIsRemovingList(true);
-      const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/lists/${savedListId}/save`, {
+      const response = await fetch(`/api/users/${encodeURIComponent(user?.username)}/lists/${savedListId}/save`, {
         method: "DELETE",
       });
 
@@ -837,7 +853,14 @@ export default function ListDetailPage() {
   if (isPrivateList) {
     return (
       <main className="min-h-screen bg-background">
-        <Header />
+        {isMobile ? (
+          <Header minimalMobile={isMobile} />
+        ) : (
+          <>
+            <DesktopSidebar />
+            <MinimalDesktopHeader />
+          </>
+        )}
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 mt-16">
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
             <div className="max-w-md space-y-4">
@@ -861,7 +884,14 @@ export default function ListDetailPage() {
 
   return (
     <main className="min-h-screen bg-background">
-      <Header />
+      {isMobile ? (
+        <Header minimalMobile={isMobile} />
+      ) : (
+        <>
+          <DesktopSidebar />
+          <MinimalDesktopHeader />
+        </>
+      )}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 mt-16 pb-24 md:pb-8">
         {/* Header Section */}
         <div className="mb-6 sm:mb-8">
@@ -983,11 +1013,11 @@ export default function ListDetailPage() {
                 key={book._id}
                 className="group relative aspect-[2/3] overflow-hidden rounded-lg cursor-pointer"
                 onClick={() => {
-                  const slug = createBookSlug(
-                    book.volumeInfo.title,
-                    book._id
-                  );
-                  router.push(`/b/${slug}`);
+                  if (book.slug) {
+                    router.push(`/b/${book.slug}`);
+                  } else {
+                    router.push(`/b/${createBookSlug(book.volumeInfo.title, book._id)}`);
+                  }
                 }}
               >
                 <Image

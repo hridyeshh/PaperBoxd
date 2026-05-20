@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/providers/auth-provider";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -41,7 +41,7 @@ export function UsernameSelection({
   initialUsername,
   onComplete,
 }: UsernameSelectionProps) {
-  const { update } = useSession();
+  const { refreshUser } = useAuth();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [availability, setAvailability] = React.useState<{
     available: boolean | null;
@@ -187,8 +187,8 @@ export function UsernameSelection({
         throw new Error(result.error || "Failed to set username");
       }
 
-      // Update session to include username
-      await update();
+      // Refresh auth state to reflect username change
+      refreshUser();
 
       toast.success("Username set successfully!");
       

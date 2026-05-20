@@ -1,6 +1,6 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { EditProfileForm, type EditableProfile } from "@/components/ui/forms/edit-profile-form";
@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { DEFAULT_AVATAR } from "@/lib/utils";
 
 export default function SetupProfilePage() {
-  const { data: session, status } = useSession();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [profileData, setProfileData] = useState<EditableProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -19,22 +19,20 @@ export default function SetupProfilePage() {
 
   // Load current user profile data
   useEffect(() => {
-    if (status === "loading") {
-      return;
-    }
+    if (authLoading) return;
 
-    if (status === "unauthenticated") {
+    if (!isAuthenticated) {
       router.replace("/auth");
       return;
     }
 
-    if (status === "authenticated" && session?.user) {
+    if (isAuthenticated && user) {
       const loadProfile = async () => {
         try {
           setIsLoading(true);
-          
+
           // Fetch current user profile
-          const username = session.user.username;
+          const username = user.username;
           if (!username) {
             // No username yet, redirect to choose username
             router.replace("/choose-username");
@@ -47,9 +45,9 @@ export default function SetupProfilePage() {
             if (data.user) {
               const profile: EditableProfile = {
                 username: data.user.username || "",
-                name: data.user.name || session.user.name || "",
+                name: data.user.name || user?.name || "",
                 birthday: data.user.birthday ? new Date(data.user.birthday).toISOString().split('T')[0] : "",
-                email: data.user.email || session.user.email || "",
+                email: data.user.email || user?.email || "",
                 bio: data.user.bio || "",
                 pronouns: Array.isArray(data.user.pronouns) ? data.user.pronouns : [],
                 links: Array.isArray(data.user.links) ? data.user.links.join(", ") : (data.user.links || ""),
@@ -63,9 +61,9 @@ export default function SetupProfilePage() {
             // If user not found, use defaults
             const profile: EditableProfile = {
               username: username,
-              name: session.user.name || "",
+              name: user?.name || "",
               birthday: "",
-              email: session.user.email || "",
+              email: user?.email || "",
               bio: "",
               pronouns: [],
               links: "",
@@ -79,10 +77,10 @@ export default function SetupProfilePage() {
           console.error("Failed to load profile:", error);
           // Use defaults on error
           const profile: EditableProfile = {
-            username: session.user.username || "",
-            name: session.user.name || "",
+            username: user?.username || "",
+            name: user?.name || "",
             birthday: "",
-            email: session.user.email || "",
+            email: user?.email || "",
             bio: "",
             pronouns: [],
             links: "",
@@ -98,10 +96,10 @@ export default function SetupProfilePage() {
 
       loadProfile();
     }
-  }, [status, session, router]);
+  }, [authLoading, isAuthenticated, user, router]);
 
   const handleSave = async () => {
-    if (!profileData || !session?.user?.username) return;
+    if (!profileData || !user?.username) return;
 
     try {
       setIsSaving(true);
@@ -137,7 +135,7 @@ export default function SetupProfilePage() {
         avatar: profileData.avatar || "",
       };
 
-      const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}`, {
+      const response = await fetch(`/api/users/${encodeURIComponent(user?.username)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -164,7 +162,7 @@ export default function SetupProfilePage() {
     }
   };
 
-  if (status === "loading" || isLoading) {
+  if (authLoading || isLoading) {
     return (
       <main className="relative min-h-screen overflow-hidden bg-background">
         <AnimatedGridPattern
@@ -181,7 +179,7 @@ export default function SetupProfilePage() {
     );
   }
 
-  if (status === "unauthenticated" || !session?.user || !profileData) {
+  if (!isAuthenticated || !user || !profileData) {
     return null; // Will redirect
   }
 

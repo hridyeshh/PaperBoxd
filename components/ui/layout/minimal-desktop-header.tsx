@@ -2,17 +2,34 @@
 
 import Image from "next/image";
 import React from "react";
-import { SearchIcon, ChevronDown } from "lucide-react";
+import { SearchIcon, ChevronDown, NotebookPen } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/providers/auth-provider";
+import { logoutAction } from "@/lib/auth/actions";
+import { signOut } from "next-auth/react";
+import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { cn, DEFAULT_AVATAR } from "@/lib/utils";
-import { Button } from "@/components/ui/primitives/button";
 import { SearchModal, CommandItem } from "@/components/ui/features/search-modal";
 import { ThemeToggle } from "@/components/ui/features/theme-toggle";
 import { Dropdown } from "@/components/ui/primitives/dropdown";
-import { signOut } from "@/lib/auth-client";
 import { DeleteAccountDialog } from "@/components/ui/dialogs/delete-account-dialog";
+import { GeneralDiaryEditorDialog } from "@/components/ui/dialogs/general-diary-editor-dialog";
+import { ActivityPopover } from "@/components/ui/layout/activity-popover";
 import { toast } from "sonner";
+import { Pinyon_Script } from "next/font/google";
+
+const pinyonScript = Pinyon_Script({
+  weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const NAV_LINKS = [
+  { label: "Home", href: "/" },
+  { label: "Find a new book", href: "/recommendations" },
+  { label: "Lists", href: "/lists" },
+  { label: "Leaderboard", href: "/leaderboard" },
+];
 
 const searchItems: CommandItem[] = [
   {
@@ -44,43 +61,52 @@ const searchItems: CommandItem[] = [
 export function MinimalDesktopHeader() {
   const router = useRouter();
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const { user, isAuthenticated } = useAuth();
+
   const [isProfileMenuOpen, setIsProfileMenuOpen] = React.useState(false);
-  const [fetchedAvatar, setFetchedAvatar] = React.useState<string | null>(null);
-  const [isLoadingAvatar, setIsLoadingAvatar] = React.useState(false);
   const [isNavigatingToProfile, setIsNavigatingToProfile] = React.useState(false);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = React.useState(false);
+  const [writeDialogOpen, setWriteDialogOpen] = React.useState(false);
+  const [hasNewActivities, setHasNewActivities] = React.useState(false);
 
-  // Fetch logged-in user's profile avatar from database
+  // Use avatar directly from auth cookie — no per-render fetch needed
+  const avatarSrc =
+    user?.avatar_url && user.avatar_url.trim() !== "" ? user.avatar_url : DEFAULT_AVATAR;
+
+  // Check for new activities every 30 s
   React.useEffect(() => {
-    if (session?.user?.username) {
-      const username = session.user.username;
-      setIsLoadingAvatar(true);
-      fetch(`/api/users/${encodeURIComponent(username)}`)
-        .then((res) => {
-          if (res.ok) {
-            return res.json();
-          }
-          return null;
-        })
-        .then((data) => {
-          if (data?.user?.avatar) {
-            setFetchedAvatar(data.user.avatar);
-          }
-        })
-        .catch((error) => {
-          console.error("Error fetching avatar:", error);
-        })
-        .finally(() => {
-          setIsLoadingAvatar(false);
-        });
-    }
-  }, [session?.user?.username]);
+    if (!isAuthenticated || !user?.username) return;
 
-  const avatarSrc = fetchedAvatar || session?.user?.image || DEFAULT_AVATAR;
-  const profileLabel = session?.user?.username
-    ? `View ${session.user.username}'s profile`
-    : "View profile";
+    const username = user.username;
+
+    if (pathname === "/activity") {
+      localStorage.setItem(`activity_last_viewed_${username}`, new Date().toISOString());
+      setHasNewActivities(false);
+      return;
+    }
+
+    const lastViewed = localStorage.getItem(`activity_last_viewed_${username}`);
+
+    const check = async () => {
+      try {
+        const url = lastViewed
+          ? `/api/users/${encodeURIComponent(username)}/activities/check-new?lastViewed=${encodeURIComponent(lastViewed)}`
+          : `/api/users/${encodeURIComponent(username)}/activities/check-new`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          setHasNewActivities(data.hasNewActivities || false);
+        }
+      } catch {
+        // silent fail
+      }
+    };
+
+    check();
+    const interval = setInterval(check, 30000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, user?.username, pathname]);
 
   // Reset navigation loading state when pathname changes
   React.useEffect(() => {
@@ -88,9 +114,8 @@ export function MinimalDesktopHeader() {
   }, [pathname]);
 
   const handleProfileClick = () => {
-    if (!session?.user?.username) return;
-    const targetPath = `/u/${session.user.username}`;
-    // Only show loading if not already on profile page
+    if (!user?.username) return;
+    const targetPath = `/u/${user.username}`;
     if (pathname !== targetPath) {
       setIsNavigatingToProfile(true);
       router.push(targetPath);
@@ -98,20 +123,19 @@ export function MinimalDesktopHeader() {
   };
 
   const handleLogout = async () => {
+    setIsLoggingOut(true);
     try {
-      await signOut();
-      toast.success("Logged out successfully");
-      window.location.href = "/auth";
-    } catch (error) {
-      console.error("Logout error:", error);
-      window.location.href = "/auth";
+      await logoutAction();
+      await signOut({ redirect: false });
+    } catch {
+      // ignore
     }
+    window.location.href = "/auth";
   };
 
   const handleCopyProfileLink = () => {
-    if (session?.user?.username) {
-      const profileUrl = `${window.location.origin}/u/${session.user.username}`;
-      navigator.clipboard.writeText(profileUrl);
+    if (user?.username) {
+      navigator.clipboard.writeText(`${window.location.origin}/u/${user.username}`);
       toast.success("Profile link copied to clipboard");
       setIsProfileMenuOpen(false);
     }
@@ -119,96 +143,167 @@ export function MinimalDesktopHeader() {
 
   return (
     <>
-      {/* Full-page loader overlay when navigating to profile */}
+      {/* Full-page overlay when navigating */}
       {isNavigatingToProfile && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-4">
-            <div className="text-sm text-muted-foreground">Loading profile...</div>
-          </div>
+          <div className="text-sm text-muted-foreground">Loading profile…</div>
         </div>
       )}
-      <header
-        className={cn(
-          "hidden md:flex fixed top-0 left-16 right-0 z-[100] w-[calc(100%-4rem)] border-b",
-          "border-gray-200/50 dark:border-border/60",
-          "bg-white dark:bg-black"
-        )}
-      >
-        <nav className="mx-auto flex h-16 w-full items-center justify-between px-6 gap-4">
-          {/* Search Bar */}
-          <div className="flex-1">
-            <SearchModal data={searchItems}>
-              <Button
-                variant="outline"
-                className="relative h-12 w-full cursor-pointer px-4 text-sm justify-between gap-2"
-              >
-                <span className="text-muted-foreground">
-                  Search library...
-                </span>
-                <SearchIcon className="size-4" />
-              </Button>
-            </SearchModal>
-          </div>
+      {isLoggingOut && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <TetrisLoading size="sm" speed="fast" loadingText="Signing out…" />
+        </div>
+      )}
 
-          {/* Theme Toggle */}
-          <div className="flex-shrink-0">
-            <ThemeToggle className="transition-transform hover:scale-[1.02]" />
-          </div>
+      <header className="hidden md:flex fixed top-0 left-0 right-0 z-[100] h-16 items-center border-b border-border/60 bg-background/95 backdrop-blur-md px-5 gap-4">
 
-          {/* Profile Button and Dropdown */}
-          {session?.user && (
-            <div className="flex items-center gap-2 flex-shrink-0">
+        {/* ── Left: wordmark + nav ── */}
+        <div className="flex flex-shrink-0 items-center gap-1">
+          {/* Wordmark */}
+          <button
+            type="button"
+            onClick={() =>
+              pathname !== "/" ? router.push("/") : window.scrollTo({ top: 0, behavior: "smooth" })
+            }
+            className="flex items-center gap-2 pr-3 hover:opacity-75 transition-opacity"
+          >
+            <Image
+              src="/icon.jpg"
+              alt="PaperBoxd"
+              width={26}
+              height={26}
+              className="rounded-full flex-shrink-0"
+              priority
+            />
+            <span
+              className={cn("text-[1.55rem] leading-none text-foreground select-none", pinyonScript.className)}
+            >
+              PaperBoxd
+            </span>
+          </button>
+
+          {/* Divider */}
+          <div className="h-5 w-px bg-border/70 mx-1 flex-shrink-0" />
+
+          {/* Nav links */}
+          <nav className="flex items-center gap-0.5">
+            {NAV_LINKS.map(({ label, href }) => {
+              const isActive =
+                href === "/" ? pathname === "/" : pathname.startsWith(href);
+              return (
+                <button
+                  key={href}
+                  type="button"
+                  onClick={() => router.push(href)}
+                  className={cn(
+                    "px-3 py-1.5 text-[0.8125rem] font-medium rounded-lg transition-colors whitespace-nowrap",
+                    isActive
+                      ? "bg-muted text-foreground font-semibold"
+                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                  )}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* ── Center: compact search ── */}
+        <div className="flex-1 flex justify-center">
+          <SearchModal data={searchItems}>
+            <button
+              type="button"
+              className={cn(
+                "flex h-9 w-full max-w-[420px] items-center gap-2 rounded-lg border border-border bg-muted/50 px-3",
+                "text-[0.8125rem] text-muted-foreground transition-colors hover:bg-muted hover:border-border/80"
+              )}
+            >
+              <SearchIcon className="size-3.5 flex-shrink-0" />
+              <span className="flex-1 text-left">Search…</span>
+              <kbd className="hidden sm:flex items-center font-mono text-[10px] bg-background border border-border rounded px-1.5 py-px leading-none">
+                ⌘K
+              </kbd>
+            </button>
+          </SearchModal>
+        </div>
+
+        {/* ── Right: write, bell, theme, profile ── */}
+        <div className="flex flex-shrink-0 items-center gap-1.5">
+          {/* Write */}
+          {isAuthenticated && (
+            <button
+              type="button"
+              onClick={() => setWriteDialogOpen(true)}
+              title="Write a diary entry"
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+            >
+              <NotebookPen className="size-[18px]" />
+            </button>
+          )}
+
+          {/* Notifications / Updates */}
+          {isAuthenticated && (
+            <ActivityPopover
+              username={user?.username || ""}
+              hasNewActivities={hasNewActivities}
+              onOpen={() => setHasNewActivities(false)}
+              variant="bell"
+            />
+          )}
+
+          {/* Theme toggle */}
+          <ThemeToggle />
+
+          {/* Profile */}
+          {isAuthenticated && (
+            <div className="flex items-center gap-1 ml-1">
               <button
                 type="button"
                 aria-label="View profile"
                 onClick={handleProfileClick}
-                disabled={isNavigatingToProfile || isLoadingAvatar}
+                disabled={isNavigatingToProfile}
                 className={cn(
-                  "relative flex size-10 items-center justify-center rounded-full border-2 border-foreground/80 p-0.5",
-                  "transition-all duration-150 hover:scale-[1.10] active:scale-95 cursor-pointer",
-                  (isNavigatingToProfile || isLoadingAvatar) && "opacity-75 cursor-wait"
+                  "relative flex size-8 items-center justify-center rounded-full border-2 border-foreground/70 p-0.5 select-none",
+                  "transition-all duration-150 hover:scale-105 active:scale-95 cursor-pointer",
+                  isNavigatingToProfile && "opacity-75 cursor-wait"
                 )}
               >
                 <Image
                   src={avatarSrc}
-                  alt={profileLabel}
-                  width={40}
-                  height={40}
-                  className="size-8 rounded-full object-cover"
+                  alt="Profile"
+                  width={32}
+                  height={32}
+                  draggable={false}
+                  className="size-6 rounded-full object-cover pointer-events-none"
                 />
               </button>
-              <Dropdown.Root
-                isOpen={isProfileMenuOpen}
-                onOpenChange={setIsProfileMenuOpen}
-              >
+              <Dropdown.Root isOpen={isProfileMenuOpen} onOpenChange={setIsProfileMenuOpen}>
                 <Dropdown.Trigger
-                  aria-label={profileLabel}
+                  aria-label="Profile menu"
                   aria-haspopup="menu"
                   aria-expanded={isProfileMenuOpen}
-                  className="rounded-full p-1 transition hover:bg-foreground/5"
+                  className="rounded-full p-0.5 transition hover:bg-foreground/5"
                 >
                   <ChevronDown
                     className={cn(
-                      "size-5 text-muted-foreground transition-transform duration-200",
-                      isProfileMenuOpen && "rotate-180",
+                      "size-4 text-muted-foreground transition-transform duration-200",
+                      isProfileMenuOpen && "rotate-180"
                     )}
                   />
                 </Dropdown.Trigger>
                 <Dropdown.Popover align="end">
                   <Dropdown.Menu>
-                    <Dropdown.Item 
-                      label="Copy profile link" 
-                      onClick={handleCopyProfileLink}
-                    />
-                    <Dropdown.Item 
-                      label="Log out" 
+                    <Dropdown.Item label="Copy profile link" onClick={handleCopyProfileLink} />
+                    <Dropdown.Item
+                      label="Log out"
                       onClick={() => {
                         handleLogout();
                         setIsProfileMenuOpen(false);
                       }}
                     />
-                    <Dropdown.Item 
-                      label="Delete account" 
+                    <Dropdown.Item
+                      label="Delete account"
                       onClick={() => {
                         setIsDeleteAccountOpen(true);
                         setIsProfileMenuOpen(false);
@@ -220,11 +315,20 @@ export function MinimalDesktopHeader() {
               </Dropdown.Root>
             </div>
           )}
-        </nav>
+        </div>
       </header>
 
-      {/* Delete Account Dialog */}
-      {session?.user && (
+      {/* Write dialog (moved here from DesktopSidebar) */}
+      {isAuthenticated && user?.username && (
+        <GeneralDiaryEditorDialog
+          open={writeDialogOpen}
+          onOpenChange={setWriteDialogOpen}
+          username={user.username}
+        />
+      )}
+
+      {/* Delete Account dialog */}
+      {isAuthenticated && (
         <DeleteAccountDialog
           open={isDeleteAccountOpen}
           onOpenChange={setIsDeleteAccountOpen}
@@ -233,4 +337,3 @@ export function MinimalDesktopHeader() {
     </>
   );
 }
-

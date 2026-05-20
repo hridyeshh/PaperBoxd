@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { signOut } from "next-auth/react";
+import { logoutAction } from "@/lib/auth/actions";
 
 export default function ClearCookiesPage() {
   const [cleared, setCleared] = useState(false);
@@ -19,9 +19,11 @@ export default function ClearCookiesPage() {
       }
     };
 
-    // Sign out and clear cookies
-    signOut({ redirect: false }).then(() => {
-      clearAllCookies();
+    // Clear JWT cookies and local cookies
+    clearAllCookies();
+    logoutAction().then(() => {
+      setCleared(true);
+    }).catch(() => {
       setCleared(true);
     });
   }, []);
