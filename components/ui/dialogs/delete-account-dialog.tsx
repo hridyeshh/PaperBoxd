@@ -3,6 +3,7 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trash2, X, Loader2, AlertTriangle } from "lucide-react";
+import { logoutAction } from "@/lib/auth/actions";
 import { signOut } from "next-auth/react";
 import { toast } from "sonner";
 
@@ -101,8 +102,13 @@ export function DeleteAccountDialog({
   };
 
   const handleGoodbyeOk = async () => {
-    // Sign out and redirect to auth page
-    await signOut({ callbackUrl: "/auth", redirect: true });
+    try {
+      await logoutAction();
+      await signOut({ redirect: false });
+    } catch {
+      // ignore errors, navigate anyway
+    }
+    window.location.href = "/auth";
   };
 
   const handleClose = () => {

@@ -1,53 +1,93 @@
 import { NextRequest, NextResponse } from "next/server";
-import mongoose from "mongoose";
-import connectDB from "@/lib/db/mongodb";
-import User from "@/lib/db/models/User";
-import Book from "@/lib/db/models/Book";
-import type {
-  IBookReference,
-  IBookshelfBook,
-  ILikedBook,
-  ITbrBook,
-} from "@/lib/db/models/User";
-import {
-  getBookByISBN,
-  transformISBNdbBook,
-} from "@/lib/api/isbndb";
-import {
-  getOpenLibraryWork,
-  transformOpenLibraryBook,
-} from "@/lib/api/open-library";
+import { bookshelfApi, favoritesApi, goFetchAuthed, userApi } from "@/lib/api/endpoints";
 
-// Type for Open Library work response
-type OpenLibraryWorkData = {
-  key?: string;
-  title?: string;
-  authors?: Array<{ name?: string } | string>;
-  first_publish_year?: number;
-  isbn?: string[];
-  publishers?: string[];
-  subjects?: string[];
-  ratings_average?: number;
-  ratings_count?: number;
-};
+function isPostgresBookUUID(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s.trim());
+}
+
+/** Strip to 10- or 13-digit ISBN for Go ISBNdb lookup. */
+function normalizeIsbnForGo(s: string): string | null {
+  const d = s.replace(/\D/g, "");
+  if (d.length === 13 || d.length === 10) return d;
+  if (d.length > 13) return d.slice(-13);
+  return null;
+}
 
 /**
- * Add a book to user's collection (bookshelf, TBR, liked, etc.)
+ * Go /books/:id/like only accepts a Postgres `books.id` (UUID). Resolve from ISBN or Google volume id via POST /api/v1/books.
+ * Priority: PG UUID → ISBN → Google Books ID → book_id treated as ISBN or Google ID directly.
+ */
+type ResolveResult =
+  | { ok: true; uuid: string }
+  | { ok: false; status: number; message: string };
+
+async function resolvePostgresBookIDForLike(params: {
+  book_id?: string;
+  isbn?: string;
+  google_books_id?: string;
+}): Promise<ResolveResult> {
+  const id = (params.book_id ?? "").trim();
+  if (isPostgresBookUUID(id)) return { ok: true, uuid: id };
+
+  let rawIsbn = (params.isbn ?? "").trim();
+  let g = (params.google_books_id ?? "").trim();
+
+  // If no isbn/google_books_id was explicitly sent, try interpreting book_id directly:
+  // - could be a bare ISBN (10 or 13 digits)
+  // - could be a Google Books volume ID (alphanumeric, not a Mongo 24-char hex)
+  if (!rawIsbn && !g && id) {
+    const isbnFromId = normalizeIsbnForGo(id);
+    const isMongo24 = /^[0-9a-f]{24}$/i.test(id);
+    if (isbnFromId) {
+      rawIsbn = isbnFromId;
+    } else if (!isMongo24 && /^[A-Za-z0-9_-]{6,}$/.test(id)) {
+      g = id;
+    }
+  }
+
+  const isbnNorm = rawIsbn ? normalizeIsbnForGo(rawIsbn) : null;
+  if (!isbnNorm && !g) {
+    return {
+      ok: false,
+      status: 400,
+      message:
+        "Could not resolve this book. Send a Postgres book UUID as bookId, or an ISBN / Google Books volume id.",
+    };
+  }
+  const body = isbnNorm ? { isbn: isbnNorm } : { google_books_id: g };
+  const { data, status } = await goFetchAuthed("/api/v1/books", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (status >= 400) {
+    const err = data as { error?: { message?: string }; message?: string };
+    return {
+      ok: false,
+      status,
+      message: err?.error?.message ?? err?.message ?? `Book lookup failed (${status})`,
+    };
+  }
+  const row = data as { id?: string };
+  const rid = (row?.id ?? "").trim();
+  if (!isPostgresBookUUID(rid)) {
+    return { ok: false, status: 502, message: "Book lookup returned an invalid id" };
+  }
+  return { ok: true, uuid: rid };
+}
+
+/**
+ * Add a book to a user's collection.
  *
  * POST /api/users/[username]/books
  * Body: {
- *   isbndbId?: string,        // ISBN-10 or ISBN-13 (ISBNdb ID)
- *   openLibraryId?: string,   // Open Library ID
- *   bookId?: string,          // MongoDB _id
- *   type: "bookshelf" | "tbr" | "liked" | "top" | "favorite" | "currently_reading",
- *   // Additional data based on type
- *   finishedOn?: Date,
+ *   googleBooksId?: string,
+ *   isbn?: string,
+ *   book_id?: string,
+ *   type: "bookshelf" | "tbr" | "liked" | "favorite" | "currently_reading",
+ *   status?: "read" | "reading" | "to-read",   // for bookshelf
  *   rating?: number,
- *   thoughts?: string,
- *   format?: string,
- *   urgency?: string,
- *   reason?: string,
- *   whyNow?: string
+ *   finishedOn?: string,
+ *   ...
  * }
  */
 export async function POST(
@@ -56,346 +96,136 @@ export async function POST(
 ) {
   try {
     const { username } = await context.params;
-    const body = await request.json();
-    const { isbndbId, openLibraryId, bookId, type, ...additionalData } = body;
+    const raw = (await request.json()) as Record<string, unknown>;
+    const type = raw.type as string | undefined;
+    const rawGoogle = (raw.googleBooksId ?? raw.google_books_id) as string | undefined;
+    let isbn = (raw.isbn ?? raw.isbndbId) as string | undefined;
+    let googleForGo = rawGoogle;
+    let book_id: string | undefined;
+
+    // The client sometimes sends an ISBN or Google Books volume ID in `bookId`
+    // (because book.id can be any of those). Only forward as book_id when it's a
+    // valid Postgres UUID — otherwise promote it to isbn/google_books_id so the
+    // Go backend doesn't try to uuid.Parse() a non-UUID and reject the request.
+    const rawBookId = (raw.book_id ?? raw.bookId) as string | undefined;
+    if (rawBookId) {
+      const trimmed = rawBookId.trim();
+      if (isPostgresBookUUID(trimmed)) {
+        book_id = trimmed;
+      } else {
+        const isbnFromId = normalizeIsbnForGo(trimmed);
+        if (!isbn && isbnFromId) {
+          isbn = isbnFromId;
+        } else if (!googleForGo && !isbnFromId && /^[A-Za-z0-9_-]{6,20}$/.test(trimmed) && !/^[0-9a-f]{24}$/i.test(trimmed)) {
+          googleForGo = trimmed;
+        }
+      }
+    }
+
+    const rest = raw;
 
     if (!username || !type) {
-      return NextResponse.json(
-        { error: "Username and type are required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Username and type are required" }, { status: 400 });
     }
 
-    // Must provide at least one book identifier
-    if (!isbndbId && !openLibraryId && !bookId) {
-      return NextResponse.json(
-        { error: "Either isbndbId, openLibraryId, or bookId is required" },
-        { status: 400 }
-      );
-    }
-
-    // Validate type
-    const validTypes = [
-      "bookshelf",
-      "tbr",
-      "liked",
-      "top",
-      "favorite",
-      "currently_reading",
-    ];
-    if (!validTypes.includes(type)) {
-      return NextResponse.json({ error: "Invalid type" }, { status: 400 });
-    }
-
-    // Connect to database
-    await connectDB();
-
-    // Find book by provided identifier (priority: bookId > isbndbId > openLibraryId)
-    let book = null;
-    if (bookId) {
-      book = await Book.findById(bookId);
-    } else if (isbndbId) {
-      book = await Book.findOne({ isbndbId });
-    } else if (openLibraryId) {
-      book = await Book.findOne({ openLibraryId });
-    }
-
-    // If book not found, try to fetch from APIs (ISBNdb first)
-    if (!book && isbndbId) {
-      console.log(`[User Books] Trying ISBNdb for ISBN: "${isbndbId}"`);
-      try {
-        const isbndbBook = await getBookByISBN(isbndbId);
-        const transformedData = transformISBNdbBook(isbndbBook);
-        await Book.findOrCreateFromISBNdb(transformedData);
-        book = await Book.findOne({ isbndbId });
-      } catch (error) {
-        console.error("Failed to fetch from ISBNdb:", error);
-      }
-    }
-
-    // Fallback to Open Library if ISBNdb fails or not available
-    if (!book && openLibraryId) {
-      console.log(`[User Books] Trying Open Library for ID: "${openLibraryId}"`);
-      try {
-        const workData = await getOpenLibraryWork(openLibraryId) as OpenLibraryWorkData;
-        // Extract author names from various formats
-        const authorNames: string[] = [];
-        if (workData.authors) {
-          for (const author of workData.authors) {
-            if (typeof author === 'string') {
-              authorNames.push(author);
-            } else if (author && typeof author === 'object' && 'name' in author && typeof author.name === 'string') {
-              authorNames.push(author.name);
-            }
-          }
-        }
-        const transformedDataRaw = transformOpenLibraryBook({
-          key: workData.key || `/works/${openLibraryId}`,
-          title: workData.title || "",
-          author_name: authorNames,
-          cover_i: undefined, // Will be handled in transformation
-          first_publish_year: workData.first_publish_year,
-          isbn: workData.isbn || [],
-          publisher: workData.publishers || [],
-          subject: workData.subjects || [],
-          ratings_average: workData.ratings_average,
-          ratings_count: workData.ratings_count,
-        });
-        
-        // Convert null to undefined for imageLinks properties to match IOpenLibraryBookData interface
-        const transformedData = {
-          ...transformedDataRaw,
-          volumeInfo: {
-            ...transformedDataRaw.volumeInfo,
-            imageLinks: transformedDataRaw.volumeInfo.imageLinks ? {
-              thumbnail: transformedDataRaw.volumeInfo.imageLinks.thumbnail === null ? undefined : transformedDataRaw.volumeInfo.imageLinks.thumbnail,
-              smallThumbnail: transformedDataRaw.volumeInfo.imageLinks.smallThumbnail === null ? undefined : transformedDataRaw.volumeInfo.imageLinks.smallThumbnail,
-              small: transformedDataRaw.volumeInfo.imageLinks.small === null ? undefined : transformedDataRaw.volumeInfo.imageLinks.small,
-              medium: transformedDataRaw.volumeInfo.imageLinks.medium === null ? undefined : transformedDataRaw.volumeInfo.imageLinks.medium,
-              large: transformedDataRaw.volumeInfo.imageLinks.large === null ? undefined : transformedDataRaw.volumeInfo.imageLinks.large,
-              extraLarge: transformedDataRaw.volumeInfo.imageLinks.extraLarge === null ? undefined : transformedDataRaw.volumeInfo.imageLinks.extraLarge,
-            } : undefined,
-          },
-        };
-        
-        await Book.findOrCreateFromOpenLibrary(transformedData);
-        book = await Book.findOne({ openLibraryId });
-      } catch (error) {
-        console.error("Failed to fetch from Open Library:", error);
-      }
-    }
-
-    if (!book) {
-      return NextResponse.json(
-        { error: "Book not found. Please ensure the book exists in our database." },
-        { status: 404 }
-      );
-    }
-
-    // Find user
-    const user = await User.findOne({ username });
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    // Prepare book reference
-    const bookIdObj = book._id as mongoose.Types.ObjectId;
-    
-    // Extract author - handle various formats and edge cases
-    let author = "Unknown Author";
-    if (book.volumeInfo?.authors && Array.isArray(book.volumeInfo.authors) && book.volumeInfo.authors.length > 0) {
-      // Get first author, filter out empty strings
-      const authors = book.volumeInfo.authors.filter((a: string) => a && a.trim() !== '');
-      if (authors.length > 0) {
-        author = authors[0].trim();
-      }
-    }
-    
-    // Log warning if author is missing
-    if (author === "Unknown Author") {
-      console.warn(`[User Books] Book "${book.volumeInfo?.title || 'Unknown'}" added without author information`);
-    }
-    
-    const bookReference = {
-      bookId: bookIdObj,
-      isbndbId: book.isbndbId || undefined,
-      openLibraryId: book.openLibraryId || undefined,
-      title: book.volumeInfo.title,
-      author: author,
-      cover:
-        book.volumeInfo.imageLinks?.thumbnail ||
-        book.volumeInfo.imageLinks?.smallThumbnail ||
-        book.volumeInfo.imageLinks?.medium ||
-        "",
-      mood: additionalData.mood,
-    };
-
-    // Helper function to check if book exists in collection
-    type BookCollectionItem = IBookReference | IBookshelfBook | ILikedBook | ITbrBook;
-    const findBookInCollection = (collection: BookCollectionItem[]): number => {
-      return collection.findIndex((item) => {
-        const itemBookId = item.bookId?.toString() || item.bookId;
-        const currentBookId = bookIdObj.toString();
-        return (
-          itemBookId === currentBookId ||
-          (book.isbndbId && item.isbndbId === book.isbndbId) ||
-          (book.openLibraryId && item.openLibraryId === book.openLibraryId) ||
-          item.title?.toLowerCase() === book.volumeInfo.title?.toLowerCase()
-        );
-      });
-    };
-
-    // Check if book already exists and handle toggle (remove if exists, add if not)
-    let existingIndex = -1;
-    let isRemoving = false;
-
+    // Map old "type" values to Go backend endpoints
     switch (type) {
-      case "bookshelf":
-        existingIndex = findBookInCollection(user.bookshelf);
-        break;
-      case "tbr":
-        existingIndex = findBookInCollection(user.tbrBooks);
-        break;
-      case "liked":
-        existingIndex = findBookInCollection(user.likedBooks);
-        break;
-      case "top":
-        existingIndex = findBookInCollection(user.topBooks);
-        break;
-      case "favorite":
-        existingIndex = findBookInCollection(user.favoriteBooks);
-        break;
-      case "currently_reading":
-        existingIndex = findBookInCollection(user.currentlyReading);
-        break;
-    }
+      case "bookshelf": {
+        // Map to Go bookshelf with status "read"
+        const goBody: Record<string, unknown> = { status: (rest.status as string) ?? "read" };
+        if (googleForGo) goBody.google_books_id = googleForGo;
+        if (isbn) goBody.isbn = isbn;
+        if (book_id) goBody.book_id = book_id;
+        if (rest.rating !== undefined) goBody.rating = rest.rating;
+        if (rest.finishedOn) goBody.finished_at = rest.finishedOn;
 
-    // If book exists, remove it (toggle off)
-    if (existingIndex !== -1) {
-      isRemoving = true;
-      switch (type) {
-        case "bookshelf":
-          user.bookshelf.splice(existingIndex, 1);
-          user.totalBooksRead = Math.max(0, user.totalBooksRead - 1);
-          // Note: We don't decrement book stats here as other users might have the book
-          break;
-        case "tbr":
-          user.tbrBooks.splice(existingIndex, 1);
-          break;
-        case "liked":
-          user.likedBooks.splice(existingIndex, 1);
-          break;
-        case "top":
-          user.topBooks.splice(existingIndex, 1);
-          break;
-        case "favorite":
-          user.favoriteBooks.splice(existingIndex, 1);
-          break;
-        case "currently_reading":
-          user.currentlyReading.splice(existingIndex, 1);
-          break;
+        const { data, status } = await bookshelfApi.add(username, goBody);
+        if (status >= 400) {
+          const err = data as { error?: { message?: string }; message?: string };
+          return NextResponse.json({ error: err?.error?.message ?? "Failed to add to bookshelf" }, { status });
+        }
+        return NextResponse.json({ message: "Book added to bookshelf successfully", ...(data as object) });
       }
-    }
 
-    // If not removing, add to appropriate collection
-    if (!isRemoving) {
-    switch (type) {
-      case "bookshelf":
-        user.bookshelf.push({
-          ...bookReference,
-          finishedOn: additionalData.finishedOn
-            ? new Date(additionalData.finishedOn)
-            : new Date(),
-          format: additionalData.format,
-          rating: additionalData.rating,
-          thoughts: additionalData.thoughts,
-        });
-        user.totalBooksRead += 1;
-        await book.updateStats("read");
-        if (additionalData.rating) {
-          await book.updateStats("rating", additionalData.rating);
+      case "tbr": {
+        // Map to Go bookshelf with status "to-read"
+        const goBody: Record<string, unknown> = { status: "to-read" };
+        if (googleForGo) goBody.google_books_id = googleForGo;
+        if (isbn) goBody.isbn = isbn;
+        if (book_id) goBody.book_id = book_id;
+        if (rest.urgency) goBody.tbr_priority = rest.urgency;
+        if (rest.whyNow) goBody.tbr_notes = rest.whyNow;
+
+        const { data, status } = await bookshelfApi.add(username, goBody);
+        if (status >= 400) {
+          const err = data as { error?: { message?: string }; message?: string };
+          return NextResponse.json({ error: err?.error?.message ?? "Failed to add to TBR" }, { status });
         }
-
-        // Add activity
-        user.activities.push({
-          type: "read",
-          bookId: bookIdObj,
-          rating: additionalData.rating,
-          timestamp: new Date(),
-        });
-        break;
-
-      case "tbr":
-        user.tbrBooks.push({
-          ...bookReference,
-          addedOn: new Date(),
-          urgency: additionalData.urgency,
-          whyNow: additionalData.whyNow,
-        });
-        await book.updateStats("tbr");
-
-        // Add activity
-        user.activities.push({
-          type: "added_to_list",
-          bookId: bookIdObj,
-          timestamp: new Date(),
-        });
-        break;
-
-      case "liked":
-        user.likedBooks.push({
-          ...bookReference,
-          likedOn: new Date(),
-          reason: additionalData.reason,
-        });
-        await book.updateStats("like");
-
-        // Add activity
-        user.activities.push({
-          type: "liked",
-          bookId: bookIdObj,
-          timestamp: new Date(),
-        });
-        break;
-
-      case "top":
-        if (user.topBooks.length >= 6) {
-          return NextResponse.json(
-            { error: "Maximum 6 top books allowed" },
-            { status: 400 }
-          );
-        }
-        user.topBooks.push(bookReference);
-        break;
-
-      case "favorite":
-        if (user.favoriteBooks.length >= 4) {
-          return NextResponse.json(
-            { error: "Maximum 4 favorite books allowed" },
-            { status: 400 }
-          );
-        }
-        user.favoriteBooks.push(bookReference);
-        break;
-
-      case "currently_reading":
-        user.currentlyReading.push(bookReference);
-
-        // Add activity
-        user.activities.push({
-          type: "started_reading",
-          bookId: bookIdObj,
-          timestamp: new Date(),
-        });
-        break;
+        return NextResponse.json({ message: "Book added to TBR successfully", ...(data as object) });
       }
+
+      case "currently_reading": {
+        // Map to Go bookshelf with status "reading"
+        const goBody: Record<string, unknown> = { status: "reading" };
+        if (googleForGo) goBody.google_books_id = googleForGo;
+        if (isbn) goBody.isbn = isbn;
+        if (book_id) goBody.book_id = book_id;
+
+        const { data, status } = await bookshelfApi.add(username, goBody);
+        if (status >= 400) {
+          const err = data as { error?: { message?: string }; message?: string };
+          return NextResponse.json({ error: err?.error?.message ?? "Failed to add to currently reading" }, { status });
+        }
+        return NextResponse.json({ message: "Book added to currently reading successfully", ...(data as object) });
+      }
+
+      case "favorite": {
+        const goBody: Record<string, unknown> = {};
+        if (googleForGo) goBody.google_books_id = googleForGo;
+        if (isbn) goBody.isbn = isbn;
+        if (book_id) goBody.book_id = book_id;
+
+        const { data, status } = await favoritesApi.add(username, goBody);
+        if (status >= 400) {
+          const err = data as { error?: { message?: string }; message?: string };
+          return NextResponse.json({ error: err?.error?.message ?? "Failed to add to favorites" }, { status });
+        }
+        return NextResponse.json({ message: "Book added to favorites successfully", ...(data as object) });
+      }
+
+      case "liked": {
+        const resolved = await resolvePostgresBookIDForLike({
+          book_id,
+          isbn,
+          google_books_id: googleForGo,
+        });
+        if (!resolved.ok) {
+          return NextResponse.json({ error: resolved.message }, { status: resolved.status });
+        }
+        const { data, status } = await goFetchAuthed(`/api/v1/books/${encodeURIComponent(resolved.uuid)}/like`, {
+          method: "POST",
+        });
+        if (status >= 400) {
+          const err = data as { error?: { message?: string }; message?: string };
+          return NextResponse.json({ error: err?.error?.message ?? "Failed to like book" }, { status });
+        }
+        return NextResponse.json({ message: "Book liked successfully", id: resolved.uuid, ...(data as object) });
+      }
+
+      default:
+        return NextResponse.json({ error: "Invalid type" }, { status: 400 });
     }
-
-    await user.save();
-
-    return NextResponse.json({
-      message: isRemoving 
-        ? `Book removed from ${type} successfully`
-        : `Book added to ${type} successfully`,
-      book: bookReference,
-      removed: isRemoving,
-    });
-  } catch (error: unknown) {
+  } catch (error) {
     console.error("Add book error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      {
-        error: "Failed to add book",
-        details: errorMessage,
-      },
+      { error: "Failed to add book", details: error instanceof Error ? error.message : "Unknown" },
       { status: 500 }
     );
   }
 }
 
 /**
- * Get user's books by type
+ * Get user's books by type.
  *
  * GET /api/users/[username]/books?type=bookshelf&limit=10&offset=0
  */
@@ -405,86 +235,93 @@ export async function GET(
 ) {
   try {
     const { username } = await context.params;
-    const searchParams = request.nextUrl.searchParams;
-    const type = searchParams.get("type") || "bookshelf";
-    const limit = parseInt(searchParams.get("limit") || "10");
-    const offset = parseInt(searchParams.get("offset") || "0");
-
-    // Connect to database
-    await connectDB();
-
-    // Find user
-    const user = await User.findOne({ username }).select(
-      `${type === "top" ? "topBooks" : type === "favorite" ? "favoriteBooks" : type === "tbr" ? "tbrBooks" : type === "liked" ? "likedBooks" : type === "currently_reading" ? "currentlyReading" : "bookshelf"}`
-    );
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    type BookCollection = IBookReference[] | IBookshelfBook[] | ILikedBook[] | ITbrBook[];
-    let books: BookCollection = [];
-    let total = 0;
+    const { searchParams } = request.nextUrl;
+    const type = searchParams.get("type") ?? "bookshelf";
+    const limit = parseInt(searchParams.get("limit") ?? "10");
+    const page = Math.floor(parseInt(searchParams.get("offset") ?? "0") / limit) + 1;
 
     switch (type) {
-      case "top":
-        books = user.topBooks;
-        total = user.topBooks.length;
-        break;
-      case "favorite":
-        books = user.favoriteBooks;
-        total = user.favoriteBooks.length;
-        break;
-      case "tbr":
-        books = user.tbrBooks;
-        total = user.tbrBooks.length;
-        break;
-      case "liked":
-        books = user.likedBooks;
-        total = user.likedBooks.length;
-        break;
-      case "currently_reading":
-        books = user.currentlyReading;
-        total = user.currentlyReading.length;
-        break;
-      case "bookshelf":
+      case "bookshelf": {
+        const { data, status } = await bookshelfApi.get(username, page, limit, "read");
+        if (status >= 400) return NextResponse.json({ error: "Failed to fetch bookshelf" }, { status });
+        const bs = data as { books: unknown[]; total_count: number };
+        return NextResponse.json({ type, total: bs.total_count, limit, offset: (page - 1) * limit, books: bs.books });
+      }
+
+      case "tbr": {
+        const { data, status } = await bookshelfApi.getTBR(username, page, limit);
+        if (status >= 400) return NextResponse.json({ error: "Failed to fetch TBR" }, { status });
+        const tbr = data as unknown[];
+        return NextResponse.json({ type, total: tbr.length, limit, offset: (page - 1) * limit, books: tbr });
+      }
+
+      case "currently_reading": {
+        const { data, status } = await bookshelfApi.getCurrentlyReading(username, page, limit);
+        if (status >= 400) return NextResponse.json({ error: "Failed to fetch currently reading" }, { status });
+        const cr = data as unknown[];
+        return NextResponse.json({ type, total: cr.length, limit, offset: (page - 1) * limit, books: cr });
+      }
+
+      case "favorite": {
+        const { data, status } = await favoritesApi.get(username);
+        if (status >= 400) return NextResponse.json({ error: "Failed to fetch favorites" }, { status });
+        const favs = data as unknown[];
+        return NextResponse.json({ type, total: favs.length, limit, offset: 0, books: favs });
+      }
+
+      case "liked": {
+        const { data, status } = await userApi.getLikes(username, page, limit);
+        if (status >= 400) {
+          return NextResponse.json({ error: "Failed to fetch liked books" }, { status });
+        }
+        const lr = data as {
+          books?: Array<{
+            id: string;
+            _id?: string;
+            volumeInfo?: { title?: string };
+            isbndbId?: string;
+            openLibraryId?: string;
+            googleBooksId?: string;
+          }>;
+          total_count?: number;
+        };
+        const rawBooks = lr.books ?? [];
+        const books = rawBooks.map((b) => ({
+          bookId: b.id,
+          _id: b._id ?? b.id,
+          title: b.volumeInfo?.title,
+          isbndbId: b.isbndbId,
+          openLibraryId: b.openLibraryId,
+          googleBooksId: b.googleBooksId,
+        }));
+        const total = typeof lr.total_count === "number" ? lr.total_count : books.length;
+        return NextResponse.json({
+          type,
+          total,
+          limit,
+          offset: (page - 1) * limit,
+          books,
+        });
+      }
+
       default:
-        books = user.bookshelf;
-        total = user.bookshelf.length;
-        break;
+        return NextResponse.json({ error: "Invalid type" }, { status: 400 });
     }
-
-    // Apply pagination
-    const paginatedBooks = books.slice(offset, offset + limit);
-
-    return NextResponse.json({
-      type,
-      total,
-      limit,
-      offset,
-      books: paginatedBooks,
-    });
-  } catch (error: unknown) {
+  } catch (error) {
     console.error("Get books error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      {
-        error: "Failed to get books",
-        details: errorMessage,
-      },
+      { error: "Failed to get books", details: error instanceof Error ? error.message : "Unknown" },
       { status: 500 }
     );
   }
 }
 
 /**
- * Reorder favorite books
+ * Reorder favorites.
  *
  * PUT /api/users/[username]/books
- * Body: {
- *   type: "favorite",
- *   bookIds: string[]  // Array of book IDs in the new order
- * }
+ * Body: { type: "favorite", bookIds: string[] }
+ *   bookIds is the ordered array of Postgres book UUIDs.
  */
 export async function PUT(
   request: NextRequest,
@@ -492,64 +329,124 @@ export async function PUT(
 ) {
   try {
     const { username } = await context.params;
-    const body = await request.json();
-    const { type, bookIds } = body;
-
-    if (!username || !type || !Array.isArray(bookIds)) {
-      return NextResponse.json(
-        { error: "Username, type, and bookIds array are required" },
-        { status: 400 }
-      );
-    }
+    const body = (await request.json()) as Record<string, unknown>;
+    const type = body.type as string | undefined;
 
     if (type !== "favorite") {
-      return NextResponse.json(
-        { error: "Reordering is only supported for favorite books" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Only favorite reordering is supported via PUT" }, { status: 400 });
     }
 
-    await connectDB();
-
-    const user = await User.findOne({ username });
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    const bookIds = body.bookIds as string[] | undefined;
+    if (!Array.isArray(bookIds) || bookIds.length === 0) {
+      return NextResponse.json({ error: "bookIds array is required" }, { status: 400 });
     }
 
-    // Validate that all bookIds exist in user's favoriteBooks
-    const existingBookIds = user.favoriteBooks.map((b) => b.bookId?.toString());
-    const validBookIds = bookIds.filter((id: string) => existingBookIds.includes(id));
-
-    if (validBookIds.length !== bookIds.length || validBookIds.length !== user.favoriteBooks.length) {
-      return NextResponse.json(
-        { error: "Invalid book IDs or count mismatch" },
-        { status: 400 }
-      );
+    const goBody = {
+      favorites: bookIds.map((id, i) => ({ book_id: id, display_order: i + 1 })),
+    };
+    const { data, status } = await favoritesApi.reorder(username, goBody);
+    if (status >= 400) {
+      const err = data as { error?: { message?: string }; message?: string };
+      return NextResponse.json({ error: err?.error?.message ?? "Failed to reorder favorites" }, { status });
     }
-
-    // Reorder favoriteBooks based on bookIds array
-    const reorderedBooks = bookIds
-      .map((id: string) => {
-        return user.favoriteBooks.find((b) => b.bookId?.toString() === id);
-      })
-      .filter((b): b is IBookReference => b !== undefined);
-
-    user.favoriteBooks = reorderedBooks;
-    await user.save();
-
-    return NextResponse.json({
-      message: "Favorite books reordered successfully",
-      books: reorderedBooks,
-    });
-  } catch (error: unknown) {
-    console.error("Reorder books error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ message: "Favorites reordered successfully" });
+  } catch (error) {
+    console.error("Reorder favorites error:", error);
     return NextResponse.json(
-      {
-        error: "Failed to reorder books",
-        details: errorMessage,
-      },
+      { error: "Failed to reorder favorites", details: error instanceof Error ? error.message : "Unknown" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Remove a book from bookshelf/favorites.
+ *
+ * DELETE /api/users/[username]/books
+ * Body: { type: "bookshelf" | "favorite" | "liked", bookId: string }
+ */
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ username: string }> }
+) {
+  try {
+    const { username } = await context.params;
+    const body = (await request.json()) as Record<string, unknown>;
+    const type = body.type as string | undefined;
+    const bookId = (body.bookId ?? body.book_id) as string | undefined;
+    const isbnHint = (body.isbn ?? body.isbndbId) as string | undefined;
+    const googleHint = (body.googleBooksId ?? body.openLibraryId ?? body.google_books_id) as
+      | string
+      | undefined;
+
+    if (!username || !type) {
+      return NextResponse.json({ error: "Username and type are required" }, { status: 400 });
+    }
+
+    // Go backend expects a Postgres UUID in the URL path. The frontend sometimes
+    // sends a Mongo ObjectID (legacy) as bookId. Resolve to a real UUID first.
+    const resolveForRemove = async () => {
+      if (!bookId && !isbnHint && !googleHint) {
+        return { ok: false as const, status: 400, message: "bookId is required" };
+      }
+      return resolvePostgresBookIDForLike({
+        book_id: bookId,
+        isbn: isbnHint,
+        google_books_id: googleHint,
+      });
+    };
+
+    switch (type) {
+      case "bookshelf":
+      case "tbr":
+      case "currently_reading": {
+        const resolved = await resolveForRemove();
+        if (!resolved.ok) {
+          return NextResponse.json({ error: resolved.message }, { status: resolved.status });
+        }
+        const { data, status } = await bookshelfApi.remove(username, resolved.uuid);
+        if (status >= 400) {
+          const err = data as { error?: { message?: string }; message?: string };
+          return NextResponse.json({ error: err?.error?.message ?? "Failed to remove from bookshelf" }, { status });
+        }
+        return NextResponse.json({ message: "Book removed successfully" });
+      }
+
+      case "favorite": {
+        const resolved = await resolveForRemove();
+        if (!resolved.ok) {
+          return NextResponse.json({ error: resolved.message }, { status: resolved.status });
+        }
+        const { data, status } = await favoritesApi.remove(username, resolved.uuid);
+        if (status >= 400) {
+          const err = data as { error?: { message?: string }; message?: string };
+          return NextResponse.json({ error: err?.error?.message ?? "Failed to remove from favorites" }, { status });
+        }
+        return NextResponse.json({ message: "Book removed from favorites" });
+      }
+
+      case "liked": {
+        const resolved = await resolveForRemove();
+        if (!resolved.ok) {
+          return NextResponse.json({ error: resolved.message }, { status: resolved.status });
+        }
+        const { data, status } = await goFetchAuthed(`/api/v1/books/${encodeURIComponent(resolved.uuid)}/like`, {
+          method: "DELETE",
+        });
+        if (status >= 400) {
+          const err = data as { error?: { message?: string }; message?: string };
+          return NextResponse.json({ error: err?.error?.message ?? "Failed to unlike book" }, { status });
+        }
+        return NextResponse.json({ message: "Book unliked" });
+      }
+
+      default:
+        return NextResponse.json({ error: "Invalid type" }, { status: 400 });
+    }
+  } catch (error) {
+    console.error("Remove book error:", error);
+    return NextResponse.json(
+      { error: "Failed to remove book", details: error instanceof Error ? error.message : "Unknown" },
       { status: 500 }
     );
   }

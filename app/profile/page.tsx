@@ -1,81 +1,67 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/providers/auth-provider";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
 
 export default function ProfilePage() {
-  const { data: session, status } = useSession();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    if (status === "loading") {
-      return; // Wait for session to load
+    if (isLoading) {
+      return; // Wait for auth to initialize
     }
 
-    if (status === "unauthenticated") {
-      // Not authenticated, redirect to auth page
+    if (!isAuthenticated) {
       router.replace("/auth");
       return;
     }
 
-    if (status === "authenticated") {
-      const checkStatus = async () => {
-        try {
-          // Check if user has username and onboarding status
-          const response = await fetch("/api/onboarding/status");
-          if (response.ok) {
-            const data = await response.json();
-            
-            // If no username, redirect to choose username
-            if (!data.hasUsername) {
-              router.replace("/choose-username");
-              return;
-            }
-            
-            // Only redirect to onboarding if user is new (no activity, recently created account)
-            // Existing users who log in should not see onboarding even if not completed
-            if (!data.completed && data.isNewUser) {
-              // Only show onboarding for new users
-              router.replace("/onboarding");
-              return;
-            }
-            // Existing user without onboarding - skip it and go to profile
-            
-            // Has username and completed onboarding - redirect to profile
-            const username = data.username || session?.user?.username;
-            if (username) {
-              router.replace(`/u/${username}`);
-            }
-          } else {
-            // If API fails, try to redirect based on session
-            if (session?.user?.username) {
-              router.replace(`/u/${session.user.username}`);
-            } else {
-              router.replace("/choose-username");
-            }
+    const checkStatus = async () => {
+      try {
+        const response = await fetch("/api/onboarding/status");
+        if (response.ok) {
+          const data = await response.json();
+
+          if (!data.hasUsername) {
+            router.replace("/choose-username");
+            return;
           }
-        } catch (error) {
-          console.error("Failed to check status:", error);
-          // Fallback to session-based redirect
-          if (session?.user?.username) {
-            router.replace(`/u/${session.user.username}`);
+
+          if (!data.completed && data.isNewUser) {
+            router.replace("/onboarding");
+            return;
+          }
+
+          const username = data.username || user?.username;
+          if (username) {
+            router.replace(`/u/${username}`);
+          }
+        } else {
+          if (user?.username) {
+            router.replace(`/u/${user.username}`);
           } else {
             router.replace("/choose-username");
           }
-        } finally {
-          setChecking(false);
         }
-      };
+      } catch {
+        if (user?.username) {
+          router.replace(`/u/${user.username}`);
+        } else {
+          router.replace("/choose-username");
+        }
+      } finally {
+        setChecking(false);
+      }
+    };
 
-      checkStatus();
-    }
-  }, [status, session, router]);
+    checkStatus();
+  }, [isLoading, isAuthenticated, user, router]);
 
-  // Show loading while checking/redirecting
-  if (checking || status === "loading") {
+  if (isLoading || checking) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -85,5 +71,5 @@ export default function ProfilePage() {
     );
   }
 
-  return null; // Will redirect
+  return null;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { OnboardingQuestionnaire } from "@/components/ui/features/onboarding-questionnaire";
@@ -8,80 +8,64 @@ import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 
 export default function OnboardingPage() {
-  const { data: session, status } = useSession();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
   useEffect(() => {
-    if (status === "loading") {
-      return; // Wait for session to load
-    }
+    if (isLoading) return;
 
-    if (status === "unauthenticated") {
-      // Not authenticated, redirect to auth page
+    if (!isAuthenticated) {
       router.replace("/auth");
       return;
     }
 
-    if (status === "authenticated") {
-      // Check onboarding status via API (this will also verify username from database)
-      const checkOnboarding = async () => {
-        try {
-          const response = await fetch("/api/onboarding/status");
-          if (response.ok) {
-            const data = await response.json();
-            
-            // If user doesn't have username yet, redirect to choose username
-            if (!data.hasUsername) {
-              router.replace("/choose-username");
-              return;
-            }
-            
-            // If onboarding is already completed, redirect to profile
-            if (data.completed) {
-              setHasCompletedOnboarding(true);
-              const username = data.username || session?.user?.username;
-              if (username) {
-                router.replace(`/u/${username}`);
-              } else {
-                router.replace("/profile");
-              }
-              return;
-            }
-            
-            // User has username but hasn't completed onboarding
-            // Only show questionnaire for new users, not existing users logging in
-            if (!data.isNewUser) {
-              // Existing user - skip onboarding and redirect to profile
-              const username = data.username || session?.user?.username;
-              if (username) {
-                router.replace(`/u/${username}`);
-              } else {
-                router.replace("/profile");
-              }
-              return;
-            }
-            
-            // New user - show questionnaire
-            setCheckingOnboarding(false);
-          } else {
-            // If API fails, still show questionnaire (better UX than blocking)
-            setCheckingOnboarding(false);
+    const checkOnboarding = async () => {
+      try {
+        const response = await fetch("/api/onboarding/status");
+        if (response.ok) {
+          const data = await response.json();
+
+          if (!data.hasUsername) {
+            router.replace("/choose-username");
+            return;
           }
-        } catch (error) {
-          console.error("Failed to check onboarding status:", error);
-          // On error, still show questionnaire (better UX)
+
+          if (data.completed) {
+            setHasCompletedOnboarding(true);
+            const username = data.username || user?.username;
+            if (username) {
+              router.replace(`/u/${username}`);
+            } else {
+              router.replace("/profile");
+            }
+            return;
+          }
+
+          if (!data.isNewUser) {
+            const username = data.username || user?.username;
+            if (username) {
+              router.replace(`/u/${username}`);
+            } else {
+              router.replace("/profile");
+            }
+            return;
+          }
+
+          setCheckingOnboarding(false);
+        } else {
           setCheckingOnboarding(false);
         }
-      };
+      } catch {
+        setCheckingOnboarding(false);
+      }
+    };
 
-      // Always check onboarding status via API
-      checkOnboarding();
-    }
-  }, [status, router, session?.user?.username]);
+    checkOnboarding();
+  }, [isLoading, isAuthenticated, user, router]);
 
-  if (status === "loading" || checkingOnboarding) {
+  if (isLoading || checkingOnboarding) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <TetrisLoading size="md" speed="fast" loadingText="Loading..." />
@@ -89,12 +73,12 @@ export default function OnboardingPage() {
     );
   }
 
-  if (status === "unauthenticated" || !session?.user) {
-    return null; // Will redirect
+  if (!isAuthenticated) {
+    return null;
   }
 
   if (hasCompletedOnboarding) {
-    return null; // Will redirect
+    return null;
   }
 
   return (
@@ -109,7 +93,6 @@ export default function OnboardingPage() {
       <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
         <OnboardingQuestionnaire
           onComplete={() => {
-            // Redirect to home page
             router.push("/");
           }}
         />
@@ -117,4 +100,3 @@ export default function OnboardingPage() {
     </main>
   );
 }
-

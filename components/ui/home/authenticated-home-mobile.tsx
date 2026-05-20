@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/providers/auth-provider";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
@@ -49,24 +49,22 @@ type BookFromAPI = {
 
 const BOOKS_PER_PAGE = 20; // 2 columns x 10 rows = 20 books per load
 
-// Helper function to get a random fallback cover image
-const getFallbackCover = () => {
-  const fallbackImages = [
-    "/cover_1.jpeg",
-    "/cover_2.jpeg"
-  ];
-  return fallbackImages[Math.floor(Math.random() * fallbackImages.length)];
-};
-
 export function AuthenticatedHomeMobile() {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { user } = useAuth();
   const [books, setBooks] = React.useState<Book[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
   const [hasMore, setHasMore] = React.useState(true);
   const [page, setPage] = React.useState(1);
   const allBooksRef = React.useRef<Book[]>([]);
+  const serverPageRef = React.useRef(1); // tracks which onboarding server page we last fetched
+  // Fallback state: once the DB-backed onboarding feed runs dry we flip to the
+  // ISBNdb worldwide endpoint and stay there for the rest of the session.
+  const useIsbndbRef = React.useRef(false);
+  const isbndbPageRef = React.useRef(0);
+  const onboardingEmptyStreakRef = React.useRef(0);
+  const isbndbEmptyStreakRef = React.useRef(0);
 
   // Fetch books (latest + personalized recommendations + friends' liked books)
   React.useEffect(() => {
@@ -80,7 +78,7 @@ export function AuthenticatedHomeMobile() {
         
         (latestData.books || []).forEach((book: BookFromAPI) => {
           const bookId = book.id || book._id;
-          if (bookId && !bookMap.has(bookId)) {
+          if (bookId && book.cover && !bookMap.has(bookId)) {
             bookMap.set(bookId, {
               id: bookId,
               _id: book._id || bookId,
@@ -88,7 +86,7 @@ export function AuthenticatedHomeMobile() {
               authors: Array.isArray(book.authors) ? book.authors : (book.authors ? [book.authors] : ["Unknown Author"]),
               description: book.description || "",
               publishedDate: book.publishedDate || "",
-              cover: book.cover || getFallbackCover(),
+              cover: book.cover,
               isbn: book.isbn,
               isbn13: book.isbn13,
               openLibraryId: book.openLibraryId,
@@ -102,7 +100,7 @@ export function AuthenticatedHomeMobile() {
           }
         });
 
-        if (session?.user?.id) {
+        if (user?.id) {
           const [recommendationsResponse, onboardingResponse, friendsResponse] = await Promise.all([
             fetch(`/api/books/personalized?type=recommended&limit=100`),
             fetch(`/api/books/personalized?type=onboarding&limit=100`),
@@ -203,7 +201,7 @@ export function AuthenticatedHomeMobile() {
         // Add latest books first (they get priority)
         (latestData.books || []).forEach((book: BookFromAPI) => {
           const bookId = book.id || book._id;
-          if (bookId && !bookMap.has(bookId)) {
+          if (bookId && book.cover && !bookMap.has(bookId)) {
             bookMap.set(bookId, {
               id: bookId,
               _id: book._id || bookId,
@@ -211,7 +209,7 @@ export function AuthenticatedHomeMobile() {
               authors: Array.isArray(book.authors) ? book.authors : (book.authors ? [book.authors] : ["Unknown Author"]),
               description: book.description || "",
               publishedDate: book.publishedDate || "",
-              cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+              cover: book.cover,
               isbn: book.isbn,
               isbn13: book.isbn13,
               openLibraryId: book.openLibraryId,
@@ -226,7 +224,7 @@ export function AuthenticatedHomeMobile() {
         });
 
         // If authenticated, also fetch personalized recommendations, onboarding books, and friends' liked books
-        if (session?.user?.id) {
+        if (user?.id) {
           // Fetch all personalized sources in parallel
           const [recommendationsResponse, onboardingResponse, friendsResponse] = await Promise.all([
             fetch(`/api/books/personalized?type=recommended&limit=100`),
@@ -241,7 +239,7 @@ export function AuthenticatedHomeMobile() {
           // Add onboarding-based books first (they get priority as they match user's explicit preferences)
           (onboardingData.books || []).forEach((book: BookFromAPI) => {
             const bookId = book.id || book._id;
-            if (bookId && !bookMap.has(bookId)) {
+            if (bookId && book.cover && !bookMap.has(bookId)) {
               bookMap.set(bookId, {
                 id: bookId,
                 _id: book._id || bookId,
@@ -249,7 +247,7 @@ export function AuthenticatedHomeMobile() {
                 authors: Array.isArray(book.authors) ? book.authors : (book.authors ? [book.authors] : (book.author ? [book.author] : ["Unknown Author"])),
                 description: book.description || "",
                 publishedDate: book.publishedDate || "",
-                cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                cover: book.cover,
                 isbn: book.isbn,
                 isbn13: book.isbn13,
                 openLibraryId: book.openLibraryId,
@@ -266,7 +264,7 @@ export function AuthenticatedHomeMobile() {
           // Add recommended books (only if not already in map)
           (recommendationsData.books || []).forEach((book: BookFromAPI) => {
             const bookId = book.id || book._id;
-            if (bookId && !bookMap.has(bookId)) {
+            if (bookId && book.cover && !bookMap.has(bookId)) {
               bookMap.set(bookId, {
                 id: bookId,
                 _id: book._id || bookId,
@@ -274,7 +272,7 @@ export function AuthenticatedHomeMobile() {
                 authors: Array.isArray(book.authors) ? book.authors : (book.authors ? [book.authors] : (book.author ? [book.author] : ["Unknown Author"])),
                 description: book.description || "",
                 publishedDate: book.publishedDate || "",
-                cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                cover: book.cover,
                 isbn: book.isbn,
                 isbn13: book.isbn13,
                 openLibraryId: book.openLibraryId,
@@ -291,7 +289,7 @@ export function AuthenticatedHomeMobile() {
           // Add friends' liked books (only if not already in map)
           (friendsData.books || []).forEach((book: BookFromAPI) => {
             const bookId = book.id || book._id;
-            if (bookId && !bookMap.has(bookId)) {
+            if (bookId && book.cover && !bookMap.has(bookId)) {
               bookMap.set(bookId, {
                 id: bookId,
                 _id: book._id || bookId,
@@ -299,7 +297,7 @@ export function AuthenticatedHomeMobile() {
                 authors: Array.isArray(book.authors) ? book.authors : (book.authors ? [book.authors] : (book.author ? [book.author] : ["Unknown Author"])),
                 description: book.description || "",
                 publishedDate: book.publishedDate || "",
-                cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                cover: book.cover,
                 isbn: book.isbn,
                 isbn13: book.isbn13,
                 openLibraryId: book.openLibraryId,
@@ -337,27 +335,137 @@ export function AuthenticatedHomeMobile() {
     };
 
     fetchBooks();
-  }, [session?.user?.id]);
+  }, [user?.id]);
 
-  // Load more books when scrolling
-  const loadMore = React.useCallback(() => {
+  // Transform a raw API book shape into the local Book type.
+  const mapApiBook = React.useCallback((b: BookFromAPI): Book | null => {
+    const id = b.id || b._id;
+    if (!id || !b.cover) return null;
+    return {
+      id,
+      _id: b._id || id,
+      title: b.title || "Unknown Title",
+      authors: Array.isArray(b.authors)
+        ? b.authors
+        : b.authors
+        ? [b.authors]
+        : b.author
+        ? [b.author]
+        : ["Unknown Author"],
+      description: b.description || "",
+      publishedDate: b.publishedDate || "",
+      cover: b.cover,
+      isbn: b.isbn,
+      isbn13: b.isbn13,
+      openLibraryId: b.openLibraryId,
+      isbndbId: b.isbndbId,
+      averageRating: b.averageRating,
+      ratingsCount: b.ratingsCount,
+      pageCount: b.pageCount,
+      categories: b.categories,
+      publisher: b.publisher,
+    };
+  }, []);
+
+  // Load more books when scrolling.
+  // Strategy:
+  //  1. Drain the in-memory pool (filled from initial fetches + prior loadMore calls).
+  //  2. Top up the pool from the onboarding endless-feed endpoint.
+  //  3. After 2 empty onboarding pages in a row, flip to the ISBNdb worldwide
+  //     fallback so scrolling keeps working even when our DB is exhausted.
+  const loadMore = React.useCallback(async () => {
     if (isLoadingMore || !hasMore) return;
-
     setIsLoadingMore(true);
-    const nextPage = page + 1;
-    const startIndex = nextPage * BOOKS_PER_PAGE;
-    const endIndex = startIndex + BOOKS_PER_PAGE;
-    const nextBooks = allBooksRef.current.slice(startIndex, endIndex);
 
-    if (nextBooks.length > 0) {
-      setBooks((prev) => [...prev, ...nextBooks]);
-      setPage(nextPage);
-      setHasMore(endIndex < allBooksRef.current.length);
-    } else {
+    try {
+      const nextPage = page + 1;
+      const startIndex = (nextPage - 1) * BOOKS_PER_PAGE;
+      const endIndex = startIndex + BOOKS_PER_PAGE;
+
+      // Top up the pool if the next slice isn't fully covered yet.
+      if (endIndex > allBooksRef.current.length) {
+        const existingIds = new Set(allBooksRef.current.map((b) => b.id));
+        let addedThisRound = 0;
+
+        if (!useIsbndbRef.current) {
+          const nextServerPage = serverPageRef.current + 1;
+          const resp = await fetch(
+            `/api/books/personalized?type=onboarding&page=${nextServerPage}&limit=60`
+          );
+          if (resp.ok) {
+            const data = await resp.json() as { books?: BookFromAPI[] };
+            const newBooks: Book[] = (data.books || [])
+              .map(mapApiBook)
+              .filter((b): b is Book => !!b && !existingIds.has(b.id));
+
+            if (newBooks.length > 0) {
+              allBooksRef.current = [...allBooksRef.current, ...newBooks];
+              serverPageRef.current = nextServerPage;
+              onboardingEmptyStreakRef.current = 0;
+              addedThisRound = newBooks.length;
+            } else {
+              serverPageRef.current = nextServerPage;
+              onboardingEmptyStreakRef.current += 1;
+              if (onboardingEmptyStreakRef.current >= 2) {
+                useIsbndbRef.current = true;
+              }
+            }
+          } else {
+            // HTTP error → flip to the fallback immediately.
+            useIsbndbRef.current = true;
+          }
+        }
+
+        // Only hit ISBNdb if we still don't have enough books. This way a successful
+        // onboarding page won't trigger an extra (unused) ISBNdb request.
+        if (useIsbndbRef.current && endIndex > allBooksRef.current.length) {
+          const nextIsbndbPage = isbndbPageRef.current + 1;
+          const isbndbResp = await fetch(
+            `/api/books/from-isbndb?page=${nextIsbndbPage}&limit=20`
+          );
+          if (isbndbResp.ok) {
+            const data = await isbndbResp.json() as { books?: BookFromAPI[] };
+            const existingIdsNow = new Set(allBooksRef.current.map((b) => b.id));
+            const newBooks: Book[] = (data.books || [])
+              .map(mapApiBook)
+              .filter((b): b is Book => !!b && !existingIdsNow.has(b.id));
+
+            if (newBooks.length > 0) {
+              allBooksRef.current = [...allBooksRef.current, ...newBooks];
+              isbndbPageRef.current = nextIsbndbPage;
+              isbndbEmptyStreakRef.current = 0;
+              addedThisRound += newBooks.length;
+            } else {
+              isbndbPageRef.current = nextIsbndbPage;
+              isbndbEmptyStreakRef.current += 1;
+            }
+          } else {
+            isbndbPageRef.current = nextIsbndbPage;
+            isbndbEmptyStreakRef.current += 1;
+          }
+        }
+
+        // If both sources are exhausted and nothing new came in, stop infinite scroll.
+        if (addedThisRound === 0 && isbndbEmptyStreakRef.current >= 5) {
+          setHasMore(false);
+          return;
+        }
+      }
+
+      const nextBooks = allBooksRef.current.slice(startIndex, endIndex);
+      if (nextBooks.length > 0) {
+        setBooks((prev) => [...prev, ...nextBooks]);
+        setPage(nextPage);
+        setHasMore(true);
+      } else if (isbndbEmptyStreakRef.current >= 5) {
+        setHasMore(false);
+      }
+    } catch {
       setHasMore(false);
+    } finally {
+      setIsLoadingMore(false);
     }
-    setIsLoadingMore(false);
-  }, [page, isLoadingMore, hasMore]);
+  }, [page, isLoadingMore, hasMore, mapApiBook]);
 
   // Infinite scroll detection
   React.useEffect(() => {
@@ -423,7 +531,7 @@ export function AuthenticatedHomeMobile() {
                 {/* Book Cover Image */}
                 <div className="relative w-full aspect-[2/3] overflow-hidden bg-muted">
                   <Image
-                    src={book.cover || getFallbackCover()}
+                    src={book.cover}
                     alt={book.title}
                     fill
                     className="object-cover object-center transition-transform duration-500 group-hover:scale-105"

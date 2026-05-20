@@ -2,9 +2,11 @@
 
 import Image from "next/image";
 import React from "react";
-import { ChevronDown, Grid2x2PlusIcon, MenuIcon, SearchIcon, LinkIcon, Trash2, Bell } from "lucide-react";
+import { ChevronDown, Grid2x2PlusIcon, MenuIcon, SearchIcon, LinkIcon, Trash2 } from "lucide-react";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/providers/auth-provider";
+import { logoutAction } from "@/lib/auth/actions";
+import { signOut } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
 
 import { cn, DEFAULT_AVATAR } from "@/lib/utils";
@@ -13,9 +15,9 @@ import { CommandItem, SearchModal } from "@/components/ui/features/search-modal"
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/primitives/sheet";
 import { ThemeToggle } from "@/components/ui/features/theme-toggle";
 import { Dropdown } from "@/components/ui/primitives/dropdown";
-import { signOut } from "@/lib/auth-client";
 import { DeleteAccountDialog } from "@/components/ui/dialogs/delete-account-dialog";
 import { GeneralDiaryEditorDialog } from "@/components/ui/dialogs/general-diary-editor-dialog";
+import { ActivityPopover } from "@/components/ui/layout/activity-popover";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-media-query";
 
@@ -66,16 +68,14 @@ export function Header({
 }: HeaderProps) {
   const [open, setOpen] = React.useState(false);
   const [internalProfileMenuOpen, setInternalProfileMenuOpen] = React.useState(false);
-  const [fetchedAvatar, setFetchedAvatar] = React.useState<string | null>(null);
-  const [isLoadingAvatar, setIsLoadingAvatar] = React.useState(false);
   const [isNavigatingToProfile, setIsNavigatingToProfile] = React.useState(false);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = React.useState(false);
   const [hasNewActivities, setHasNewActivities] = React.useState(false);
   const [isDark, setIsDark] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
   const [writeDialogOpen, setWriteDialogOpen] = React.useState(false);
-  const { data: session, status } = useSession();
-  const isAuthenticated = status === "authenticated";
+  const { user, isAuthenticated } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const isMobile = useIsMobile();
@@ -84,40 +84,6 @@ export function Header({
   // minimalMobile prop is available but not used - keeping for API compatibility
   void _minimalMobile; // Suppress unused variable warning
   
-  // Fetch logged-in user's profile avatar from database when authenticated
-  // Always fetch the logged-in user's avatar, not the profile being viewed
-  React.useEffect(() => {
-    if (isAuthenticated && session?.user?.username) {
-      const username = session.user.username;
-      setIsLoadingAvatar(true);
-      // Fetch logged-in user's profile to get their avatar
-      fetch(`/api/users/${encodeURIComponent(username)}`)
-        .then((res) => {
-          if (res.ok) {
-            return res.json();
-          }
-          return null;
-        })
-        .then((data) => {
-          if (data?.user?.avatar) {
-            setFetchedAvatar(data.user.avatar);
-          } else {
-            // If no avatar in database, use session image or clear
-            setFetchedAvatar(null);
-          }
-        })
-        .catch((err) => {
-          console.warn("Failed to fetch avatar in header:", err);
-          setFetchedAvatar(null);
-        })
-        .finally(() => {
-          setIsLoadingAvatar(false);
-        });
-    } else if (!isAuthenticated) {
-      setFetchedAvatar(null);
-      setIsLoadingAvatar(false);
-    }
-  }, [isAuthenticated, session?.user?.username]);
 
   // Detect theme for logo switching
   React.useEffect(() => {
@@ -189,12 +155,12 @@ export function Header({
 
   // Check for new friend activities periodically
   React.useEffect(() => {
-    if (!isAuthenticated || !session?.user?.username) {
+    if (!isAuthenticated || !user?.username) {
       setHasNewActivities(false);
       return;
     }
 
-    const username = session.user.username;
+    const username = user.username;
     const isOnActivityPage = pathname === "/activity";
     
     // If user is on activity page, clear the indicator and update timestamp
@@ -231,21 +197,12 @@ export function Header({
     const interval = setInterval(checkNewActivities, 30000);
 
     return () => clearInterval(interval);
-  }, [isAuthenticated, session?.user?.username, pathname]);
+  }, [isAuthenticated, user?.username, pathname]);
   
-  // Ensure avatarSrc is never an empty string
-  // Priority: fetchedAvatar (logged-in user from database) > default
-  // Don't use session?.user?.image as it may contain Google profile images
-  // Note: profileAvatarSrc prop is ignored - we always show logged-in user's avatar
-  const avatarSrc = React.useMemo(() => {
-    // Only use fetchedAvatar from database, not Google images from session
-    const src = fetchedAvatar;
-    // Return fallback if empty string, null, or undefined
-    if (!src || (typeof src === "string" && src.trim() === "")) {
-      return DEFAULT_AVATAR;
-    }
-    return src;
-  }, [fetchedAvatar]);
+  // avatar_url is stored in the pb_user cookie by the auth provider — no fetch needed
+  const avatarSrc = (user?.avatar_url && user.avatar_url.trim() !== "")
+    ? user.avatar_url
+    : DEFAULT_AVATAR;
   
   const profileLabel = profileButtonLabel ?? "Open profile menu";
   const isProfileMenuOpen = profileMenuOpen ?? internalProfileMenuOpen;
@@ -260,12 +217,12 @@ export function Header({
     if (isAuthenticated) {
       setIsNavigatingToProfile(true);
       // Prefetch profile data if not already cached
-      if (session?.user?.username) {
-        const cacheKey = `profile_${session.user.username}`;
+      if (user?.username) {
+        const cacheKey = `profile_${user?.username}`;
         const cached = typeof window !== "undefined" ? sessionStorage.getItem(cacheKey) : null;
         if (!cached) {
           // Prefetch in background
-          fetch(`/api/users/${encodeURIComponent(session.user.username)}`)
+          fetch(`/api/users/${encodeURIComponent(user?.username)}`)
             .then((res) => res.ok ? res.json() : null)
             .then((data) => {
               if (data?.user && typeof window !== "undefined") {
@@ -297,8 +254,8 @@ export function Header({
       }
       // Small delay to allow prefetch to start, then navigate to /u/[username]
       setTimeout(() => {
-        if (session?.user?.username) {
-          window.location.href = `/u/${session.user.username}`;
+        if (user?.username) {
+          window.location.href = `/u/${user?.username}`;
         } else {
           // Fallback to /profile if username not available yet
           window.location.href = "/profile";
@@ -313,15 +270,14 @@ export function Header({
   };
 
   const handleLogout = async () => {
+    setIsLoggingOut(true);
     try {
-      await signOut();
-      // signOut already redirects to /auth, but we can ensure it with window.location
-      window.location.href = "/auth";
-    } catch (error) {
-      console.error("Logout error:", error);
-      // Fallback: redirect even if signOut fails
-      window.location.href = "/auth";
+      await logoutAction();
+      await signOut({ redirect: false });
+    } catch {
+      // ignore errors, navigate anyway
     }
+    window.location.href = "/auth";
   };
 
   return (
@@ -332,6 +288,11 @@ export function Header({
           <div className="flex flex-col items-center gap-4">
             <TetrisLoading size="sm" speed="fast" loadingText="Loading profile..." />
           </div>
+        </div>
+      )}
+      {isLoggingOut && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <TetrisLoading size="sm" speed="fast" loadingText="Signing out..." />
         </div>
       )}
       <header
@@ -392,7 +353,7 @@ export function Header({
             >
               Recommendations
             </button>
-            {isAuthenticated && session?.user?.username ? (
+            {isAuthenticated && user?.username ? (
               <>
                 <button
                   type="button"
@@ -408,25 +369,12 @@ export function Header({
                 >
                   Write
                 </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    router.push("/activity");
-                  }}
-                  className={cn(
-                    buttonVariants({
-                      variant: "ghost",
-                      className: "font-medium text-foreground/80 hover:text-foreground relative",
-                    })
-                  )}
-                >
-                  Updates
-                  {hasNewActivities && (
-                    <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-red-500 border-2 border-background" />
-                  )}
-                </button>
+                <ActivityPopover
+                  username={user?.username || ""}
+                  hasNewActivities={hasNewActivities}
+                  onOpen={() => setHasNewActivities(false)}
+                  variant="text"
+                />
               </>
             ) : null}
           </div>
@@ -445,23 +393,14 @@ export function Header({
             </Button>
           </SearchModal>
           )}
-          {/* Mobile: Updates button before theme toggle */}
+          {/* Mobile: Updates popover before theme toggle */}
           {isMobile && isAuthenticated && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                router.push("/activity");
-              }}
-              className="relative p-2 rounded-lg hover:bg-accent transition-colors"
-              aria-label="Updates"
-            >
-              <Bell className="h-5 w-5 text-foreground/80" />
-              {hasNewActivities && (
-                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 border border-background" />
-              )}
-            </button>
+            <ActivityPopover
+              username={user?.username || ""}
+              hasNewActivities={hasNewActivities}
+              onOpen={() => setHasNewActivities(false)}
+              variant="bell"
+            />
           )}
           <ThemeToggle className="transition-transform hover:scale-[1.02]" />
           {isAuthenticated ? (
@@ -474,11 +413,11 @@ export function Header({
                 type="button"
                 aria-label="View profile"
                 onClick={handleProfileClick}
-                disabled={isNavigatingToProfile || isLoadingAvatar}
+                disabled={isNavigatingToProfile}
                 className={cn(
                   "relative flex size-10 items-center justify-center rounded-full border-2 border-foreground/80 p-0.5",
                   "transition-all duration-150 hover:scale-[1.10] active:scale-95 cursor-pointer",
-                  (isNavigatingToProfile || isLoadingAvatar) && "opacity-75 cursor-wait",
+                  isNavigatingToProfile && "opacity-75 cursor-wait",
                   "hidden md:flex"
                 )}
               >
@@ -526,8 +465,8 @@ export function Header({
                       label="Share profile link" 
                       icon={LinkIcon}
                       onClick={async () => {
-                        if (session?.user?.username) {
-                          const profileUrl = `${window.location.origin}/u/${session.user.username}`;
+                        if (user?.username) {
+                          const profileUrl = `${window.location.origin}/u/${user?.username}`;
                           try {
                             await navigator.clipboard.writeText(profileUrl);
                             toast.success('Profile link copied to clipboard!');
@@ -634,7 +573,7 @@ export function Header({
                 >
                   Feed
                 </button>
-                {isAuthenticated && session?.user?.username ? (
+                {isAuthenticated && user?.username ? (
                   <button
                     onClick={() => {
                       router.push("/activity");
@@ -661,11 +600,11 @@ export function Header({
         </div>
       </nav>
     </header>
-    {isAuthenticated && session?.user?.username && (
+    {isAuthenticated && user?.username && (
       <GeneralDiaryEditorDialog
         open={writeDialogOpen}
         onOpenChange={setWriteDialogOpen}
-        username={session.user.username}
+        username={user?.username}
       />
     )}
     <DeleteAccountDialog

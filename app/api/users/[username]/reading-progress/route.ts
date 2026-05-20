@@ -1,53 +1,79 @@
 import { NextRequest, NextResponse } from "next/server";
-import mongoose from "mongoose";
-import connectDB from "@/lib/db/mongodb";
-import User from "@/lib/db/models/User";
-import Book from "@/lib/db/models/Book";
-import { auth } from "@/lib/auth";
+import { bookshelfApi } from "@/lib/api/endpoints";
+import { cookies } from "next/headers";
 
 /**
- * Get reading progress for a book
- * 
  * GET /api/users/[username]/reading-progress?bookId=...
+ * Resolves pages read from Go: currently-reading entries and TBR (DNF) rows expose current_page.
  */
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ username: string }> }
 ) {
   try {
+    const cookieStore = await cookies();
+    if (!cookieStore.get("pb_access_token")?.value) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { username } = await context.params;
-    const searchParams = request.nextUrl.searchParams;
-    const bookId = searchParams.get("bookId");
-
+    const bookId = request.nextUrl.searchParams.get("bookId");
     if (!username || !bookId) {
-      return NextResponse.json(
-        { error: "Username and bookId are required" },
-        { status: 400 }
+      return NextResponse.json({ error: "Username and bookId are required" }, { status: 400 });
+    }
+
+    const [crRes, tbrRes] = await Promise.all([
+      bookshelfApi.getCurrentlyReading(username, 1, 100),
+      bookshelfApi.getTBR(username, 1, 100),
+    ]);
+
+    type EntryBook = {
+      id?: string;
+      _id?: string;
+      isbndbId?: string;
+      openLibraryId?: string;
+      googleBooksId?: string;
+    };
+    type ProgressRow = {
+      book_id?: string;
+      current_page?: number | null;
+      book?: EntryBook;
+    };
+
+    const matches = (row: ProgressRow, needle: string) => {
+      if (row.book_id === needle) return true;
+      const b = row.book;
+      if (!b) return false;
+      return (
+        b.id === needle ||
+        b._id === needle ||
+        b.isbndbId === needle ||
+        b.openLibraryId === needle ||
+        b.googleBooksId === needle
       );
+    };
+
+    if (crRes.status < 400 && Array.isArray(crRes.data)) {
+      const row = (crRes.data as ProgressRow[]).find((r) => matches(r, bookId));
+      if (row && typeof row.current_page === "number") {
+        return NextResponse.json({ pagesRead: row.current_page });
+      }
     }
 
-    await connectDB();
-
-    const user = await User.findOne({ username }).select("readingProgress");
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    if (tbrRes.status < 400 && Array.isArray(tbrRes.data)) {
+      const row = (tbrRes.data as ProgressRow[]).find((r) => matches(r, bookId));
+      if (row && typeof row.current_page === "number") {
+        return NextResponse.json({ pagesRead: row.current_page });
+      }
     }
 
-    const progress = user.readingProgress?.find(
-      (p) => p.bookId?.toString() === bookId
-    );
-
-    return NextResponse.json({
-      pagesRead: progress?.pagesRead || 0,
-    });
+    return NextResponse.json({ pagesRead: 0 });
   } catch (error: unknown) {
     console.error("Get reading progress error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       {
         error: "Failed to get reading progress",
-        details: errorMessage,
+        details: error instanceof Error ? error.message : "Unknown",
       },
       { status: 500 }
     );
@@ -55,27 +81,24 @@ export async function GET(
 }
 
 /**
- * Update reading progress for a book
- * 
  * POST /api/users/[username]/reading-progress
- * Body: {
- *   bookId: string,
- *   pagesRead: number
- * }
+ * Body: { bookId: string, pagesRead: number }
+ * Proxies to Go PUT .../bookshelf/:bookId/progress (current_page).
  */
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ username: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user) {
+    const cookieStore = await cookies();
+    if (!cookieStore.get("pb_access_token")?.value) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { username } = await context.params;
     const body = await request.json();
-    const { bookId, pagesRead } = body;
+    const bookId = body.bookId ?? body.book_id;
+    const pagesRead = body.pagesRead;
 
     if (!username || !bookId || pagesRead === undefined) {
       return NextResponse.json(
@@ -84,152 +107,41 @@ export async function POST(
       );
     }
 
-    // Verify user can only update their own progress
-    if (session.user.username !== username) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (typeof pagesRead !== "number" || pagesRead < 0 || !Number.isFinite(pagesRead)) {
+      return NextResponse.json({ error: "pagesRead must be a non-negative number" }, { status: 400 });
     }
 
-    if (typeof pagesRead !== "number" || pagesRead < 0) {
+    const currentPage = Math.floor(pagesRead);
+    const { data, status } = await bookshelfApi.updateProgress(username, String(bookId), {
+      current_page: currentPage,
+    });
+
+    if (status >= 400) {
+      const err = data as { error?: { message?: string }; message?: string };
       return NextResponse.json(
-        { error: "pagesRead must be a non-negative number" },
-        { status: 400 }
+        { error: err?.error?.message ?? err?.message ?? "Failed to update progress" },
+        { status }
       );
     }
 
-    await connectDB();
-
-    // Verify book exists
-    const book = await Book.findById(bookId);
-    if (!book) {
-      return NextResponse.json({ error: "Book not found" }, { status: 404 });
-    }
-
-    // Get total pages from book
-    const totalPages = book.volumeInfo?.pageCount || 0;
-    
-    // Clamp pagesRead to totalPages
-    const clampedPagesRead = totalPages > 0 
-      ? Math.min(pagesRead, totalPages) 
-      : pagesRead;
-
-    const user = await User.findOne({ username });
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    // Find existing progress or create new
-    const bookIdObj = new mongoose.Types.ObjectId(bookId);
-    const existingIndex = user.readingProgress?.findIndex(
-      (p) => p.bookId?.toString() === bookId
-    ) ?? -1;
-
-    if (existingIndex >= 0) {
-      // Update existing progress
-      user.readingProgress[existingIndex].pagesRead = clampedPagesRead;
-      user.readingProgress[existingIndex].updatedAt = new Date();
-    } else {
-      // Add new progress
-      if (!user.readingProgress) {
-        user.readingProgress = [];
-      }
-      user.readingProgress.push({
-        bookId: bookIdObj,
-        pagesRead: clampedPagesRead,
-        updatedAt: new Date(),
-      });
-    }
-
-    // If progress is complete (100%), optionally add to currentlyReading or bookshelf
-    const isComplete = totalPages > 0 && clampedPagesRead >= totalPages;
-    
-    if (isComplete) {
-      // Check if book is already in bookshelf
-      const isInBookshelf = user.bookshelf?.some(
-        (b) => b.bookId?.toString() === bookId
-      );
-
-      // If not in bookshelf, add to currentlyReading (user can manually add to bookshelf)
-      if (!isInBookshelf) {
-        const isInCurrentlyReading = user.currentlyReading?.some(
-          (b) => b.bookId?.toString() === bookId
-        );
-        
-        if (!isInCurrentlyReading) {
-          // Add to currentlyReading with book reference
-          const bookReference = {
-            bookId: bookIdObj,
-            isbndbId: book.isbndbId,
-            openLibraryId: book.openLibraryId,
-            title: book.volumeInfo?.title || "Unknown",
-            author: book.volumeInfo?.authors?.[0] || "Unknown",
-            cover: book.volumeInfo?.imageLinks?.thumbnail || 
-                   book.volumeInfo?.imageLinks?.smallThumbnail || "",
-          };
-          
-          if (!user.currentlyReading) {
-            user.currentlyReading = [];
-          }
-          user.currentlyReading.push(bookReference);
-        }
-      }
-    } else if (clampedPagesRead > 0) {
-      // If progress is set but not complete, add to DNF (TBR) if not already there
-      const isInTbr = user.tbrBooks?.some(
-        (b) => b.bookId?.toString() === bookId
-      );
-      
-      if (!isInTbr) {
-        // Add to TBR (DNF) with book reference
-        const bookReference = {
-          bookId: bookIdObj,
-          isbndbId: book.isbndbId,
-          openLibraryId: book.openLibraryId,
-          title: book.volumeInfo?.title || "Unknown",
-          author: book.volumeInfo?.authors?.[0] || "Unknown",
-          cover: book.volumeInfo?.imageLinks?.thumbnail || 
-                 book.volumeInfo?.imageLinks?.smallThumbnail || "",
-        };
-        
-        if (!user.tbrBooks) {
-          user.tbrBooks = [];
-        }
-        user.tbrBooks.push({
-          ...bookReference,
-          addedOn: new Date(),
-        });
-      }
-    } else if (clampedPagesRead === 0) {
-      // If progress is reset to 0, remove from DNF (TBR) if it's there
-      if (user.tbrBooks && user.tbrBooks.length > 0) {
-        const tbrIndex = user.tbrBooks.findIndex(
-          (b) => b.bookId?.toString() === bookId
-        );
-        
-        if (tbrIndex >= 0) {
-          user.tbrBooks.splice(tbrIndex, 1);
-        }
-      }
-    }
-
-    await user.save();
+    const row = data as { current_page?: number | null; book_id?: string };
+    const resolvedPages =
+      typeof row?.current_page === "number" ? row.current_page : currentPage;
 
     return NextResponse.json({
       success: true,
-      pagesRead: clampedPagesRead,
-      totalPages,
-      isComplete,
+      pagesRead: resolvedPages,
+      totalPages: 0,
+      isComplete: false,
     });
   } catch (error: unknown) {
     console.error("Update reading progress error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       {
         error: "Failed to update reading progress",
-        details: errorMessage,
+        details: error instanceof Error ? error.message : "Unknown",
       },
       { status: 500 }
     );
   }
 }
-

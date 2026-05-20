@@ -67,7 +67,7 @@ export interface IDiaryEntry {
 }
 
 export interface IActivity {
-  type: "read" | "rated" | "liked" | "added_to_list" | "started_reading" | "reviewed" | "shared_list" | "shared_book" | "collaboration_request" | "granted_access" | "liked_diary_entry";
+  type: "read" | "rated" | "liked" | "added_to_list" | "started_reading" | "reviewed" | "shared_list" | "shared_book" | "collaboration_request" | "granted_access" | "liked_diary_entry" | "dnf";
   bookId?: mongoose.Types.ObjectId;
   listId?: string;
   listTitle?: string; // Title of the list for granted_access activities
@@ -240,7 +240,7 @@ const DiaryEntrySchema = new Schema({
 const ActivitySchema = new Schema({
   type: {
     type: String,
-    enum: ["read", "rated", "liked", "added_to_list", "started_reading", "reviewed", "shared_list", "shared_book", "collaboration_request", "granted_access", "liked_diary_entry"],
+    enum: ["read", "rated", "liked", "added_to_list", "started_reading", "reviewed", "shared_list", "shared_book", "collaboration_request", "granted_access", "liked_diary_entry", "dnf"],
     required: true,
   },
   bookId: { type: Schema.Types.ObjectId, ref: "Book" },

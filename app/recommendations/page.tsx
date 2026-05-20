@@ -1,222 +1,184 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/providers/auth-provider";
 import { useRouter } from "next/navigation";
-import { BookCarousel, BookCarouselBook } from "@/components/ui/home/book-carousel";
+import { PinterestGrid } from "@/components/ui/home/pinterest-grid";
 import { Header } from "@/components/ui/layout/header-with-search";
 import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
 import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { cn } from "@/lib/utils";
-import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 import { useIsMobile } from "@/hooks/use-media-query";
+import { Playfair_Display } from "next/font/google";
+import { Sparkles } from "lucide-react";
 
-interface CarouselData {
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  display: "swap",
+  weight: ["400", "600", "700", "800"],
+  style: ["normal", "italic"],
+});
+
+const carouselTypes = [
+  "recommended",
+  "friends",
+  "favorites",
+  "authors",
+  "genres",
+  "continue-reading",
+] as const;
+
+type APIBook = {
+  id: string;
+  _id?: string;
   title: string;
-  subtitle: string;
-  type: "recommended" | "favorites" | "authors" | "genres" | "continue-reading" | "friends";
-}
-
-const carousels: CarouselData[] = [
-  {
-    title: "Recommended for You",
-    subtitle: "Personalized picks based on your reading taste",
-    type: "recommended",
-  },
-  {
-    title: "Your Friends Are Liking These",
-    subtitle: "Books your friends are enjoying",
-    type: "friends",
-  },
-  {
-    title: "Based on Your Favorites",
-    subtitle: "Books similar to ones you love",
-    type: "favorites",
-  },
-  {
-    title: "From Your Favorite Authors",
-    subtitle: "New releases and classics from authors you've read",
-    type: "authors",
-  },
-  {
-    title: "Trending in Your Genres",
-    subtitle: "What's hot in genres you enjoy",
-    type: "genres",
-  },
-  {
-    title: "Continue Reading",
-    subtitle: "Pick up where you left off",
-    type: "continue-reading",
-  },
-];
+  author: string;
+  authors?: string[];
+  cover: string;
+  isbn?: string;
+  isbn13?: string;
+  description?: string;
+  publishedDate?: string;
+  averageRating?: number;
+  ratingsCount?: number;
+  pageCount?: number;
+  categories?: string[];
+  publisher?: string;
+  reason?: string;
+};
 
 export default function RecommendationsPage() {
-  const { data: session, status } = useSession();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const isMobile = useIsMobile();
-  const [carouselData, setCarouselData] = useState<Record<string, BookCarouselBook[]>>({});
+  const [allBooks, setAllBooks] = useState<APIBook[]>([]);
   const [loading, setLoading] = useState(true);
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const hasLoadedRef = React.useRef(false);
 
   useEffect(() => {
-    if (status === "loading") {
-      return;
-    }
+    if (authLoading) return;
+    if (!isAuthenticated) { router.push("/auth"); return; }
+    if (hasLoadedRef.current) { setLoading(false); return; }
 
-    if (!session?.user) {
-      router.push("/auth");
-      return;
-    }
-
-    // Only fetch if we haven't loaded yet
-    if (hasLoadedRef.current) {
-      setLoading(false);
-      return;
-    }
-
-    const fetchCarousels = async () => {
+    const fetchAll = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        const data: Record<string, BookCarouselBook[]> = {};
-        const errs: Record<string, string> = {};
+        const results = await Promise.all(
+          carouselTypes.map((type) =>
+            fetch(`/api/books/personalized?type=${type}&limit=20`)
+              .then((r) => r.ok ? r.json() : { recommendations: [] })
+              .then((d) => {
+                const recs = (d.books || d.recommendations || []) as (APIBook & {
+                  cover_url?: string;
+                  authors?: string[];
+                })[];
+                return recs.map((book) => ({
+                  ...book,
+                  author: book.author || book.authors?.[0] || "",
+                  cover: book.cover || book.cover_url || "",
+                })) as APIBook[];
+              })
+              .catch(() => [] as APIBook[])
+          )
+        );
 
-        // Fetch all carousels in parallel
-        const promises = carousels.map(async (carousel) => {
-          try {
-            const response = await fetch(
-              `/api/books/personalized?type=${carousel.type}&limit=20`
-            );
-            if (!response.ok) {
-              throw new Error(`Failed to fetch ${carousel.type}`);
+        // Merge and deduplicate by id
+        const seen = new Set<string>();
+        const merged: APIBook[] = [];
+        for (const books of results) {
+          for (const book of books) {
+            const key = book.id || book._id || book.title;
+            if (key && !seen.has(key)) {
+              seen.add(key);
+              merged.push(book);
             }
-            const result = await response.json();
-            data[carousel.type] = result.books || [];
-          } catch (error) {
-            console.error(`Error fetching ${carousel.type}:`, error);
-            errs[carousel.type] = error instanceof Error ? error.message : "Unknown error";
-            data[carousel.type] = [];
           }
-        });
-
-        await Promise.all(promises);
-        setCarouselData(data);
-        setErrors(errs);
-        setLoading(false);
+        }
+        setAllBooks(merged);
         hasLoadedRef.current = true;
-      } catch (error) {
-        console.error("Error in fetchCarousels:", error);
+      } finally {
         setLoading(false);
-        hasLoadedRef.current = true;
       }
     };
 
-    fetchCarousels().catch((error) => {
-      console.error("Unhandled error in fetchCarousels:", error);
-    });
-  }, [session?.user, status, router]);
+    fetchAll();
+  }, [isAuthenticated, authLoading, router]);
 
-  // Show loading state
-  if (status === "loading" || loading) {
+  if (authLoading || loading) {
     return (
-      <main className="relative min-h-screen overflow-hidden bg-background">
-        <AnimatedGridPattern
-          numSquares={120}
-          maxOpacity={0.08}
-          duration={4}
-          repeatDelay={0.75}
-          className="text-slate-500 dark:text-slate-400"
-        />
-        <div className="relative z-10 flex min-h-screen flex-col">
-          {isMobile ? (
-            <Header minimalMobile={isMobile} />
-          ) : (
-            <>
-              <DesktopSidebar />
-              <MinimalDesktopHeader />
-            </>
-          )}
-          <div className={cn(
-            "flex flex-1 items-center justify-center px-4 pb-16 pt-20 md:pb-24 md:pt-24",
-            isMobile ? "mt-16" : "mt-16 ml-16"
-          )}>
-            <TetrisLoading size="md" speed="fast" loadingText="Loading recommendations..." />
+      <main className="min-h-screen bg-background">
+        <div className="flex min-h-screen flex-col">
+          {isMobile ? <Header minimalMobile={isMobile} /> : <><DesktopSidebar /><MinimalDesktopHeader /></>}
+          <div className={cn("flex flex-1 items-center justify-center", isMobile ? "mt-16" : "mt-16")}>
+            <TetrisLoading size="md" speed="fast" loadingText="Finding your next read…" />
           </div>
         </div>
       </main>
     );
   }
 
-  // Redirect if not authenticated
-  if (!session?.user) {
-    return null;
-  }
+  if (!isAuthenticated) return null;
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-background">
-      <AnimatedGridPattern
-        numSquares={120}
-        maxOpacity={0.08}
-        duration={4}
-        repeatDelay={0.75}
-        className="text-slate-500 dark:text-slate-400"
-      />
-      <div className="relative z-10 flex min-h-screen flex-col">
-        {isMobile ? (
-          <Header minimalMobile={isMobile} />
-        ) : (
-          <>
-            <DesktopSidebar />
-            <MinimalDesktopHeader />
-          </>
-        )}
-        <div className={cn(
-          "flex-1",
-          isMobile ? "mt-16" : "mt-16 ml-16"
-        )}>
-          <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8 pb-24 md:pb-8">
-            <div className="space-y-10">
-              <div>
-                <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-                  Recommendations
-                </h1>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Personalized picks based on your reading taste, books your friends are enjoying, and more.
+    <main className="min-h-screen bg-background">
+      <div className="flex min-h-screen flex-col">
+        {isMobile ? <Header minimalMobile={isMobile} /> : <><DesktopSidebar /><MinimalDesktopHeader /></>}
+
+        <div className={cn("flex-1", isMobile ? "mt-16" : "mt-16")}>
+          <div className="mx-auto w-full max-w-7xl px-4 py-8 pb-24 sm:px-6 lg:px-8 md:pb-8">
+
+            {/* Heading */}
+            <div className="mb-10">
+              <div className="flex items-center gap-2 mb-1">
+                <Sparkles className="h-4 w-4 text-[#b85c38]" />
+                <span className="text-xs font-semibold uppercase tracking-widest text-[#b85c38]">
+                  Personalized
+                </span>
+              </div>
+              <h1 className={cn("text-4xl font-bold tracking-tight text-foreground md:text-5xl", playfair.className)}>
+                Find a New Book
+              </h1>
+              <p
+                className={cn("mt-1.5 text-base text-muted-foreground", playfair.className)}
+                style={{ fontStyle: "italic" }}
+              >
+                curated picks waiting to be discovered
+              </p>
+            </div>
+
+            {allBooks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-border bg-card p-16 text-center">
+                <Sparkles className="mx-auto mb-4 h-10 w-10 text-muted-foreground/40" />
+                <p className={cn("text-lg font-semibold", playfair.className)}>No recommendations yet</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Add some books to your library and we&apos;ll start personalizing your picks.
                 </p>
               </div>
-
-              {/* Personalized Book Carousels */}
-              <div className="w-full space-y-12">
-                {carousels.map((carousel) => {
-                  const books = carouselData[carousel.type] || [];
-                  
-                  // For friends carousel, only show if we have at least 5 books
-                  if (carousel.type === "friends" && books.length < 5) {
-                    return null; // Don't show friends carousel if less than 5 books
-                  }
-                  
-                  // Show carousel even if empty for "continue-reading" (user might not have any)
-                  // But hide others if empty
-                  if (books.length === 0 && carousel.type !== "continue-reading" && !errors[carousel.type]) {
-                    return null; // Don't show empty carousels
-                  }
-                  
-                  return (
-                    <BookCarousel
-                      key={carousel.type}
-                      title={carousel.title}
-                      subtitle={carousel.subtitle}
-                      books={books}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          </main>
+            ) : (
+              <PinterestGrid
+                books={allBooks.map((book) => ({
+                  id: book.id || book._id || "",
+                  _id: book._id,
+                  title: book.title || "Unknown Title",
+                  authors: book.authors?.length ? book.authors : book.author ? [book.author] : [],
+                  description: book.description || "",
+                  publishedDate: book.publishedDate || "",
+                  cover: book.cover || "",
+                  isbn: book.isbn,
+                  isbn13: book.isbn13,
+                  averageRating: book.averageRating,
+                  ratingsCount: book.ratingsCount,
+                  pageCount: book.pageCount,
+                  categories: book.categories,
+                  publisher: book.publisher,
+                  reason: book.reason,
+                }))}
+              />
+            )}
+          </div>
         </div>
       </div>
     </main>
   );
 }
-

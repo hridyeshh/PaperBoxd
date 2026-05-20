@@ -303,16 +303,11 @@ export function EditProfileForm({
 
   const handlePronounSelection = React.useCallback(
     (selection: Selection) => {
-      if (selection === "all") {
-        const allPronouns = [...pronounOptions];
-        setPronounSelection(new Set(allPronouns));
-        updateProfile({ pronouns: allPronouns });
-        return;
-      }
+      if (selection === "all") return;
       const selected = Array.from(selection).map((key) => key.toString());
+      if (selected.length > 2) return;
       setPronounSelection(selection);
       updateProfile({ pronouns: selected });
-      // Keep dropdown open for multiple selection
     },
     [updateProfile],
   );
@@ -536,7 +531,7 @@ export function EditProfileForm({
                 onOpenChange={setPronounDropdownOpen}
               >
                 <Dropdown.Trigger className="flex w-full items-center justify-between rounded-2xl border border-input bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                  <span className="truncate">{pronounDisplay}</span>
+                  <span className="truncate">{pronounDisplay}{profile.pronouns.length >= 2 ? " (max)" : ""}</span>
                   <ChevronDown className="h-4 w-4 text-muted-foreground" />
                 </Dropdown.Trigger>
                 <Dropdown.Popover align="start" className="w-64 p-2">
@@ -564,14 +559,20 @@ export function EditProfileForm({
                       }}
                     className="max-h-60"
                   >
-                    {pronounOptions.map((option) => (
-                        <GridListItem 
-                          id={option} 
+                    {pronounOptions.map((option) => {
+                      const isSelected = profile.pronouns.includes(option);
+                      const atMax = profile.pronouns.length >= 2 && !isSelected;
+                      return (
+                        <GridListItem
+                          id={option}
                           key={option}
+                          isDisabled={atMax}
+                          className={atMax ? "opacity-40 cursor-not-allowed" : ""}
                         >
-                        {option}
-                      </GridListItem>
-                    ))}
+                          {option}
+                        </GridListItem>
+                      );
+                    })}
                   </GridList>
                   </div>
                 </Dropdown.Popover>

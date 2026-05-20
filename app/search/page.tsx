@@ -4,6 +4,9 @@ import * as React from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/ui/layout/header-with-search";
+import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
+import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
+import { useIsMobile } from "@/hooks/use-media-query";
 import {
   Command,
   CommandEmpty,
@@ -85,6 +88,7 @@ type SearchResponse = BookSearchResponse | UserSearchResponse;
 
 export default function SearchPage() {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [mounted, setMounted] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [searchType, setSearchType] = React.useState<SearchType>("Books");
@@ -237,7 +241,14 @@ export default function SearchPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      {isMobile ? (
+        <Header minimalMobile={isMobile} />
+      ) : (
+        <>
+          <DesktopSidebar />
+          <MinimalDesktopHeader />
+        </>
+      )}
       <main className="flex-1 mt-16 pb-24">
         <div className="px-4 py-4">
           {/* Search Bar with Dock Toggle */}
