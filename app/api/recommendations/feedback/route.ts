@@ -1,106 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import connectDB from '@/lib/db/mongodb';
-import RecommendationLog from '@/lib/db/models/RecommendationLog';
-import mongoose from 'mongoose';
+import { cookies } from 'next/headers';
+import { goFetchAuthed } from '@/lib/api/endpoints';
+
+const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? 'https://paperboxd-backend-production-d9e0.up.railway.app';
 
 /**
  * POST /api/recommendations/feedback
  *
- * Track user feedback on recommendations (shown, clicked, converted, dismissed).
- * Requires authentication.
+ * Proxies impression (batch) and click/dismiss (single) events to the Go backend.
+ * Batch impressions: { book_ids: string[], event_type: "impression" }
+ * Single event:      { book_id: string, event_type: "click" | "dismiss" }
  */
 export async function POST(request: NextRequest) {
-  try {
-    const session = await auth();
+  const cookieStore = await cookies();
+  const token = cookieStore.get('pb_access_token')?.value ?? '';
 
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    await connectDB();
-
-    const body = await request.json();
-    const { bookId, action, convertedAction } = body;
-
-    if (!bookId || !action) {
-      return NextResponse.json(
-        { error: 'bookId and action are required' },
-        { status: 400 }
-      );
-    }
-
-    const validActions = ['shown', 'clicked', 'converted', 'dismissed'];
-    if (!validActions.includes(action)) {
-      return NextResponse.json(
-        { error: 'Invalid action. Must be: shown, clicked, converted, or dismissed' },
-        { status: 400 }
-      );
-    }
-
-    // Update recommendation log
-    const userIdObj = new mongoose.Types.ObjectId(session.user.id);
-    const bookIdObj = new mongoose.Types.ObjectId(bookId);
-    await RecommendationLog.updateRecommendationStatus(
-      userIdObj,
-      bookIdObj,
-      action,
-      convertedAction
-    );
-
-    return NextResponse.json({
-      success: true,
-      message: 'Feedback recorded successfully',
-    });
-  } catch (error: unknown) {
-    console.error('Error recording recommendation feedback:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json(
-      { error: 'Failed to record feedback', details: errorMessage },
-      { status: 500 }
-    );
+  if (!token) {
+    return NextResponse.json({ ok: false }, { status: 401 });
   }
+
+  const body = await request.json();
+
+  // Batch impressions — split into individual requests fired in parallel.
+  if (Array.isArray(body.book_ids)) {
+    await Promise.allSettled(
+      body.book_ids.map((bookId: string) =>
+        fetch(`${BACKEND}/api/v1/recommendations/feedback`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ book_id: bookId, event_type: 'impression' }),
+        })
+      )
+    );
+    return NextResponse.json({ ok: true });
+  }
+
+  // Single event (click, dismiss) — use goFetchAuthed for auto-refresh.
+  const { status } = await goFetchAuthed('/api/v1/recommendations/feedback', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return NextResponse.json({ ok: status < 400 });
 }
 
-/**
- * GET /api/recommendations/feedback/metrics
- *
- * Get recommendation performance metrics.
- * Admin endpoint for analytics.
- */
-export async function GET(request: NextRequest) {
-  try {
-    const session = await auth();
-
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    await connectDB();
-
-    const { searchParams } = new URL(request.url);
-    const algorithm = searchParams.get('algorithm') || undefined;
-    const days = parseInt(searchParams.get('days') || '7');
-
-    const metrics = await RecommendationLog.getAlgorithmMetrics(algorithm || 'hybrid', days);
-
-    return NextResponse.json({
-      metrics,
-      algorithm: algorithm || 'all',
-      days,
-    });
-  } catch (error: unknown) {
-    console.error('Error getting recommendation metrics:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json(
-      { error: 'Failed to get metrics', details: errorMessage },
-      { status: 500 }
-    );
-  }
-}

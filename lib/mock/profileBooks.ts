@@ -4,6 +4,7 @@ export type ProfileBook = {
   author: string;
   cover: string;
   mood?: string;
+  slug?: string; // Go backend stored slug — preferred for navigation
   bookId?: string; // MongoDB _id for navigation
   isbndbId?: string; // ISBNdb ID for navigation
   openLibraryId?: string; // Open Library ID for navigation
@@ -35,6 +36,8 @@ export type ReadingList = {
   description?: string;
   books?: Array<{
     _id?: string;
+    cover?: string;
+    thumbnail?: string;
     volumeInfo?: {
       title?: string;
       imageLinks?: {

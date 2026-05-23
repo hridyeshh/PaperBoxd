@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import * as React from "react";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/providers/auth-provider";
 import { useRouter } from "next/navigation";
 
 import { Header } from "@/components/ui/layout/header-with-search";
@@ -71,13 +71,14 @@ type DiaryEntryData = {
 // Type for activity data from API
 type ActivityFromAPI = {
   _id?: string | { toString(): string };
-  type: "diary_entry" | "read" | "rated" | "liked" | "added_to_list" | "started_reading" | "reviewed" | "shared_list" | "shared_book" | "collaboration_request" | "granted_access" | "liked_diary_entry";
+  type: string;
   userName?: string;
   username?: string;
   userAvatar?: string;
   timestamp?: string | Date;
   bookId?: string | null;
   bookTitle?: string | null;
+  bookSlug?: string | null;
   bookAuthor?: string | null;
   bookCover?: string | null;
   rating?: number;
@@ -94,15 +95,18 @@ type ActivityFromAPI = {
   listCover?: string;
   listBooksCount?: number;
   sharedByUsername?: string;
+  targetUsername?: string;
+  // Pre-computed by proxy route
+  action?: string;
+  detail?: string | null;
 };
 
 const ACTIVITY_PAGE_SIZE = 10;
 
 export default function ActivityPage() {
-  const { data: session, status } = useSession();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const isMobile = useIsMobile();
-  const isAuthenticated = status === "authenticated";
   const [activities, setActivities] = React.useState<ActivityEntry[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -113,23 +117,18 @@ export default function ActivityPage() {
 
   // Redirect if not authenticated
   React.useEffect(() => {
-    if (status === "loading") {
-      return; // Still loading session
-    }
+    if (authLoading) return;
 
-    if (!isAuthenticated || !session?.user?.username) {
+    if (!isAuthenticated || !user?.username) {
       router.replace("/auth");
       return;
     }
 
-    // Update last viewed timestamp when user visits activity page
-    if (session?.user?.username) {
-      localStorage.setItem(
-        `activity_last_viewed_${session.user.username}`,
-        new Date().toISOString()
-      );
-    }
-  }, [status, isAuthenticated, session, router]);
+    localStorage.setItem(
+      `activity_last_viewed_${user.username}`,
+      new Date().toISOString()
+    );
+  }, [authLoading, isAuthenticated, user, router]);
 
   // Format time ago helper
   const formatTimeAgo = (timestamp: string | Date | undefined | null) => {
@@ -167,18 +166,20 @@ export default function ActivityPage() {
 
   // Format activity action helper
   const formatActivity = (activity: ActivityFromAPI) => {
+    // Use pre-computed action/detail from the proxy route when available
+    if (activity.action !== undefined) {
+      return { action: activity.action, bookTitle: activity.detail ?? activity.bookTitle ?? undefined };
+    }
+
     let action = "";
-    // Use bookTitle from populated book data, fallback to undefined (will be handled in display)
     let bookTitle = activity.bookTitle || undefined;
-    
-    // Handle all activity types except search
+
     if (!activity.type) {
       console.warn("Activity missing type:", activity);
-    } else if (activity.type === "diary_entry") {
+    } else if (activity.type === "diary_entry" || activity.type === "reviewed") {
       action = activity.isGeneralEntry ? "wrote" : "wrote about";
-      bookTitle = activity.bookTitle || (activity.isGeneralEntry ? undefined : undefined);
-    } else if (activity.type === "read") {
-      action = "added to bookshelf";
+    } else if (activity.type === "added_book" || activity.type === "read") {
+      action = "added to their shelf";
     } else if (activity.type === "rated") {
       action = `rated ${"★".repeat(activity.rating || 0)}`;
     } else if (activity.type === "liked") {
@@ -187,14 +188,14 @@ export default function ActivityPage() {
       action = "added to TBR";
     } else if (activity.type === "started_reading") {
       action = "started reading";
-    } else if (activity.type === "reviewed") {
-      action = "reviewed";
+    } else if (activity.type === "created_list") {
+      action = "created a list";
+      bookTitle = activity.listTitle;
     } else if (activity.type === "shared_list") {
       action = "shared their list";
       bookTitle = activity.listTitle;
     } else if (activity.type === "shared_book") {
       action = "shared";
-      // bookTitle is already set from the activity
     } else if (activity.type === "collaboration_request") {
       action = "invited you to collaborate on";
       bookTitle = activity.listTitle;
@@ -204,59 +205,93 @@ export default function ActivityPage() {
     } else if (activity.type === "liked_diary_entry") {
       action = "liked your note on";
       bookTitle = activity.subject || "diary entry";
+    } else if (activity.type === "followed") {
+      action = "started following you";
+      bookTitle = undefined;
     } else {
-      console.warn(`Unknown activity type: "${activity.type}"`);
+      action = activity.type.replace(/_/g, " ");
     }
-    
+
     return { action, bookTitle };
   };
 
   // Fetch activities from followed users only
   React.useEffect(() => {
-    console.log('[ACTIVITY PAGE] useEffect triggered. Auth:', isAuthenticated, 'Username:', session?.user?.username);
+    console.log('[ACTIVITY PAGE] useEffect triggered. Auth:', isAuthenticated, 'Username:', user?.username);
 
-    if (!isAuthenticated || !session?.user?.username) {
+    if (!isAuthenticated || !user?.username) {
       console.log('[ACTIVITY PAGE] Not authenticated or no username, skipping fetch');
       setIsLoading(false);
       return;
     }
 
-    const username = session.user.username;
+    const username = user.username;
+    let cancelled = false;
     setIsLoading(true);
 
-      console.log('[ACTIVITY PAGE] Fetching activities for:', username);
-      // Fetch activities from followed users
-      fetch(`/api/users/${encodeURIComponent(username)}/activities/following?page=${currentPage}&pageSize=${ACTIVITY_PAGE_SIZE}`)
+    const fetchFollowing = async (): Promise<Response> => {
+      const url = `/api/users/${encodeURIComponent(username)}/activities/following?page=${currentPage}&pageSize=${ACTIVITY_PAGE_SIZE}`;
+      let res = await fetch(url);
+      if (res.status === 429) {
+        await new Promise((r) => setTimeout(r, 2500));
+        if (!cancelled) res = await fetch(url);
+      }
+      return res;
+    };
+
+    console.log("[ACTIVITY PAGE] Fetching activities for:", username);
+    fetchFollowing()
         .then((res) => {
-          console.log('[ACTIVITY PAGE] API response status:', res.status);
+          if (res.status === 401) {
+            // Session expired — send back to login
+            router.replace("/auth");
+            return Promise.reject(new Error("session_expired"));
+          }
           if (!res.ok) {
-            throw new Error(`Failed to fetch following activities: ${res.status}`);
+            return res.json().then((body) => {
+              const msg =
+                typeof body?.error === "string"
+                  ? body.error
+                  : body?.error?.message ??
+                    (res.status === 429
+                      ? "Too many requests. Please wait a moment and refresh."
+                      : `Failed to fetch following activities (${res.status})`);
+              throw new Error(msg);
+            });
           }
           return res.json();
         })
         .then((data) => {
+          if (cancelled) return;
           console.log('[ACTIVITY PAGE] Got data:', data);
           console.log('[ACTIVITY PAGE] Activities count:', data.activities?.length);
           const transformedActivities: ActivityEntry[] = Array.isArray(data.activities)
             ? data.activities.map((activity: ActivityFromAPI, idx: number) => {
                 const { action, bookTitle } = formatActivity(activity);
                 
+              const isListType = activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" || activity.type === "created_list";
+              const detail = activity.detail !== undefined
+                ? (activity.detail ?? "")
+                : activity.type === "liked_diary_entry"
+                  ? (activity.subject || "diary entry")
+                  : activity.isGeneralEntry
+                    ? (activity.subject?.trim() || "a diary entry")
+                    : isListType
+                      ? (activity.listTitle || "")
+                      : (bookTitle || "");
+
               const baseEntry: ActivityEntry = {
                   id: activity._id?.toString() || `activity-${idx}`,
                   name: activity.userName || activity.username || "User",
                   username: activity.username,
                   userAvatar: activity.userAvatar,
                   action,
-                  detail: activity.type === "liked_diary_entry"
-                    ? (activity.subject || "diary entry")
-                    : (activity.isGeneralEntry 
-                    ? (activity.subject && activity.subject.trim() ? activity.subject : "a diary entry")
-                      : (activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? (activity.listTitle || "") : (bookTitle || ""))),
-                  bookTitle: activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" ? activity.listTitle : bookTitle,
+                  detail,
+                  bookTitle: isListType ? activity.listTitle : bookTitle,
                   timeAgo: formatTimeAgo(activity.timestamp),
-                  cover: activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access"
-                    ? (activity.listCover || "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80")
-                    : (activity.bookCover || (activity.isGeneralEntry ? null : "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80")),
+                  cover: isListType
+                    ? (activity.listCover || null)
+                    : (activity.bookCover || null),
                 type: activity.type,
                 };
               
@@ -287,6 +322,11 @@ export default function ActivityPage() {
               if (activity.type === "shared_book") {
                 baseEntry.bookId = activity.bookId;
               }
+
+              // Set bookId for all book-related activities so navigation works
+              if (activity.bookId && !baseEntry.bookId) {
+                baseEntry.bookId = activity.bookId;
+              }
               
               return baseEntry;
               })
@@ -295,19 +335,27 @@ export default function ActivityPage() {
           setTotalPages(data.totalPages || 1);
         })
         .catch((error) => {
+          if (error instanceof Error && error.message === "session_expired") return;
           console.error("[ACTIVITY PAGE] Failed to fetch following activities:", error);
-          setActivities([]);
-          setTotalPages(1);
+          if (!cancelled) {
+            toast.error(error instanceof Error ? error.message : "Could not load activity feed");
+            setActivities([]);
+            setTotalPages(1);
+          }
         })
         .finally(() => {
-          setIsLoading(false);
+          if (!cancelled) setIsLoading(false);
         });
-  }, [isAuthenticated, session?.user?.username, currentPage]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, user?.username, currentPage]);
 
 
   // Handle collaboration request accept/reject
   const handleCollaborationRequest = async (entry: ActivityEntry, action: "accept" | "reject") => {
-    if (!entry.listId || !entry.sharedByUsername || !session?.user?.username) return;
+    if (!entry.listId || !entry.sharedByUsername || !user?.username) return;
 
     setProcessingRequest(entry.id);
     try {
@@ -334,8 +382,8 @@ export default function ActivityPage() {
       setActivities(activities.filter(a => a.id !== entry.id));
       
       // Refresh activities
-      if (session?.user?.username) {
-        const username = session.user.username;
+      if (user?.username) {
+        const username = user?.username;
         fetch(`/api/users/${encodeURIComponent(username)}/activities/following?page=${currentPage}&pageSize=${ACTIVITY_PAGE_SIZE}`)
           .then((res) => res.json())
           .then((data) => {
@@ -409,7 +457,7 @@ export default function ActivityPage() {
   // Removed view switching logic
 
   // Show loading state
-  if (status === "loading" || isLoading) {
+  if (authLoading || isLoading) {
     return (
       <main className="relative min-h-screen overflow-hidden bg-background">
         <AnimatedGridPattern
@@ -430,7 +478,7 @@ export default function ActivityPage() {
           )}
           <div className={cn(
             "flex flex-1 items-center justify-center px-4 pb-16 pt-20 md:pb-24 md:pt-24",
-            isMobile ? "mt-16" : "mt-16 ml-16"
+            isMobile ? "mt-16" : "mt-16"
           )}>
             <TetrisLoading size="md" speed="fast" loadingText="Loading updates..." />
           </div>
@@ -439,7 +487,7 @@ export default function ActivityPage() {
     );
   }
 
-  if (!isAuthenticated || !session?.user?.username) {
+  if (!isAuthenticated || !user?.username) {
     return null;
   }
 
@@ -463,7 +511,7 @@ export default function ActivityPage() {
         )}
         <div className={cn(
           "flex-1",
-          isMobile ? "mt-16" : "mt-16 ml-16"
+          isMobile ? "mt-16" : "mt-16"
         )}>
           <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8 pb-24 md:pb-8">
             <div className="space-y-10">
@@ -505,9 +553,9 @@ export default function ActivityPage() {
                       }
                       // If it's a liked_diary_entry, fetch and open the diary entry
                       // The owner is the current user (since the activity is in their activities array)
-                      else if (entry.type === "liked_diary_entry" && entry.diaryEntryId && session?.user?.username) {
+                      else if (entry.type === "liked_diary_entry" && entry.diaryEntryId && user?.username) {
                         // Fetch the diary entry from the current user's diary
-                        fetch(`/api/users/${encodeURIComponent(session.user.username)}/diary`)
+                        fetch(`/api/users/${encodeURIComponent(user?.username)}/diary`)
                           .then((res) => res.json())
                           .then((data: { entries?: Array<{ _id?: { toString(): string } | string; id?: string; bookId?: { toString(): string } | string; bookTitle?: string; bookAuthor?: string; bookCover?: string; content?: string; createdAt?: string; updatedAt?: string; isLiked?: boolean; likesCount?: number }> }) => {
                             const diaryEntry = data.entries?.find((e) => 
@@ -530,7 +578,7 @@ export default function ActivityPage() {
                                 isLiked: diaryEntry.isLiked,
                                 likesCount: diaryEntry.likesCount,
                               });
-                              setSelectedDiaryEntryUsername(session.user.username || null);
+                              setSelectedDiaryEntryUsername(user?.username || null);
                             }
                           })
                           .catch((error) => {
@@ -566,10 +614,15 @@ export default function ActivityPage() {
                           console.error("Error navigating to book:", error);
                         }
                       }
+                      // Book-related activities: navigate to the book page using slug or id
+                      else if ((entry.type === "added_book" || entry.type === "read" || entry.type === "started_reading" || entry.type === "rated" || entry.type === "liked") && entry.bookId) {
+                        const bookId = entry.bookId.toString();
+                        router.push(`/b/${bookId}`);
+                      }
                       // Don't navigate for collaboration requests - they have buttons
                     }}
                     className={`flex gap-4 rounded-3xl border border-border/70 bg-background/90 p-4 shadow-sm transition hover:-translate-y-1 ${
-                      (entry.type === "diary_entry" || entry.type === "shared_list" || entry.type === "shared_book" || entry.type === "granted_access" || entry.type === "liked_diary_entry") ? "cursor-pointer" : ""
+                      (entry.type === "diary_entry" || entry.type === "shared_list" || entry.type === "shared_book" || entry.type === "granted_access" || entry.type === "liked_diary_entry" || entry.type === "added_book" || entry.type === "read" || entry.type === "started_reading" || entry.type === "rated" || entry.type === "liked") ? "cursor-pointer" : ""
                     }`}
                   >
                     {/* Show profile picture of the person who did the activity */}
@@ -690,7 +743,7 @@ export default function ActivityPage() {
           </div>
           
           {/* Diary Entry Dialog */}
-          {selectedDiaryEntry && session?.user?.username && (
+          {selectedDiaryEntry && user?.username && (
             <DiaryEntryDialog
               open={!!selectedDiaryEntry}
               onOpenChange={(open) => {
@@ -700,13 +753,13 @@ export default function ActivityPage() {
                 }
               }}
               entry={selectedDiaryEntry}
-              username={selectedDiaryEntryUsername || session.user.username}
+              username={selectedDiaryEntryUsername || user?.username}
               isOwnProfile={false}
               onLikeChange={async () => {
                 // Refresh activities after like change
-                if (session?.user?.username) {
+                if (user?.username) {
                   try {
-                    const response = await fetch(`/api/users/${encodeURIComponent(session.user.username)}/activities/following?page=${currentPage}&pageSize=${ACTIVITY_PAGE_SIZE}`);
+                    const response = await fetch(`/api/users/${encodeURIComponent(user?.username)}/activities/following?page=${currentPage}&pageSize=${ACTIVITY_PAGE_SIZE}`);
                     if (response.ok) {
                       const data = await response.json();
                       

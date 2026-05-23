@@ -1,5 +1,5 @@
-import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 // Routes that require authentication
 const protectedRoutes = ["/profile", "/settings"];
@@ -13,27 +13,18 @@ const publicAuthRoutes = ["/auth/forgot-password", "/auth/reset-password"];
 // Setup routes that should be accessible even when logged in (e.g., choose username, setup profile, onboarding)
 const setupRoutes = ["/choose-username", "/setup-profile", "/onboarding"];
 
-export default auth((req) => {
-  const { nextUrl } = req;
-  
-  // NEW: Completely exempt the mobile API from web-session logic
-  // Mobile API uses Bearer tokens, not cookies/sessions
-  if (nextUrl.pathname.startsWith("/api/mobile")) {
-    return NextResponse.next();
-  }
-  
-  const isLoggedIn = !!req.auth;
+export function middleware(request: NextRequest) {
+  const { nextUrl } = request;
+  const isLoggedIn = !!request.cookies.get("pb_access_token")?.value;
 
   const isProtectedRoute = protectedRoutes.some((route) =>
     nextUrl.pathname.startsWith(route)
   );
 
-  // Check if it's a setup route (should be accessible even when logged in)
   const isSetupRoute = setupRoutes.some((route) =>
     nextUrl.pathname.startsWith(route)
   );
 
-  // Check if it's a public auth route (should be accessible even when logged in)
   const isPublicAuthRoute = publicAuthRoutes.some((route) =>
     nextUrl.pathname.startsWith(route)
   );
@@ -54,19 +45,18 @@ export default auth((req) => {
   }
 
   return NextResponse.next();
-});
+}
 
 // Matcher configuration
 export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
-     * - api/auth (NextAuth routes)
-     * - api/mobile (Mobile API - uses Bearer tokens, not sessions)
+     * - api (API routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      */
-    "/((?!api/auth|api/mobile|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
   ],
 };

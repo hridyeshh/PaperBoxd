@@ -338,5 +338,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === "development",
+  // Opt-in only: NextAuth debug logs include the raw provider config
+  // (Google client secret, tokens, profile). Never default to true on any
+  // environment — set NEXTAUTH_DEBUG=true locally when you need it.
+  debug: process.env.NEXTAUTH_DEBUG === "true",
 });

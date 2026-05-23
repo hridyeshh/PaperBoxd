@@ -1,5 +1,3 @@
-import type { IIndustryIdentifier } from "@/lib/db/models/Book";
-
 /**
  * ISBNdb API Integration
  *
@@ -260,7 +258,7 @@ export function transformISBNdbBook(book: ISBNdbBook) {
       publishedDate: book.date_published,
       description: book.synopsis || book.synopsys || book.overview || book.excerpt,
       industryIdentifiers: (() => {
-        const identifiers: IIndustryIdentifier[] = [];
+        const identifiers: { type: string; identifier: string }[] = [];
         if (book.isbn13) {
           identifiers.push({
             type: "ISBN_13",

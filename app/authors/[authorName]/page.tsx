@@ -4,6 +4,9 @@ import Image from "next/image";
 import * as React from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { Header } from "@/components/ui/layout/header-with-search";
+import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
+import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
+import { useIsMobile } from "@/hooks/use-media-query";
 import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { NotFoundPage } from "@/components/ui/pages/not-found-page";
 import { createBookSlug } from "@/lib/utils/book-slug";
@@ -52,6 +55,8 @@ export default function AuthorDetailPage() {
   const router = useRouter();
   const authorName = typeof params.authorName === "string" ? decodeURIComponent(params.authorName) : null;
   const username = searchParams.get("user");
+
+  const isMobile = useIsMobile();
 
   const [books, setBooks] = React.useState<AuthorBook[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -162,11 +167,20 @@ export default function AuthorDetailPage() {
     }
   }, [router]);
 
+  const nav = isMobile ? (
+    <Header minimalMobile={isMobile} />
+  ) : (
+    <>
+      <DesktopSidebar />
+      <MinimalDesktopHeader />
+    </>
+  );
+
   if (loading) {
     return (
       <div className="flex min-h-screen flex-col">
-        <Header />
-        <div className="flex flex-1 items-center justify-center">
+        {nav}
+        <div className="flex flex-1 items-center justify-center mt-16">
           <TetrisLoading />
         </div>
       </div>
@@ -176,7 +190,7 @@ export default function AuthorDetailPage() {
   if (error || !authorName) {
     return (
       <div className="flex min-h-screen flex-col">
-        <Header />
+        {nav}
         <NotFoundPage />
       </div>
     );
@@ -184,8 +198,8 @@ export default function AuthorDetailPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-6xl">
+      {nav}
+      <main className="flex-1 container mx-auto px-4 py-8 max-w-6xl mt-16 pb-24 md:pb-8">
         <div className="space-y-8">
           {/* Author Header */}
           <div>

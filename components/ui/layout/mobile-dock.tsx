@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/providers/auth-provider";
 import DockMorph from "@/components/ui/dock-morph";
-import { Home, NotebookPen, Search } from "lucide-react";
+import { Home, PenTool, Search, Trophy } from "lucide-react";
 import { GeneralDiaryEditorDialog } from "@/components/ui/dialogs/general-diary-editor-dialog";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { DEFAULT_AVATAR } from "@/lib/utils";
@@ -12,7 +12,7 @@ import { DEFAULT_AVATAR } from "@/lib/utils";
 export function MobileDock() {
   const router = useRouter();
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const { user, isAuthenticated } = useAuth();
   const isMobile = useIsMobile();
   const [writeDialogOpen, setWriteDialogOpen] = React.useState(false);
   const [profileAvatar, setProfileAvatar] = React.useState<string | null>(null);
@@ -42,27 +42,27 @@ export function MobileDock() {
   }, []);
 
   // Don't show dock on auth pages, if not authenticated, or if edit form is open
-  const shouldShowDock = isMobile && session?.user && !pathname?.startsWith("/auth") && !pathname?.startsWith("/choose-username") && !pathname?.startsWith("/onboarding") && !isEditOpen;
+  const shouldShowDock = isMobile && isAuthenticated && !pathname?.startsWith("/auth") && !pathname?.startsWith("/choose-username") && !pathname?.startsWith("/onboarding") && !isEditOpen;
 
   // Function to fetch profile avatar
   const fetchProfileAvatar = React.useCallback(() => {
-    if (session?.user?.username) {
-      fetch(`/api/users/${encodeURIComponent(session.user.username)}`)
+    if (user?.username) {
+      fetch(`/api/users/${encodeURIComponent(user.username)}`)
         .then((res) => res.ok ? res.json() : null)
         .then((data) => {
           if (data?.user?.avatar) {
             setProfileAvatar(data.user.avatar);
-          } else if (session?.user?.image) {
-            setProfileAvatar(session.user.image);
+          } else if (user?.avatar_url) {
+            setProfileAvatar(user.avatar_url);
           } else {
             setProfileAvatar(null);
           }
         })
         .catch(() => {
-          setProfileAvatar(session?.user?.image || null);
+          setProfileAvatar(user?.avatar_url || null);
         });
     }
-  }, [session?.user?.username, session?.user?.image]);
+  }, [user?.username, user?.avatar_url]);
 
   // Fetch profile avatar on mount and when username changes
   React.useEffect(() => {
@@ -74,7 +74,7 @@ export function MobileDock() {
     const handleAvatarUpdate = (event: CustomEvent) => {
       const { avatar, username } = event.detail;
       // Only update if it's for the current user
-      if (username === session?.user?.username && avatar) {
+      if (username === user?.username && avatar) {
         setProfileAvatar(avatar);
       }
     };
@@ -85,7 +85,7 @@ export function MobileDock() {
         window.removeEventListener("profileAvatarUpdated", handleAvatarUpdate as EventListener);
       };
     }
-  }, [session?.user?.username]);
+  }, [user?.username]);
 
   if (!shouldShowDock) {
     return null;
@@ -115,16 +115,21 @@ export function MobileDock() {
             onClick: () => router.push("/search"),
           },
           {
-            icon: NotebookPen,
+            icon: Trophy,
+            label: "Leaderboard",
+            onClick: () => router.push("/leaderboard"),
+          },
+          {
+            icon: PenTool,
             label: "Write",
             onClick: () => setWriteDialogOpen(true),
           },
           {
             label: "Profile",
-            avatar: profileAvatar || session?.user?.image || DEFAULT_AVATAR,
+            avatar: profileAvatar || user?.avatar_url || DEFAULT_AVATAR,
             onClick: () => {
-              if (session?.user?.username) {
-                router.push(`/u/${session.user.username}`);
+              if (user?.username) {
+                router.push(`/u/${user.username}`);
               }
             },
           },
@@ -132,11 +137,11 @@ export function MobileDock() {
       />
 
       {/* Write Dialog */}
-      {session?.user?.username && (
+      {user?.username && (
         <GeneralDiaryEditorDialog
           open={writeDialogOpen}
           onOpenChange={setWriteDialogOpen}
-          username={session.user.username}
+          username={user.username}
         />
       )}
     </>

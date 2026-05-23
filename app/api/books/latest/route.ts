@@ -1,116 +1,76 @@
 import { NextRequest, NextResponse } from "next/server";
-import connectDB from "@/lib/db/mongodb";
-import Book from "@/lib/db/models/Book";
-import { getBestBookCover } from "@/lib/utils";
+import { bookApi } from "@/lib/api/endpoints";
 
-/**
- * Get latest books sorted by published date or creation date
- * 
- * Query Parameters:
- * - page: Page number (default: 1)
- * - pageSize: Number of results per page (default: 10)
- * 
- * Example: /api/books/latest?page=1&pageSize=10
- */
-export async function GET(request: NextRequest) {
-  try {
-    const searchParams = request.nextUrl.searchParams;
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
-    const pageSize = Math.min(Math.max(1, parseInt(searchParams.get("pageSize") || "10")), 50);
-    const skip = (page - 1) * pageSize;
-
-    // Connect to database
-    await connectDB();
-
-    // Find books sorted by publishedDate (descending), then by createdAt (descending)
-    // Prefer books with cover images, but include all books
-    const books = await Book.find({})
-      .sort({
-        "volumeInfo.publishedDate": -1, // Most recent first
-        createdAt: -1, // Fallback to creation date
-      })
-      .skip(skip)
-      .limit(pageSize)
-      .lean();
-
-    // Get total count for pagination
-    const total = await Book.countDocuments({});
-
-    // Transform books to match expected format
-    type BookLean = {
-      _id?: { toString(): string };
-      isbn?: string;
-      isbn13?: string;
-      openLibraryId?: string;
-      isbndbId?: string;
-      volumeInfo?: {
-        title?: string;
-        authors?: string[];
-        description?: string;
-        publishedDate?: string;
-        averageRating?: number;
-        ratingsCount?: number;
-        pageCount?: number;
-        categories?: string[];
-        publisher?: string;
-        imageLinks?: {
-          large?: string;
-          medium?: string;
-          thumbnail?: string;
-          smallThumbnail?: string;
-          extraLarge?: string;
-        };
-      };
+type GoBook = {
+  id: string;
+  _id: string;
+  volumeInfo: {
+    title?: string;
+    authors?: string[];
+    description?: string;
+    publishedDate?: string;
+    publisher?: string;
+    pageCount?: number;
+    categories?: string[];
+    averageRating?: number;
+    ratingsCount?: number;
+    imageLinks?: {
+      large?: string;
+      medium?: string;
+      thumbnail?: string;
+      smallThumbnail?: string;
+      extraLarge?: string;
     };
-    const transformedBooks = books.map((book: BookLean) => {
-      // Determine the best cover image to use
-      // Prioritize ISBNdb images over Open Library to avoid 503 errors
-      const imageLinks = book.volumeInfo?.imageLinks || {};
-      const cover = getBestBookCover(imageLinks) || 
-                  "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
+  };
+};
 
-      // Get book ID for navigation
-      const bookId = book._id?.toString() || 
-                     book.isbn13 || 
-                     book.isbn || 
-                     book.openLibraryId || 
-                     book.isbndbId;
-
-      return {
-        id: bookId,
-        _id: book._id?.toString(),
-        title: book.volumeInfo?.title || "Untitled",
-        authors: book.volumeInfo?.authors || [],
-        description: book.volumeInfo?.description || "",
-        publishedDate: book.volumeInfo?.publishedDate || "",
-        cover,
-        isbn: book.isbn,
-        isbn13: book.isbn13,
-        openLibraryId: book.openLibraryId,
-        isbndbId: book.isbndbId,
-        averageRating: book.volumeInfo?.averageRating,
-        ratingsCount: book.volumeInfo?.ratingsCount,
-        pageCount: book.volumeInfo?.pageCount,
-        categories: book.volumeInfo?.categories || [],
-        publisher: book.volumeInfo?.publisher,
-      };
-    });
-
-    return NextResponse.json({
-      books: transformedBooks,
-      pagination: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    });
-  } catch (error) {
-    console.error("Error fetching latest books:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch latest books" },
-      { status: 500 }
-    );
-  }
+function flattenBook(b: GoBook) {
+  const vi = b.volumeInfo ?? {};
+  const il = vi.imageLinks ?? {};
+  const cover =
+    il.large ||
+    il.medium ||
+    il.thumbnail ||
+    il.smallThumbnail ||
+    il.extraLarge ||
+    "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
+  return {
+    id: b.id,
+    _id: b._id ?? b.id,
+    title: vi.title ?? "Untitled",
+    authors: vi.authors ?? [],
+    description: vi.description ?? "",
+    publishedDate: vi.publishedDate ?? "",
+    cover,
+    averageRating: vi.averageRating,
+    ratingsCount: vi.ratingsCount,
+    pageCount: vi.pageCount,
+    categories: vi.categories ?? [],
+    publisher: vi.publisher,
+  };
 }
 
+export async function GET(request: NextRequest) {
+  const { searchParams } = request.nextUrl;
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
+  const pageSize = Math.min(Math.max(1, parseInt(searchParams.get("pageSize") || "10")), 50);
+
+  const { data, status } = await bookApi.getLatest(page, pageSize);
+  if (status >= 400) {
+    return NextResponse.json({ error: "Failed to fetch latest books" }, { status });
+  }
+
+  const goData = data as { items?: GoBook[]; totalItems?: number };
+  const books = (goData.items ?? []).map(flattenBook);
+  const total = goData.totalItems ?? books.length;
+
+  return NextResponse.json({
+    books,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  });
+}

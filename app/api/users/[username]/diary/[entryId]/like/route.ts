@@ -1,321 +1,42 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import { getUserFromRequest } from '@/lib/auth-token';
-import connectDB from '@/lib/db/mongodb';
-import User from '@/lib/db/models/User';
-import type { IDiaryEntry } from '@/lib/db/models/User';
-import mongoose from 'mongoose';
+import { NextRequest, NextResponse } from "next/server";
+import { diaryApi } from "@/lib/api/endpoints";
 
-// Type for diary entry with _id (can be Mongoose subdocument or plain object)
-type DiaryEntryWithId = IDiaryEntry & {
-  _id?: mongoose.Types.ObjectId | string;
-  toObject?: () => IDiaryEntry & { _id?: mongoose.Types.ObjectId | string; createdAt?: Date };
-};
-
-
-// Force Node.js runtime (required for Mongoose)
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
-/**
- * POST /api/users/[username]/diary/[entryId]/like
- * Like or unlike a diary entry
- */
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   context: { params: Promise<{ username: string; entryId: string }> }
 ) {
   const requestId = Math.random().toString(36).substring(7);
   
   try {
-    console.log(`[Diary Like API] [${requestId}] === REQUEST START ===`);
-    console.log(`[Diary Like API] [${requestId}] Path: ${request.nextUrl.pathname}`);
-    
-    // Log headers for debugging
-    const authHeader = request.headers.get("authorization") || request.headers.get("Authorization");
-    const customAuthHeader = request.headers.get("x-user-authorization") || request.headers.get("X-User-Authorization");
-    console.log(`[Diary Like API] [${requestId}] Authorization header present: ${!!authHeader}`);
-    console.log(`[Diary Like API] [${requestId}] X-User-Authorization header present: ${!!customAuthHeader}`);
-    if (authHeader) {
-      console.log(`[Diary Like API] [${requestId}] Authorization header (first 30 chars): ${authHeader.substring(0, 30)}...`);
-    }
-    
     const { username, entryId } = await context.params;
-    console.log(`[Diary Like API] [${requestId}] Username: ${username}, EntryId: ${entryId}`);
-
-    // Support both Bearer token (mobile) and NextAuth session (web)
-    let currentUserId: string | null = null;
-    let currentUsername: string | null = null;
-
-    // Try Bearer token first (for mobile)
-    console.log(`[Diary Like API] [${requestId}] Attempting Bearer token authentication...`);
-    const authUser = await getUserFromRequest(request);
-    if (authUser?.id) {
-      currentUserId = authUser.id;
-      currentUsername = authUser.username || null;
-      console.log(`[Diary Like API] [${requestId}] ✅ Authenticated via Bearer token:`, {
-        id: currentUserId,
-        username: currentUsername,
-      });
-    } else {
-      console.log(`[Diary Like API] [${requestId}] Bearer token authentication failed, trying NextAuth session...`);
-      // Fall back to NextAuth session (for web)
-      const session = await auth();
-      if (session?.user?.id) {
-        currentUserId = session.user.id;
-        currentUsername = session.user.username || null;
-        console.log(`[Diary Like API] [${requestId}] ✅ Authenticated via NextAuth session:`, {
-          id: currentUserId,
-          username: currentUsername,
-        });
-      } else {
-        console.log(`[Diary Like API] [${requestId}] NextAuth session also failed`);
-      }
+    const { data, status } = await diaryApi.likeEntry(username, entryId);
+    if (status === 401) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (status >= 400) {
+      const err = data as { error?: { message?: string }; message?: string };
+      return NextResponse.json({ error: err?.error?.message ?? "Failed to like entry" }, { status });
     }
-
-    if (!currentUserId) {
-      console.log(`[Diary Like API] [${requestId}] ❌ AUTH FAILED: No authentication found`);
-      console.log(`[Diary Like API] [${requestId}] Auth headers:`, {
-        hasAuthHeader: !!authHeader,
-        hasCustomAuthHeader: !!customAuthHeader,
-        authHeaderLength: authHeader?.length || 0,
-        customAuthHeaderLength: customAuthHeader?.length || 0,
-      });
-      return NextResponse.json({ error: 'Unauthorized', details: 'Please sign in to like diary entries' }, { status: 401 });
-    }
-
-    await connectDB();
-
-    // Find user
-    const user = await User.findOne({ username });
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    // Initialize diaryEntries if it doesn't exist
-    if (!user.diaryEntries) {
-      user.diaryEntries = [];
-    }
-
-    // Find the diary entry by _id
-    // Try multiple ID formats to handle different response formats
-    let entryIndex = -1;
-    
-    // First, try to find by _id (most common case)
-    entryIndex = user.diaryEntries.findIndex(
-      (entry) => {
-        const entryWithId = entry as DiaryEntryWithId;
-        if (!entryWithId._id) return false;
-        const entryIdStr = entryWithId._id.toString();
-        return entryIdStr === entryId;
-      }
-    );
-    
-    // If not found, try comparing as strings (handles edge cases)
-    if (entryIndex === -1) {
-      entryIndex = user.diaryEntries.findIndex(
-        (entry) => {
-          const entryWithId = entry as DiaryEntryWithId;
-          if (!entryWithId._id) return false;
-          const entryIdStr = String(entryWithId._id);
-          const compareId = String(entryId);
-          return entryIdStr === compareId;
-        }
-      );
-    }
-
-    if (entryIndex === -1) {
-      console.error('[Diary Like API] Entry not found:', {
-        entryId,
-        entryIdType: typeof entryId,
-        entryIds: user.diaryEntries.map((e, idx: number) => {
-          const entryWithId = e as DiaryEntryWithId;
-          return {
-            index: idx,
-            _id: entryWithId._id?.toString(),
-            _idType: typeof entryWithId._id,
-            hasId: !!entryWithId._id,
-          };
-        }),
-        totalEntries: user.diaryEntries.length,
-      });
-      return NextResponse.json({ 
-        error: 'Diary entry not found',
-        details: `Entry with ID "${entryId}" not found. Total entries: ${user.diaryEntries.length}`
-      }, { status: 404 });
-    }
-
-    const entry = user.diaryEntries[entryIndex] as DiaryEntryWithId;
-    const userId = new mongoose.Types.ObjectId(currentUserId);
-    const userIdStr = currentUserId;
-
-    // Initialize likes array if it doesn't exist
-    if (!entry.likes) {
-      entry.likes = [];
-    }
-
-    // Check if user already liked this entry
-    // Handle both ObjectId and string formats
-    type LikeId = mongoose.Types.ObjectId | string;
-    const isLiked = entry.likes.some((id: LikeId) => {
-      const idStr = id?.toString ? id.toString() : String(id);
-      return idStr === userIdStr;
-    });
-
-    console.log('[Diary Like API] Toggling like:', {
-      entryId,
-      userId: userIdStr,
-      isLiked,
-      currentLikesCount: entry.likes.length,
-      likes: entry.likes.map((id: LikeId) => id?.toString ? id.toString() : String(id)),
-    });
-
-    // Use direct MongoDB update to avoid validating all entries
-    // This prevents validation errors for general diary entries without bookId/bookTitle/bookAuthor
-    if (isLiked) {
-      // Unlike: remove user ID from likes array
-      // Need to remove both ObjectId and string formats
-      // First try with ObjectId
-      const entryIdForQuery = entry._id as mongoose.Types.ObjectId | string;
-      let updateResult = await User.updateOne(
-        { 
-          _id: user._id,
-          'diaryEntries._id': entryIdForQuery
-        },
-        {
-          $pull: {
-            'diaryEntries.$.likes': userId
-          }
-        }
-      );
-
-      // Also try removing as string format if the above didn't work
-      if (updateResult.modifiedCount === 0) {
-        updateResult = await User.updateOne(
-          { 
-            _id: user._id,
-            'diaryEntries._id': entryIdForQuery
-          },
-          {
-            $pull: {
-              'diaryEntries.$.likes': userIdStr
-            }
-          }
-        );
-      }
-
-      if (!updateResult.acknowledged) {
-        throw new Error('Failed to unlike entry');
-      }
-    } else {
-      // Like: add user ID to likes array (avoid duplicates using $addToSet)
-      const entryIdForQuery = entry._id as mongoose.Types.ObjectId | string;
-      const updateResult = await User.updateOne(
-        { 
-          _id: user._id,
-          'diaryEntries._id': entryIdForQuery
-        },
-        {
-          $addToSet: {
-            'diaryEntries.$.likes': userId
-          }
-        }
-      );
-
-      if (!updateResult.acknowledged) {
-        throw new Error('Failed to like entry');
-      }
-
-      // Create activity notification for the diary entry owner
-      // Only create activity if the liker is not the owner (don't notify yourself)
-      const ownerIdStr = user._id?.toString ? user._id.toString() : String(user._id);
-      if (ownerIdStr !== userIdStr) {
-        // Get the liker's user info
-        const likerUser = await User.findById(userId).select('username name avatar').lean();
-        
-        if (likerUser) {
-          // Determine the diary entry name/subject
-          const entrySubject = entry.subject && entry.subject.trim() 
-            ? entry.subject 
-            : (entry.bookTitle || 'your diary entry');
-          
-          // Add activity to the diary entry owner's activities
-          const newActivity = {
-            type: "liked_diary_entry" as const,
-            diaryEntryId: entryIdForQuery,
-            subject: entrySubject,
-            sharedBy: userId,
-            sharedByUsername: likerUser.username || '',
-            timestamp: new Date(),
-          };
-
-          // Re-fetch the user to ensure we have the latest document
-          const freshUser = await User.findById(user._id);
-          if (freshUser) {
-            if (!freshUser.activities) {
-              freshUser.activities = [];
-            }
-            freshUser.activities.push(newActivity);
-            await freshUser.save();
-          }
-        }
-      }
-    }
-
-    // Fetch the updated entry to get the new likes count
-    const entryIdForQuery = entry._id as mongoose.Types.ObjectId | string;
-    const updatedUser = await User.findOne({
-      _id: user._id,
-      'diaryEntries._id': entryIdForQuery
-    }).select('diaryEntries');
-
-    if (!updatedUser) {
-      throw new Error('Failed to fetch updated entry');
-    }
-
-    const entryIdStr = entry._id?.toString();
-    const updatedEntry = updatedUser.diaryEntries.find((e) => {
-      const entryWithId = e as DiaryEntryWithId;
-      return entryWithId._id?.toString() === entryIdStr;
-    });
-
-    if (!updatedEntry) {
-      throw new Error('Entry not found after update');
-    }
-
-    const newLikesCount = updatedEntry.likes?.length || 0;
-    const newLiked = updatedEntry.likes?.some((id: LikeId) => {
-      const idStr = id?.toString ? id.toString() : String(id);
-      return idStr === userIdStr;
-    }) || false;
-
-    console.log('[Diary Like API] Like toggled successfully:', {
-      newLiked: newLiked,
-      newLikesCount: newLikesCount,
-    });
-
-    return NextResponse.json({
-      liked: newLiked,
-      likesCount: newLikesCount,
-    });
-  } catch (error: unknown) {
-    console.error('[Diary Like API] Error toggling diary entry like:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    const errorName = error instanceof Error ? error.name : 'UnknownError';
-    const errorStack = error instanceof Error ? error.stack?.substring(0, 500) : undefined;
-    console.error('[Diary Like API] Error details:', {
-      message: errorMessage,
-      name: errorName,
-      stack: errorStack,
-    });
-    return NextResponse.json(
-      { 
-        error: 'Failed to toggle like', 
-        details: errorMessage,
-        errorName: errorName
-      },
-      { status: 500 }
-    );
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("Like diary entry error:", error);
+    return NextResponse.json({ error: "Failed to like entry" }, { status: 500 });
   }
 }
 
+export async function DELETE(
+  _request: NextRequest,
+  context: { params: Promise<{ username: string; entryId: string }> }
+) {
+  try {
+    const { username, entryId } = await context.params;
+    const { data, status } = await diaryApi.unlikeEntry(username, entryId);
+    if (status === 401) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (status >= 400) {
+      const err = data as { error?: { message?: string }; message?: string };
+      return NextResponse.json({ error: err?.error?.message ?? "Failed to unlike entry" }, { status });
+    }
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("Unlike diary entry error:", error);
+    return NextResponse.json({ error: "Failed to unlike entry" }, { status: 500 });
+  }
+}

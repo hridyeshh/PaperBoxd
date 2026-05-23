@@ -1,8 +1,9 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/components/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 import { Header } from "@/components/ui/layout/header-with-search";
 import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
@@ -16,60 +17,56 @@ import { useIsMobile } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 
 export default function Home() {
-  const { data: session, status } = useSession();
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const { status: sessionStatus } = useSession();
   const router = useRouter();
   const isMobile = useIsMobile();
-  const [checkingOnboarding, setCheckingOnboarding] = useState(true); // Start as true to prevent flash
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
-  // Check onboarding status immediately for authenticated users
+  // While NextAuth is still resolving, or while it's authenticated but our
+  // pb_user cookie hasn't been minted yet (OAuthBridge in flight), keep
+  // showing the spinner instead of the public home.
+  const oauthSyncPending =
+    sessionStatus === "loading" || (sessionStatus === "authenticated" && !user);
+
   useEffect(() => {
-    if (status === "loading") {
+    if (isLoading || oauthSyncPending) {
       return;
     }
 
-    if (status === "authenticated" && session?.user) {
+    if (isAuthenticated && user) {
       const checkOnboarding = async () => {
         try {
           setCheckingOnboarding(true);
           const response = await fetch("/api/onboarding/status");
           if (response.ok) {
             const data = await response.json();
-            
-            // Only check onboarding for new users
-            // Existing users should go directly to home (no redirect)
             if (data.isNewUser) {
-              // If no username, redirect to choose username
               if (!data.hasUsername) {
                 router.replace("/choose-username");
                 return;
               }
-              
-              // If onboarding not completed, redirect to onboarding
               if (!data.completed) {
                 router.replace("/onboarding");
                 return;
               }
             }
-            // Existing users (not new) - no redirect, show home
             setCheckingOnboarding(false);
           } else {
             setCheckingOnboarding(false);
           }
-        } catch (error) {
-          console.error("Failed to check onboarding status:", error);
+        } catch {
           setCheckingOnboarding(false);
         }
       };
 
       checkOnboarding();
-    } else if (status === "unauthenticated") {
-      // Not authenticated, show public home immediately
+    } else if (!isAuthenticated) {
       setCheckingOnboarding(false);
     }
-  }, [status, session?.user, router]);
+  }, [isLoading, isAuthenticated, user, router, oauthSyncPending]);
 
-  // Show loading state while checking session or onboarding
-  if (status === "loading" || checkingOnboarding) {
+  if (isLoading || checkingOnboarding || oauthSyncPending) {
     return (
       <main className="relative min-h-screen overflow-hidden bg-background">
         <AnimatedGridPattern
@@ -79,29 +76,28 @@ export default function Home() {
           repeatDelay={0.75}
           className="text-slate-500 dark:text-slate-400"
         />
-      <div className="relative z-10 flex min-h-screen flex-col">
-        {isMobile ? (
-          <Header minimalMobile={isMobile} />
-        ) : session?.user ? (
-          <>
-            <DesktopSidebar />
-            <MinimalDesktopHeader />
-          </>
-        ) : (
-          <Header minimalMobile={isMobile} />
-        )}
-        <div className={cn(
-          "flex flex-1 items-center justify-center px-4 pb-16 pt-20 md:pb-24 md:pt-24",
-          isMobile ? "mt-16" : session?.user ? "mt-16 ml-16" : "mt-16"
-        )}>
-          <TetrisLoading size="md" speed="fast" loadingText="Loading..." />
+        <div className="relative z-10 flex min-h-screen flex-col">
+          {isMobile ? (
+            <Header minimalMobile={isMobile} />
+          ) : user ? (
+            <>
+              <DesktopSidebar />
+              <MinimalDesktopHeader />
+            </>
+          ) : (
+            <Header minimalMobile={isMobile} />
+          )}
+          <div className={cn(
+            "flex flex-1 items-center justify-center px-4 pb-16 pt-20 md:pb-24 md:pt-24",
+            isMobile ? "mt-16" : user ? "mt-16" : "mt-16"
+          )}>
+            <TetrisLoading size="md" speed="fast" loadingText="Loading..." />
+          </div>
         </div>
-      </div>
       </main>
     );
   }
 
-  // Show personalized carousels for authenticated users, public carousels for others
   return (
     <main className="relative min-h-screen overflow-hidden bg-background">
       <AnimatedGridPattern
@@ -112,10 +108,9 @@ export default function Home() {
         className="text-slate-500 dark:text-slate-400"
       />
       <div className="relative z-10 flex min-h-screen flex-col">
-        {/* Show sidebar + minimal header on desktop for authenticated users, header otherwise */}
         {isMobile ? (
           <Header minimalMobile={isMobile} />
-        ) : session?.user ? (
+        ) : user ? (
           <>
             <DesktopSidebar />
             <MinimalDesktopHeader />
@@ -125,10 +120,10 @@ export default function Home() {
         )}
         <div className={cn(
           "flex-1",
-          isMobile ? "mt-16" : session?.user ? "mt-16 ml-16" : "mt-16",
-          !session?.user && "flex flex-col"
+          isMobile ? "mt-16" : user ? "mt-16" : "mt-16",
+          !user && "flex flex-col"
         )}>
-          {session?.user ? (
+          {user ? (
             isMobile ? (
               <AuthenticatedHomeMobile />
             ) : (

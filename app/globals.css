@@ -21,6 +21,25 @@
   scrollbar-width: none;  /* Firefox */
 }
 
+/* Auth page: scrolling book-cover column animations */
+@keyframes auth-scroll-up {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+
+@keyframes auth-scroll-down {
+  from { transform: translateY(-50%); }
+  to { transform: translateY(0); }
+}
+
+.animate-auth-scroll-up {
+  animation: auth-scroll-up linear infinite;
+}
+
+.animate-auth-scroll-down {
+  animation: auth-scroll-down linear infinite;
+}
+
 /* Tailwind CSS v4 theme directive - valid syntax */
 /* @suppress cssUnknownAtRule */
 @theme inline {
