@@ -89,67 +89,28 @@ export function DiaryEntryDialog({
 
     try {
       const response = await fetch(`/api/users/${encodeURIComponent(username)}/diary/${entry.id}/like`, {
-        method: "POST",
+        method: wasLiked ? "DELETE" : "POST",
         headers: { "Content-Type": "application/json" },
       });
 
       if (!response.ok) {
-        // Revert on error
         setIsLiked(wasLiked);
         setLikesCount(prev => wasLiked ? prev + 1 : prev - 1);
-        
-        // Try to get error details
+
         let errorMessage = `Failed to toggle like (${response.status})`;
-        const responseClone = response.clone();
-        
         try {
-          const errorData = await responseClone.json();
+          const errorData = await response.clone().json() as { error?: string; details?: string };
           errorMessage = errorData.error || errorData.details || errorMessage;
-          console.error("[DiaryEntryDialog] Like API error:", {
-            status: response.status,
-            statusText: response.statusText,
-            error: errorData,
-            entryId: entry.id,
-            entryIdType: typeof entry.id,
-            username,
-          });
-        } catch (parseError) {
-          // If JSON parsing fails, try to get text response
-          try {
-            const textResponseClone = response.clone();
-            const text = await textResponseClone.text();
-            console.error("[DiaryEntryDialog] Like API error (text response):", {
-              status: response.status,
-              statusText: response.statusText,
-              text,
-              entryId: entry.id,
-              entryIdType: typeof entry.id,
-              username,
-            });
-            errorMessage = text || errorMessage;
-          } catch (textError) {
-            console.error("[DiaryEntryDialog] Like API error (failed to parse):", {
-              status: response.status,
-              statusText: response.statusText,
-              parseError,
-              textError,
-              entryId: entry.id,
-              entryIdType: typeof entry.id,
-              username,
-            });
-          }
+        } catch {
+          const text = await response.clone().text().catch(() => "");
+          if (text) errorMessage = text;
         }
-        
+
         throw new Error(errorMessage);
       }
 
-      // Trigger refresh immediately to sync with server state
       if (onLikeChange) {
-        try {
-          await onLikeChange();
-        } catch (callbackError) {
-          console.error("[DiaryEntryDialog] Error in onLikeChange callback:", callbackError);
-        }
+        try { await onLikeChange(); } catch { /* ignore */ }
       }
 
       // Reset animation after delay
@@ -157,8 +118,7 @@ export function DiaryEntryDialog({
         setIsAnimating(false);
       }, 800);
     } catch (error) {
-      console.error("Error toggling like:", error);
-      toast.error("Failed to update like");
+      toast.error(error instanceof Error ? error.message : "Failed to update like");
       setIsAnimating(false);
     } finally {
       setIsLiking(false);
@@ -182,10 +142,8 @@ export function DiaryEntryDialog({
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.error || errorData.details || "Failed to delete entry";
-        console.error('[DiaryEntryDialog] Delete error:', { status: response.status, error: errorData });
-        throw new Error(errorMessage);
+        const errorData = await response.json().catch(() => ({})) as { error?: string; details?: string };
+        throw new Error(errorData.error || errorData.details || "Failed to delete entry");
       }
 
       toast.success("Diary entry deleted");
@@ -195,8 +153,7 @@ export function DiaryEntryDialog({
         onDelete();
       }
     } catch (error) {
-      console.error("Error deleting diary entry:", error);
-      toast.error("Failed to delete diary entry");
+      toast.error(error instanceof Error ? error.message : "Failed to delete diary entry");
     } finally {
       setIsDeleting(false);
     }

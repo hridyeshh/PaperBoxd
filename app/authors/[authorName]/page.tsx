@@ -4,10 +4,9 @@ import Image from "next/image";
 import * as React from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { Header } from "@/components/ui/layout/header-with-search";
-import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
-import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
+import { HomeLayoutHeader } from "@/components/ui/layout/home-layout-header";
 import { useIsMobile } from "@/hooks/use-media-query";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
+import BookLoader from "@/components/ui/features/book-loader";
 import { NotFoundPage } from "@/components/ui/pages/not-found-page";
 import { createBookSlug } from "@/lib/utils/book-slug";
 
@@ -171,8 +170,7 @@ export default function AuthorDetailPage() {
     <Header minimalMobile={isMobile} />
   ) : (
     <>
-      <DesktopSidebar />
-      <MinimalDesktopHeader />
+      <HomeLayoutHeader />
     </>
   );
 
@@ -181,7 +179,7 @@ export default function AuthorDetailPage() {
       <div className="flex min-h-screen flex-col">
         {nav}
         <div className="flex flex-1 items-center justify-center mt-16">
-          <TetrisLoading />
+          <BookLoader />
         </div>
       </div>
     );

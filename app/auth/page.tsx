@@ -1,9 +1,16 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { Auth } from "@/components/ui/auth/auth-form-1";
 import { Pinyon_Script } from "next/font/google";
 import { cn } from "@/lib/utils";
+
+// WebGL canvas — must be client-only (no SSR)
+const ShaderBackground = dynamic(
+  () => import("@/components/ui/features/shader-background").then((m) => ({ default: m.ShaderBackground })),
+  { ssr: false, loading: () => null }
+);
 
 const pinyonScript = Pinyon_Script({ weight: "400", subsets: ["latin"], display: "swap" });
 
@@ -81,6 +88,16 @@ function CoverColumn({
 }
 
 export default function AuthPage() {
+  const [isDark, setIsDark] = React.useState(false);
+  React.useEffect(() => {
+    const check = () => setIsDark(document.documentElement.classList.contains("dark"));
+    check();
+    const obs = new MutationObserver(check);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
+  const gradientVariant = isDark ? "warm-dark" : "warm";
+
   // Distribute 32 covers across 4 columns, offset so columns look varied
   const col1 = BOOK_COVERS.slice(0, 8);
   const col2 = BOOK_COVERS.slice(7, 16);
@@ -130,12 +147,24 @@ export default function AuthPage() {
       </div>
 
       {/* ── Right panel: form ── */}
-      <div className="flex-1 overflow-y-auto flex items-center justify-center py-12 px-6">
-        <div className="w-full max-w-[420px]">
+      <div
+        className="flex-1 relative overflow-y-auto flex items-start md:items-center justify-center px-5 md:px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] md:pt-12 md:pb-12"
+      >
+        {/* Shader gradient — full-bleed on mobile, inset frame on desktop */}
+        <div
+          className="absolute inset-0 md:inset-5 md:rounded-[2rem] pointer-events-none z-0 overflow-hidden md:shadow-[0_4px_32px_oklch(0.62_0.08_38/0.12)]"
+        >
+          <ShaderBackground variant={gradientVariant} />
+        </div>
+
+        <div className="w-full max-w-[420px] relative z-10">
           {/* Mobile-only wordmark */}
-          <div className="mb-8 md:hidden text-center select-none">
-            <p className={cn("text-[2.4rem] leading-none text-foreground", pinyonScript.className)}>
+          <div className="mb-6 md:hidden text-center select-none">
+            <p className={cn("text-[2rem] leading-none text-foreground", pinyonScript.className)}>
               PaperBoxd
+            </p>
+            <p className="mt-1.5 text-[10px] uppercase tracking-[0.22em] text-muted-foreground/70 font-medium">
+              Your reading universe
             </p>
           </div>
 

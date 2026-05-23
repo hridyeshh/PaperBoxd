@@ -7,7 +7,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/components/providers/auth-provider";
 import { logoutAction } from "@/lib/auth/actions";
 import { signOut } from "next-auth/react";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
+import BookLoader from "@/components/ui/features/book-loader";
 import { cn, DEFAULT_AVATAR } from "@/lib/utils";
 import { SearchModal, CommandItem } from "@/components/ui/features/search-modal";
 import { ThemeToggle } from "@/components/ui/features/theme-toggle";
@@ -151,7 +151,7 @@ export function MinimalDesktopHeader() {
       )}
       {isLoggingOut && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <TetrisLoading size="sm" speed="fast" loadingText="Signing out…" />
+          <BookLoader size="sm" speed="fast" loadingText="Signing out…" />
         </div>
       )}
 

@@ -4,15 +4,12 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 import { Header } from "@/components/ui/layout/header-with-search";
-import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
-import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
-import { PublicHome } from "@/components/ui/home/public-home";
-import { PublicHomeMobile } from "@/components/ui/home/public-home-mobile";
+import { HomeLayoutHeader } from "@/components/ui/layout/home-layout-header";
+import { HomeSidebar } from "@/components/ui/layout/home-sidebar";
+import { LandingPage } from "@/components/ui/landing/landing-page";
 import { AuthenticatedHome } from "@/components/ui/home/authenticated-home";
 import { AuthenticatedHomeMobile } from "@/components/ui/home/authenticated-home-mobile";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 
@@ -66,76 +63,38 @@ export default function Home() {
     }
   }, [isLoading, isAuthenticated, user, router, oauthSyncPending]);
 
-  if (isLoading || checkingOnboarding || oauthSyncPending) {
-    return (
-      <main className="relative min-h-screen overflow-hidden bg-background">
-        <AnimatedGridPattern
-          numSquares={120}
-          maxOpacity={0.08}
-          duration={4}
-          repeatDelay={0.75}
-          className="text-slate-500 dark:text-slate-400"
-        />
-        <div className="relative z-10 flex min-h-screen flex-col">
-          {isMobile ? (
-            <Header minimalMobile={isMobile} />
-          ) : user ? (
-            <>
-              <DesktopSidebar />
-              <MinimalDesktopHeader />
-            </>
-          ) : (
-            <Header minimalMobile={isMobile} />
-          )}
-          <div className={cn(
-            "flex flex-1 items-center justify-center px-4 pb-16 pt-20 md:pb-24 md:pt-24",
-            isMobile ? "mt-16" : user ? "mt-16" : "mt-16"
-          )}>
-            <TetrisLoading size="md" speed="fast" loadingText="Loading..." />
-          </div>
-        </div>
-      </main>
-    );
+  // While auth is resolving or onboarding check is in flight, show the landing
+  // page — its own splash overlay covers everything until it's ready.
+  if (isLoading || oauthSyncPending || checkingOnboarding) {
+    return <LandingPage />;
+  }
+
+  // Unauthenticated: full landing page
+  if (!user) {
+    return <LandingPage />;
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-background">
-      <AnimatedGridPattern
-        numSquares={120}
-        maxOpacity={0.08}
-        duration={4}
-        repeatDelay={0.75}
-        className="text-slate-500 dark:text-slate-400"
-      />
-      <div className="relative z-10 flex min-h-screen flex-col">
-        {isMobile ? (
-          <Header minimalMobile={isMobile} />
-        ) : user ? (
-          <>
-            <DesktopSidebar />
-            <MinimalDesktopHeader />
-          </>
-        ) : (
-          <Header minimalMobile={isMobile} />
-        )}
-        <div className={cn(
-          "flex-1",
-          isMobile ? "mt-16" : user ? "mt-16" : "mt-16",
-          !user && "flex flex-col"
-        )}>
-          {user ? (
-            isMobile ? (
-              <AuthenticatedHomeMobile />
-            ) : (
-              <AuthenticatedHome />
-            )
-          ) : isMobile ? (
-            <PublicHomeMobile />
-          ) : (
-            <PublicHome />
-          )}
-        </div>
-      </div>
-    </main>
+    <div className="min-h-screen bg-background">
+      {isMobile ? (
+        <>
+          <Header minimalMobile />
+          <div className="mt-16">
+            <AuthenticatedHomeMobile />
+          </div>
+        </>
+      ) : (
+        <>
+          <HomeLayoutHeader />
+          <HomeSidebar />
+          <main
+            className={cn("pt-16 pl-[220px]")}
+            style={{ minHeight: "100vh" }}
+          >
+            <AuthenticatedHome />
+          </main>
+        </>
+      )}
+    </div>
   );
 }

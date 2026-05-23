@@ -8,12 +8,11 @@ import { BookOpen, Star, Heart, Share2, NotebookPen, Link2, Search, Send, BookMa
 import { useAuth } from "@/components/providers/auth-provider";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
+import BookLoader from "@/components/ui/features/book-loader";
 import { NotFoundPage } from "@/components/ui/pages/not-found-page";
 import { Button } from "@/components/ui/primitives/button";
 import { Header } from "@/components/ui/layout/header-with-search";
-import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
-import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
+import { HomeLayoutHeader } from "@/components/ui/layout/home-layout-header";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { stripHtmlTags, cn, DEFAULT_AVATAR } from "@/lib/utils";
 import { SignupPromptDialog } from "@/components/ui/dialogs/signup-prompt-dialog";
@@ -684,7 +683,7 @@ export default function BookDetailPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <TetrisLoading />
+        <BookLoader />
       </div>
     );
   }
@@ -1007,8 +1006,7 @@ export default function BookDetailPage() {
         <Header minimalMobile={isMobile} />
       ) : (
         <>
-          <DesktopSidebar />
-          <MinimalDesktopHeader />
+          <HomeLayoutHeader />
         </>
       )}
 
@@ -1108,7 +1106,7 @@ export default function BookDetailPage() {
                   <span className="text-[0.625rem] uppercase tracking-[0.12em] text-muted-foreground font-semibold">
                     Written by
                   </span>
-                  {(volumeInfo.authors ?? [primaryAuthor]).filter(Boolean).map((author) => (
+                  {Array.from(new Set((volumeInfo.authors ?? [primaryAuthor]).filter(Boolean))).map((author) => (
                     <span
                       key={author}
                       className="inline-flex items-center gap-2 px-3 py-1.5 border border-border rounded-full text-sm font-semibold"
@@ -1882,7 +1880,7 @@ export default function BookDetailPage() {
         <DiaryEditorDialog
           open={showDiaryEditor}
           onOpenChange={setShowDiaryEditor}
-          bookId={(book._id || book.bookId || book.id) as string}
+          bookId={(book.bookId || book.id) as string}
           bookTitle={book.volumeInfo.title}
           bookAuthor={book.volumeInfo.authors?.[0] || "Unknown Author"}
           bookCover={

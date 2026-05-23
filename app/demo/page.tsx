@@ -4,7 +4,7 @@ import * as React from "react";
 import Image from "next/image";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 import { stripHtmlTags } from "@/lib/utils";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
+import BookLoader from "@/components/ui/features/book-loader";
 import { BookShareButton } from "@/components/ui/features/book-share-button";
 import { BookShareCard } from "@/components/ui/features/book-share-card";
 import { Input } from "@/components/ui/primitives/input";
@@ -154,7 +154,7 @@ export default function DemoPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <TetrisLoading />
+        <BookLoader />
       </div>
     );
   }

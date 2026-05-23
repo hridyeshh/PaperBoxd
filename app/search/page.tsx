@@ -4,8 +4,7 @@ import * as React from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/ui/layout/header-with-search";
-import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
-import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
+import { HomeLayoutHeader } from "@/components/ui/layout/home-layout-header";
 import { useIsMobile } from "@/hooks/use-media-query";
 import {
   Command,
@@ -245,8 +244,7 @@ export default function SearchPage() {
         <Header minimalMobile={isMobile} />
       ) : (
         <>
-          <DesktopSidebar />
-          <MinimalDesktopHeader />
+          <HomeLayoutHeader />
         </>
       )}
       <main className="flex-1 mt-16 pb-24">

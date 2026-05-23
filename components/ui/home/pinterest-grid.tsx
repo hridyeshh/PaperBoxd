@@ -145,6 +145,7 @@ export function PinterestGrid({ books, onLoadMore, hasMore = false, isLoading = 
   };
 
   return (
+    <>
       {/* Explicit columns — new books always go to the bottom, never reshuffle */}
       <div className="flex w-full items-start" style={{ gap: "1rem" }}>
         {columns.map((colBooks, colIndex) => (

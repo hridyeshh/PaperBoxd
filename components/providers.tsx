@@ -68,7 +68,31 @@ export function Providers({ children }: { children: ReactNode }) {
       <AuthProvider>
         <OAuthBridge />
         {children}
-        <Toaster position="top-center" richColors closeButton />
+        <Toaster
+          position="bottom-right"
+          closeButton
+          toastOptions={{
+            classNames: {
+              toast:
+                "group font-sans text-[13px] rounded-xl border border-border bg-background text-foreground shadow-lg px-4 py-3 gap-3 items-start",
+              title: "font-medium text-foreground text-[13px] leading-snug",
+              description: "text-muted-foreground text-[12px] mt-0.5",
+              icon: "text-foreground mt-0.5",
+              success:
+                "border-border bg-background text-foreground",
+              error:
+                "border-destructive/30 bg-background text-foreground",
+              warning:
+                "border-yellow-500/30 bg-background text-foreground",
+              closeButton:
+                "border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted/60",
+              actionButton:
+                "bg-foreground text-background text-[12px] font-medium rounded-lg px-3 py-1.5 hover:opacity-85",
+              cancelButton:
+                "bg-muted text-muted-foreground text-[12px] font-medium rounded-lg px-3 py-1.5 hover:bg-muted/60",
+            },
+          }}
+        />
       </AuthProvider>
     </SessionProvider>
   );

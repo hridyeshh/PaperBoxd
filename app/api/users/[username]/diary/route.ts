@@ -130,15 +130,43 @@ export async function DELETE(
   }
 }
 
+function isPostgresUUID(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s.trim());
+}
+
+function isISBN(s: string): boolean {
+  const d = s.replace(/\D/g, "");
+  return d.length === 10 || d.length === 13;
+}
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ username: string }> }
 ) {
   try {
     const { username } = await context.params;
-    const body = await request.json();
+    const raw = await request.json() as Record<string, unknown>;
 
-    const { data, status } = await diaryApi.createEntry(username, body);
+    // Normalize camelCase frontend fields → snake_case Go fields
+    const rawBookId = ((raw.bookId ?? raw.book_id) as string | undefined)?.trim();
+    const goBody: Record<string, unknown> = {
+      content: raw.content,
+      title: raw.title ?? null,
+      is_private: raw.isPrivate ?? raw.is_private ?? false,
+      rating: raw.rating ?? null,
+    };
+
+    if (rawBookId) {
+      if (isPostgresUUID(rawBookId)) {
+        goBody.book_id = rawBookId;
+      } else if (isISBN(rawBookId)) {
+        goBody.isbn = rawBookId.replace(/\D/g, "");
+      } else {
+        goBody.google_books_id = rawBookId;
+      }
+    }
+
+    const { data, status } = await diaryApi.createEntry(username, goBody);
     if (status === 401) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (status >= 400) {
       const err = data as { error?: { message?: string }; message?: string };

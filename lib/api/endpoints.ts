@@ -253,7 +253,7 @@ export const bookshelfApi = {
     goFetch(`/api/v1/users/${encodeURIComponent(username)}/tbr?page=${page}&page_size=${pageSize}`),
 
   getCurrentlyReading: (username: string, page = 1, pageSize = 20) =>
-    goFetch(`/api/v1/users/${encodeURIComponent(username)}/reading?page=${page}&page_size=${pageSize}`),
+    goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/reading?page=${page}&page_size=${pageSize}`),
 };
 
 // ── Favorites ─────────────────────────────────────────────────────────────────
@@ -346,6 +346,7 @@ export const diaryApi = {
   likeEntry: (username: string, entryId: string) =>
     goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/diary/${encodeURIComponent(entryId)}/like`, {
       method: "POST",
+      body: JSON.stringify({}),
     }),
 
   unlikeEntry: (username: string, entryId: string) =>
@@ -358,7 +359,7 @@ export const diaryApi = {
 
 export const listsApi = {
   getUserLists: (username: string) =>
-    goFetch(`/api/v1/users/${encodeURIComponent(username)}/lists`),
+    goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/lists`),
 
   createList: (username: string, body: Record<string, unknown>) =>
     goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/lists`, {
@@ -367,7 +368,7 @@ export const listsApi = {
     }),
 
   getList: (username: string, listId: string) =>
-    goFetch(`/api/v1/users/${encodeURIComponent(username)}/lists/${encodeURIComponent(listId)}`),
+    goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/lists/${encodeURIComponent(listId)}`),
 
   updateList: (username: string, listId: string, body: Record<string, unknown>) =>
     goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/lists/${encodeURIComponent(listId)}`, {

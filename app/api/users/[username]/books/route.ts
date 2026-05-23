@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bookshelfApi, favoritesApi, goFetchAuthed, userApi } from "@/lib/api/endpoints";
+import { getSession } from "@/lib/auth/jwt-session";
+import { recordActivity, STREAK_COOKIE_OPTIONS } from "@/lib/streak";
 
 function isPostgresBookUUID(s: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s.trim());
@@ -144,6 +146,17 @@ export async function POST(
           const err = data as { error?: { message?: string }; message?: string };
           return NextResponse.json({ error: err?.error?.message ?? "Failed to add to bookshelf" }, { status });
         }
+        // Marking a book as read counts as a reading activity
+        {
+          const session = await getSession();
+          const userId = session.user?.id;
+          if (userId) {
+            const { result, cookieName, cookieValue } = await recordActivity(userId);
+            const res = NextResponse.json({ message: "Book added to bookshelf successfully", ...(data as object), streak: result.streak });
+            res.cookies.set(cookieName, cookieValue, STREAK_COOKIE_OPTIONS);
+            return res;
+          }
+        }
         return NextResponse.json({ message: "Book added to bookshelf successfully", ...(data as object) });
       }
 
@@ -244,15 +257,48 @@ export async function GET(
       case "bookshelf": {
         const { data, status } = await bookshelfApi.get(username, page, limit, "read");
         if (status >= 400) return NextResponse.json({ error: "Failed to fetch bookshelf" }, { status });
-        const bs = data as { books: unknown[]; total_count: number };
-        return NextResponse.json({ type, total: bs.total_count, limit, offset: (page - 1) * limit, books: bs.books });
+        const bs = data as { books: Array<{ id: string; volumeInfo?: { title?: string; authors?: string[]; imageLinks?: { thumbnail?: string } } }>; total_count: number };
+        const books = (bs.books ?? []).map((b) => ({
+          bookId: b.id,
+          title: b.volumeInfo?.title ?? "",
+          cover: b.volumeInfo?.imageLinks?.thumbnail ?? "",
+          authors: b.volumeInfo?.authors ?? [],
+        }));
+        return NextResponse.json({ type, total: bs.total_count, limit, offset: (page - 1) * limit, books });
       }
 
       case "tbr": {
         const { data, status } = await bookshelfApi.getTBR(username, page, limit);
         if (status >= 400) return NextResponse.json({ error: "Failed to fetch TBR" }, { status });
-        const tbr = data as unknown[];
-        return NextResponse.json({ type, total: tbr.length, limit, offset: (page - 1) * limit, books: tbr });
+        type TbrEntry = {
+          book_id?: string;
+          current_page?: number;
+          tbr_priority?: string;
+          tbr_notes?: string;
+          created_at?: string;
+          book?: {
+            id?: string;
+            volumeInfo?: {
+              title?: string;
+              authors?: string[];
+              imageLinks?: { thumbnail?: string; medium?: string };
+              pageCount?: number;
+            };
+          };
+        };
+        const tbr = (data ?? []) as TbrEntry[];
+        const books = tbr.map((b) => ({
+          bookId: b.book?.id ?? b.book_id ?? "",
+          title: b.book?.volumeInfo?.title ?? "",
+          cover: b.book?.volumeInfo?.imageLinks?.thumbnail ?? b.book?.volumeInfo?.imageLinks?.medium ?? "",
+          authors: b.book?.volumeInfo?.authors ?? [],
+          current_page: b.current_page ?? 0,
+          totalPages: b.book?.volumeInfo?.pageCount ?? 0,
+          tbr_priority: b.tbr_priority,
+          tbr_notes: b.tbr_notes,
+          created_at: b.created_at,
+        }));
+        return NextResponse.json({ type, total: books.length, limit, offset: (page - 1) * limit, books });
       }
 
       case "currently_reading": {
@@ -278,7 +324,7 @@ export async function GET(
           books?: Array<{
             id: string;
             _id?: string;
-            volumeInfo?: { title?: string };
+            volumeInfo?: { title?: string; authors?: string[]; imageLinks?: { thumbnail?: string } };
             isbndbId?: string;
             openLibraryId?: string;
             googleBooksId?: string;
@@ -288,8 +334,9 @@ export async function GET(
         const rawBooks = lr.books ?? [];
         const books = rawBooks.map((b) => ({
           bookId: b.id,
-          _id: b._id ?? b.id,
-          title: b.volumeInfo?.title,
+          title: b.volumeInfo?.title ?? "",
+          cover: b.volumeInfo?.imageLinks?.thumbnail ?? "",
+          authors: b.volumeInfo?.authors ?? [],
           isbndbId: b.isbndbId,
           openLibraryId: b.openLibraryId,
           googleBooksId: b.googleBooksId,

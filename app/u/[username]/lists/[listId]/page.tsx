@@ -6,11 +6,10 @@ import Image from "next/image";
 import { Plus, Share2, MoreVertical, Link2, Search, Send, Bookmark, X, Edit, Trash2 } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { toast } from "sonner";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
+import BookLoader from "@/components/ui/features/book-loader";
 import { NotFoundPage } from "@/components/ui/pages/not-found-page";
 import { Header } from "@/components/ui/layout/header-with-search";
-import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
-import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
+import { HomeLayoutHeader } from "@/components/ui/layout/home-layout-header";
 import { Button } from "@/components/ui/primitives/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/primitives/dialog";
 import { Input } from "@/components/ui/primitives/input";
@@ -844,7 +843,7 @@ export default function ListDetailPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <TetrisLoading />
+        <BookLoader />
       </div>
     );
   }
@@ -857,8 +856,7 @@ export default function ListDetailPage() {
           <Header minimalMobile={isMobile} />
         ) : (
           <>
-            <DesktopSidebar />
-            <MinimalDesktopHeader />
+            <HomeLayoutHeader />
           </>
         )}
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 mt-16">
@@ -888,8 +886,7 @@ export default function ListDetailPage() {
         <Header minimalMobile={isMobile} />
       ) : (
         <>
-          <DesktopSidebar />
-          <MinimalDesktopHeader />
+          <HomeLayoutHeader />
         </>
       )}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 mt-16 pb-24 md:pb-8">

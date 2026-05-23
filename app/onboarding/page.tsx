@@ -3,15 +3,12 @@
 import { useAuth } from "@/components/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { OnboardingQuestionnaire } from "@/components/ui/features/onboarding-questionnaire";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
-import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
+import { OnboardingFlow } from "@/components/ui/onboarding/onboarding-flow";
 
 export default function OnboardingPage() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
-  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
-  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     if (isLoading) return;
@@ -21,82 +18,39 @@ export default function OnboardingPage() {
       return;
     }
 
-    const checkOnboarding = async () => {
+    const check = async () => {
       try {
-        const response = await fetch("/api/onboarding/status");
-        if (response.ok) {
-          const data = await response.json();
-
-          if (!data.hasUsername) {
-            router.replace("/choose-username");
+        const res = await fetch("/api/onboarding/status");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.completed && !data.isNewUser) {
+            router.replace(`/u/${data.username || user?.username}`);
             return;
           }
-
-          if (data.completed) {
-            setHasCompletedOnboarding(true);
-            const username = data.username || user?.username;
-            if (username) {
-              router.replace(`/u/${username}`);
-            } else {
-              router.replace("/profile");
-            }
-            return;
-          }
-
-          if (!data.isNewUser) {
-            const username = data.username || user?.username;
-            if (username) {
-              router.replace(`/u/${username}`);
-            } else {
-              router.replace("/profile");
-            }
-            return;
-          }
-
-          setCheckingOnboarding(false);
-        } else {
-          setCheckingOnboarding(false);
         }
       } catch {
-        setCheckingOnboarding(false);
+        // Continue to show onboarding
       }
+      setChecking(false);
     };
 
-    checkOnboarding();
+    check();
   }, [isLoading, isAuthenticated, user, router]);
 
-  if (isLoading || checkingOnboarding) {
+  if (isLoading || checking) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <TetrisLoading size="md" speed="fast" loadingText="Loading..." />
-      </div>
+      <div
+        className="fixed inset-0 flex items-center justify-center"
+        style={{ background: "#0a0a0a" }}
+      />
     );
   }
 
-  if (!isAuthenticated) {
-    return null;
-  }
-
-  if (hasCompletedOnboarding) {
-    return null;
-  }
+  if (!isAuthenticated) return null;
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-background">
-      <AnimatedGridPattern
-        numSquares={120}
-        maxOpacity={0.08}
-        duration={4}
-        repeatDelay={0.75}
-        className="text-slate-500 dark:text-slate-400"
-      />
-      <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
-        <OnboardingQuestionnaire
-          onComplete={() => {
-            router.push("/");
-          }}
-        />
-      </div>
-    </main>
+    <OnboardingFlow
+      onComplete={() => router.replace("/")}
+    />
   );
 }

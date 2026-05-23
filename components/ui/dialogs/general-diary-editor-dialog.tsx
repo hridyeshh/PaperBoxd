@@ -1,18 +1,22 @@
 "use client";
 
 import * as React from "react";
-import { Button } from "@/components/ui/primitives/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/primitives/dialog";
-import { Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { TiptapEditor } from "@/components/ui/features/tiptap-editor";
+import { cn } from "@/lib/utils";
+import { Playfair_Display } from "next/font/google";
+
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  weight: ["400", "600"],
+  style: ["normal", "italic"],
+  display: "swap",
+});
 
 interface GeneralDiaryEditorDialogProps {
   open: boolean;
@@ -33,126 +37,41 @@ export function GeneralDiaryEditorDialog({
   const [subject, setSubject] = React.useState("");
   const [isSaving, setIsSaving] = React.useState(false);
 
-  // Reset content when dialog opens/closes
   React.useEffect(() => {
     if (open) {
       setContent(initialContent || "");
-      if (!initialContent) {
-        setSubject("");
-      }
+      setSubject("");
     }
   }, [open, initialContent]);
 
-  const handleContentChange = (html: string) => {
-    setContent(html);
-  };
+  const isEmpty = !content || content.replace(/<[^>]*>/g, "").trim() === "";
 
   const handleSave = async () => {
-    // Check if content is empty (Tiptap returns <p></p> for empty content)
-    const textContent = content.replace(/<[^>]*>/g, "").trim();
-    if (!textContent) {
-      toast.error("Please write something before saving");
+    if (isEmpty) {
+      toast.error("Write something before saving");
       return;
     }
 
-    console.log("[GeneralDiaryEditor] Attempting to save:", {
-      username,
-      contentLength: content.trim().length,
-    });
-
     setIsSaving(true);
     try {
-      const requestBody: {
-        content: string;
-        subject?: string;
-      } = {
-        content: content.trim(),
-        // No bookId - this is a general diary entry
-      };
+      const body: { content: string; subject?: string } = { content: content.trim() };
+      if (subject.trim()) body.subject = subject.trim();
 
-      // Only add subject if it's not empty
-      if (subject && subject.trim()) {
-        requestBody.subject = subject.trim();
-      }
-
-      console.log("[GeneralDiaryEditor] Request body:", requestBody);
-      console.log("[GeneralDiaryEditor] Subject value:", subject);
-      console.log("[GeneralDiaryEditor] Subject in request:", requestBody.subject);
-
-      const response = await fetch(`/api/users/${encodeURIComponent(username)}/diary`, {
+      const res = await fetch(`/api/users/${encodeURIComponent(username)}/diary`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify(body),
       });
 
-      console.log("[GeneralDiaryEditor] Response status:", response.status);
-      console.log("[GeneralDiaryEditor] Response ok:", response.ok);
-      console.log("[GeneralDiaryEditor] Response statusText:", response.statusText);
-
-      // Clone the response so we can read it multiple times if needed
-      const responseClone = response.clone();
-
-      if (!response.ok) {
-        let errorMessage = `Failed to save diary entry (${response.status})`;
-        let errorDetails: { error?: string; details?: string; message?: string; validationErrors?: Record<string, string> } | null = null;
-        
-        try {
-          const error = await responseClone.json();
-          console.error("[GeneralDiaryEditor] Error response (JSON):", error);
-          errorDetails = error;
-          
-          // Build a more detailed error message
-          if (error.error) {
-            errorMessage = error.error;
-          }
-          if (error.details) {
-            errorMessage += `: ${error.details}`;
-          }
-          if (error.validationErrors) {
-            const validationMessages = Object.values(error.validationErrors).join(', ');
-            errorMessage += ` (${validationMessages})`;
-          }
-          if (error.message && !errorMessage.includes(error.message)) {
-            errorMessage += ` - ${error.message}`;
-          }
-        } catch {
-          // If JSON parsing fails, try to get text response
-          try {
-            const text = await responseClone.text();
-            console.error("[GeneralDiaryEditor] Error response (text):", text);
-            errorMessage = text || errorMessage;
-          } catch (textError) {
-            console.error("[GeneralDiaryEditor] Failed to parse error response:", textError);
-            errorMessage = `Server error (${response.status}): ${response.statusText || 'Unknown error'}`;
-          }
-        }
-        
-        console.error("[GeneralDiaryEditor] Full error details:", {
-          status: response.status,
-          statusText: response.statusText,
-          errorDetails,
-          errorMessage,
-        });
-        
-        throw new Error(errorMessage);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string; details?: string };
+        throw new Error(err.error || err.details || `Failed to save (${res.status})`);
       }
 
-      const responseData = await response.json();
-      console.log("[GeneralDiaryEditor] Success response:", responseData);
-      console.log("[GeneralDiaryEditor] Saved entry subject:", responseData.entry?.subject);
-      console.log("[GeneralDiaryEditor] Subject sent in request:", subject);
-
-      toast.success("Diary entry saved!");
+      toast.success("Diary entry saved");
       onOpenChange(false);
-      if (onSave) {
-        try {
-          await onSave();
-        } catch (callbackError) {
-          console.error("[GeneralDiaryEditor] Error in onSave callback:", callbackError);
-        }
-      }
+      onSave?.();
     } catch (error) {
-      console.error("[GeneralDiaryEditor] Exception caught:", error);
       toast.error(error instanceof Error ? error.message : "Failed to save diary entry");
     } finally {
       setIsSaving(false);
@@ -161,65 +80,75 @@ export function GeneralDiaryEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-3xl max-w-[95vw] sm:max-w-2xl lg:max-w-3xl max-h-[85vh] sm:max-h-[90vh] p-4 sm:p-6 flex flex-col overflow-hidden">
-        <DialogHeader className="flex-shrink-0">
-          <DialogTitle>Write</DialogTitle>
-          <DialogDescription>
-            Share your thoughts, reflections, or anything you&apos;d like to write about
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-[95vw] sm:max-w-2xl lg:max-w-3xl max-h-[88vh] p-0 flex flex-col overflow-hidden rounded-2xl gap-0">
+        <DialogTitle className="sr-only">Write diary entry</DialogTitle>
+        {/* Header */}
+        <div className="px-7 pt-6 pb-4 border-b border-border flex-shrink-0">
+          <div className="font-mono text-[10.5px] tracking-[0.22em] uppercase text-muted-foreground mb-1">
+            New entry
+          </div>
+          <h2 className={cn(playfair.className, "text-[22px] font-semibold text-foreground leading-tight")}>
+            What&apos;s on your mind?
+          </h2>
+        </div>
 
-        <div className="flex-1 flex flex-col gap-3 sm:gap-4 min-h-0 overflow-y-auto">
-          {/* Subject Input */}
-          <div className="flex flex-col gap-2 flex-shrink-0">
-            <label htmlFor="subject" className="text-sm font-medium text-foreground">
-              Subject
-            </label>
+        {/* Body */}
+        <div className="flex-1 flex flex-col gap-0 min-h-0 overflow-y-auto">
+          {/* Subject */}
+          <div className="px-7 pt-5 pb-3 flex-shrink-0">
             <input
-              id="subject"
               type="text"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="Enter a subject for your note..."
-              className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-0 focus:border-border"
+              placeholder="Subject (optional)"
               maxLength={200}
+              className={cn(
+                "w-full bg-transparent text-[15px] font-medium text-foreground",
+                "placeholder:text-muted-foreground/50",
+                "border-0 outline-none ring-0 focus:outline-none",
+              )}
             />
           </div>
 
-          {/* Tiptap Editor */}
-          <div className="flex-1 flex flex-col min-h-0">
-            <div className="flex-1 overflow-y-auto">
-              <TiptapEditor
-                content={content}
-                onChange={handleContentChange}
-                placeholder="Start writing your thoughts..."
-                editable={true}
-              />
-            </div>
+          {/* Divider */}
+          <div className="mx-7 h-px bg-border flex-shrink-0" />
+
+          {/* Editor */}
+          <div className="flex-1 px-4 py-4 min-h-[260px]">
+            <TiptapEditor
+              content={content}
+              onChange={setContent}
+              placeholder="Start writing…"
+              editable={true}
+            />
           </div>
         </div>
 
-        <DialogFooter className="flex-shrink-0 border-t pt-4 mt-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isSaving}
-          >
-            <X className="mr-2 h-4 w-4" />
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving || !content || content.replace(/<[^>]*>/g, "").trim() === ""}
-          >
-            <Save className="mr-2 h-4 w-4" />
-            {isSaving ? "Saving..." : "Save"}
-          </Button>
-        </DialogFooter>
+        {/* Footer */}
+        <div className="px-7 py-4 border-t border-border bg-muted/20 flex items-center justify-between flex-shrink-0">
+          <div className="font-mono text-[10px] tracking-widest text-muted-foreground">
+            {isEmpty ? "Nothing written yet" : "Ready to save"}
+          </div>
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              disabled={isSaving}
+              className="px-4 py-2 rounded-lg text-[13px] text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving || isEmpty}
+              className="px-5 py-2 rounded-lg bg-foreground text-background text-[13px] font-semibold hover:opacity-85 transition-opacity cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isSaving ? "Saving…" : "Save entry"}
+            </button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
 }
-

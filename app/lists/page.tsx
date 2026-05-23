@@ -4,9 +4,8 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/ui/layout/header-with-search";
-import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
-import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
+import { HomeLayoutHeader } from "@/components/ui/layout/home-layout-header";
+import BookLoader from "@/components/ui/features/book-loader";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 import { BookOpen, Globe, Lock, Plus, X } from "lucide-react";
@@ -140,9 +139,8 @@ export default function ListsPage() {
     return (
       <main className="min-h-screen bg-background">
         <div className="flex min-h-screen flex-col">
-          {isMobile ? <Header minimalMobile={isMobile} /> : <><DesktopSidebar /><MinimalDesktopHeader /></>}
           <div className={cn("flex flex-1 items-center justify-center", isMobile ? "mt-16" : "mt-16")}>
-            <TetrisLoading size="md" speed="fast" loadingText="Loading lists…" />
+            <BookLoader size="md" speed="fast" loadingText="Loading lists…" />
           </div>
         </div>
       </main>
@@ -154,7 +152,6 @@ export default function ListsPage() {
   return (
     <main className="min-h-screen bg-background">
       <div className="flex min-h-screen flex-col">
-        {isMobile ? <Header minimalMobile={isMobile} /> : <><DesktopSidebar /><MinimalDesktopHeader /></>}
 
         <div className={cn("flex-1", isMobile ? "mt-16" : "mt-16")}>
           <div className="mx-auto w-full max-w-7xl px-4 py-8 pb-24 sm:px-6 lg:px-8 md:pb-8">

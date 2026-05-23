@@ -7,7 +7,6 @@ import {
 	ModalTitle,
 	ModalTrigger,
 } from '@/components/ui/primitives/modal';
-import { Button } from '@/components/ui/primitives/button';
 import {
 	Command,
 	CommandEmpty,
@@ -16,9 +15,8 @@ import {
 	CommandItem,
 	CommandList,
 } from '@/components/ui/primitives/command';
-import { DockToggle } from '@/components/ui/dock';
 
-import { LucideIcon, SearchIcon, Loader2, BookOpen, User } from 'lucide-react';
+import { LucideIcon, SearchIcon, BookOpen } from 'lucide-react';
 import { cn, DEFAULT_AVATAR } from '@/lib/utils';
 import { createBookSlug } from '@/lib/utils/book-slug';
 
@@ -283,167 +281,175 @@ export function SearchModal({ children }: SearchModalProps) {
 	return (
 		<Modal open={open} onOpenChange={setOpen}>
 			<ModalTrigger asChild>{children}</ModalTrigger>
-			<ModalContent 
-				className="p-1 max-w-2xl w-full" 
-				popoverProps={{ className: "max-w-2xl" }}
+			<ModalContent
+				className="p-0 max-w-xl w-full overflow-hidden"
+				popoverProps={{ className: "max-w-xl" }}
 			>
 				<ModalTitle className="sr-only">Search</ModalTitle>
-				<Command className="bg-background md:bg-card rounded-md md:border" shouldFilter={false}>
-					<div className="flex flex-col gap-3 p-3 pb-2">
-						<CommandInput
-							className={cn(
-								'placeholder:text-muted-foreground flex h-16 w-full rounded-md bg-transparent py-4 text-base outline-hidden disabled:cursor-not-allowed disabled:opacity-50',
+				<Command
+					className={cn(
+						"overflow-hidden rounded-xl bg-background",
+						"[&_[cmdk-input-wrapper]]:border-0 [&_[cmdk-input-wrapper]]:p-0 [&_[cmdk-input-wrapper]]:flex-1",
+						"[&_[cmdk-input-wrapper]_svg]:hidden"
+					)}
+					shouldFilter={false}
+				>
+					<div className="px-4 pt-4 pb-3.5">
+						<div className="flex items-center gap-2.5">
+							<SearchIcon className="size-4 shrink-0 text-muted-foreground/60" />
+							<CommandInput
+								className="h-9 w-full bg-transparent text-sm placeholder:text-muted-foreground/60"
+								placeholder={searchType === 'User' ? 'Search readers...' : 'Search books & authors...'}
+								value={query}
+								onValueChange={(value) => {
+									setQuery(value);
+									if (searchError) setSearchError(null);
+								}}
+							/>
+							{!query && (
+								<kbd className="hidden sm:inline-flex items-center rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground/50">
+									⌘K
+								</kbd>
 							)}
-							placeholder={`Search ${searchType.toLowerCase()}...`}
-							value={query}
-							onValueChange={(value) => {
-								setQuery(value);
-								// Clear error when user starts typing again
-								if (searchError) {
-									setSearchError(null);
-								}
-							}}
-						/>
-						<DockToggle
-							items={[
-								{
-									label: 'Books',
-									icon: BookOpen,
-									isActive: searchType === 'Books',
-									onClick: () => setSearchType('Books'),
-								},
-								{
-									label: 'User',
-									icon: User,
-									isActive: searchType === 'User',
-									onClick: () => setSearchType('User'),
-								},
-							]}
-							className="w-full flex justify-between"
-							buttonClassName="justify-center"
-						/>
+						</div>
+						<div className="mt-3 flex items-center gap-1">
+							{(['Books', 'User'] as SearchType[]).map((type) => (
+								<button
+									key={type}
+									type="button"
+									onClick={() => setSearchType(type)}
+									className={cn(
+										'cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150',
+										searchType === type
+											? 'bg-foreground text-background'
+											: 'text-muted-foreground hover:bg-muted hover:text-foreground'
+									)}
+								>
+									{type === 'User' ? 'Readers' : 'Books'}
+								</button>
+							))}
+						</div>
 					</div>
-					<CommandList className="max-h-[380px] min-h-[380px] px-2 md:px-0">
+
+					<div className="h-px bg-border" />
+
+					<CommandList className="scrollbar-hide min-h-[320px] max-h-[360px] overflow-y-auto">
 						{query.trim() ? (
-							// Show search results based on type
 							<>
 								{isSearching ? (
-									<div className="flex min-h-[280px] flex-col items-center justify-center">
-										<Loader2 className="text-muted-foreground mb-2 size-6 animate-spin" />
-										<p className="text-muted-foreground text-xs">Searching {searchType.toLowerCase()}...</p>
+									<div className="flex min-h-[280px] flex-col items-center justify-center gap-4">
+										<div
+											className="pbld-bookmark"
+											style={{ '--w': '72px' } as React.CSSProperties}
+										>
+											<div className="pbld-bookmark__pages" />
+											<div className="pbld-bookmark__cover-l" />
+											<div className="pbld-bookmark__cover-r" />
+											<div className="pbld-bookmark__ribbon" />
+										</div>
+										<p className="text-xs uppercase tracking-widest text-muted-foreground">
+											Searching {searchType === 'User' ? 'readers' : 'books'}
+										</p>
 									</div>
 								) : searchError ? (
-									<CommandEmpty className="flex min-h-[280px] flex-col items-center justify-center">
-										<SearchIcon className="text-muted-foreground mb-2 size-6" />
-										<p className="text-muted-foreground mb-1 text-xs">
-											{searchError}
-										</p>
-										<Button onClick={() => setQuery('')} variant="ghost">
+									<CommandEmpty className="flex min-h-[280px] flex-col items-center justify-center px-8 text-center">
+										<SearchIcon className="mb-3 size-6 text-muted-foreground/30" />
+										<p className="mb-1 text-sm font-medium">Search failed</p>
+										<p className="mb-4 text-xs text-muted-foreground">{searchError}</p>
+										<button
+											type="button"
+											onClick={() => setQuery('')}
+											className="text-xs text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
+										>
 											Clear search
-										</Button>
+										</button>
 									</CommandEmpty>
 								) : currentResults.length === 0 ? (
-									<CommandEmpty className="flex min-h-[280px] flex-col items-center justify-center">
-										<SearchIcon className="text-muted-foreground mb-2 size-6" />
-										<p className="text-muted-foreground mb-1 text-xs">
-											No {searchType.toLowerCase()} found for &quot;{query}&quot;
+									<CommandEmpty className="flex min-h-[280px] flex-col items-center justify-center px-8 text-center">
+										<p className="mb-1 text-sm font-medium text-foreground/60">
+											No {searchType === 'User' ? 'readers' : 'books'} found
 										</p>
-										<Button onClick={() => setQuery('')} variant="ghost">
-											Clear search
-										</Button>
+										<p className="text-xs text-muted-foreground">
+											No results for &ldquo;{query}&rdquo;
+										</p>
 									</CommandEmpty>
 								) : (
-									<CommandGroup>
+									<CommandGroup className="px-2 py-2">
 										{searchType === 'Books' && bookResults.map((book, index) => {
 											const cover = book.imageLinks?.thumbnail || book.imageLinks?.smallThumbnail || '';
 											const authors = book.authors?.join(', ') || 'Unknown Author';
-											
+
 											const handleBookSelect = () => {
-												// If in favorite mode, dispatch event instead of navigating
 												if (favoriteMode) {
 													const bookWithRaw = book as BookSearchResultWithRaw;
 													const rawBook = bookWithRaw._raw || book;
-													// Check if already added
 													const isAlreadyAdded = favoriteMode.currentBooks.some(
 														(id: string) => id === book.id || (typeof rawBook === 'object' && '_id' in rawBook && rawBook._id?.toString() === id)
 													);
 													if (!isAlreadyAdded && favoriteMode.currentBooks.length < favoriteMode.maxBooks) {
-														// Dispatch event with full book data
 														const event = new CustomEvent('favorite-book-selected', { detail: rawBook });
 														window.dispatchEvent(event);
 														setOpen(false);
 													}
 													return;
 												}
-
-												// Normal navigation behavior
-												// Use the book ID directly if it's an ISBN or valid ID
-												// Otherwise, create a slug from the title
 												if (book.id) {
-													// Check if book.id is an ISBN (10 or 13 digits)
 													const isISBN = /^(\d{10}|\d{13})$/.test(book.id);
-													// Check if it looks like an Open Library ID
 													const isOpenLibraryId = book.id.startsWith("OL") || book.id.startsWith("/works/");
-													// Check if it's a valid ID format (alphanumeric, no spaces, no +)
 													const isValidId = /^[a-zA-Z0-9_-]+$/.test(book.id) && !book.id.includes(" ") && !book.id.includes("+");
-													
 													if (isISBN || isOpenLibraryId || isValidId) {
-														// Use ID directly
 														router.push(`/b/${book.id}`);
 													} else {
-														// Create slug if ID format is unexpected
 														const slug = createBookSlug(book.title, book.id, book.id);
 														router.push(`/b/${slug}`);
 													}
 												} else {
-													// No ID, create slug from title
 													const slug = createBookSlug(book.title);
 													router.push(`/b/${slug}`);
 												}
 												setOpen(false);
 											};
-											
+
 											const handleClick = (e: React.MouseEvent) => {
 												e.stopPropagation();
 												handleBookSelect();
 											};
-											
-											// Create unique key: use book.id if available, otherwise use index with title
+
 											const uniqueKey = book.id ? `${book.id}-${index}` : `book-${index}-${book.title}`;
-											
+
 											return (
 												<CommandItem
 													key={uniqueKey}
-													className="flex cursor-pointer items-center gap-3"
+													className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5"
 													value={`${book.id}-${book.title}`}
 													onSelect={handleBookSelect}
 													onClick={handleClick}
 												>
 													{cover ? (
-														<div className="relative size-14 flex-shrink-0 overflow-hidden rounded-md bg-muted pointer-events-none">
+														<div className="pointer-events-none relative h-[60px] w-10 flex-shrink-0 overflow-hidden rounded-[3px] bg-muted shadow-sm">
 															<Image
 																src={cover}
 																alt={book.title}
 																fill
-																className="object-cover pointer-events-none"
-																sizes="56px"
+																className="pointer-events-none object-cover"
+																sizes="40px"
 																quality={100}
-																unoptimized={cover.includes('isbndb.com') || cover.includes('images.isbndb.com') || cover.includes('covers.isbndb.com')}
+																unoptimized={
+																	cover.includes('isbndb.com') ||
+																	cover.includes('images.isbndb.com') ||
+																	cover.includes('covers.isbndb.com')
+																}
 																priority={false}
 															/>
 														</div>
 													) : (
-														<div className="flex size-12 flex-shrink-0 items-center justify-center rounded-md bg-muted pointer-events-none">
-															<BookOpen className="size-5 text-muted-foreground" />
+														<div className="pointer-events-none flex h-[60px] w-10 flex-shrink-0 items-center justify-center rounded-[3px] bg-muted">
+															<BookOpen className="size-4 text-muted-foreground/50" />
 														</div>
 													)}
-													<div className="flex flex-1 flex-col min-w-0">
-														<p className="max-w-[250px] truncate text-sm font-medium">
-															{book.title}
-														</p>
-														<p className="text-muted-foreground text-xs truncate">
-															{authors}
-														</p>
+													<div className="flex min-w-0 flex-1 flex-col">
+														<p className="truncate text-sm font-medium leading-snug">{book.title}</p>
+														<p className="mt-0.5 truncate text-xs text-muted-foreground">{authors}</p>
 													</div>
 												</CommandItem>
 											);
@@ -453,56 +459,66 @@ export function SearchModal({ children }: SearchModalProps) {
 												router.push(`/u/${encodeURIComponent(user.username)}`);
 												setOpen(false);
 											};
-											
 											const handleClick = (e: React.MouseEvent) => {
 												e.stopPropagation();
 												handleUserSelect();
 											};
-											
-											// Create unique key: use user.id if available, otherwise use username with index
 											const uniqueKey = user.id ? `${user.id}-${index}` : `user-${index}-${user.username}`;
-											
+
 											return (
 												<CommandItem
 													key={uniqueKey}
-													className="flex cursor-pointer items-center gap-3"
+													className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5"
 													value={`${user.id}-${user.username}`}
 													onSelect={handleUserSelect}
 													onClick={handleClick}
 												>
-												<div className="relative size-12 flex-shrink-0 overflow-hidden rounded-full bg-muted pointer-events-none">
-													<Image
-														src={user.avatar || DEFAULT_AVATAR}
-														alt={user.username}
-														fill
-														className="object-cover pointer-events-none"
-														sizes="48px"
-													/>
-												</div>
-												<div className="flex flex-1 flex-col min-w-0">
-													<p className="max-w-[250px] truncate text-sm font-medium">
-														{user.username}
-													</p>
-													<p className="text-muted-foreground text-xs truncate">
-														{user.name}
-													</p>
-												</div>
-											</CommandItem>
+													<div className="pointer-events-none relative size-10 flex-shrink-0 overflow-hidden rounded-full bg-muted">
+														<Image
+															src={user.avatar || DEFAULT_AVATAR}
+															alt={user.username}
+															fill
+															className="pointer-events-none object-cover"
+															sizes="40px"
+														/>
+													</div>
+													<div className="flex min-w-0 flex-1 flex-col">
+														<p className="truncate text-sm font-medium">{user.username}</p>
+														<p className="mt-0.5 truncate text-xs text-muted-foreground">{user.name}</p>
+													</div>
+												</CommandItem>
 											);
 										})}
 									</CommandGroup>
 								)}
 							</>
 						) : (
-							// Show empty state when no search query
-							<CommandEmpty className="flex min-h-[280px] flex-col items-center justify-center">
-								<SearchIcon className="text-muted-foreground mb-2 size-6" />
-								<p className="text-muted-foreground mb-1 text-xs">
-									Search for {searchType.toLowerCase()} by typing above
+							<div className="flex min-h-[280px] flex-col items-center justify-center gap-3 px-4 text-center">
+								<div
+									className="pbld-pageflip opacity-30"
+									style={{ '--w': '36px', '--h': '44px' } as React.CSSProperties}
+								>
+									<div className="pbld-pageflip__left" />
+									<div className="pbld-pageflip__right" />
+									<div className="pbld-pageflip__spine" />
+									<div className="pbld-pageflip__page" />
+								</div>
+								<p className="text-xs text-muted-foreground">
+									{searchType === 'User'
+										? 'Find readers by username'
+										: 'Search by title, author, or ISBN'}
 								</p>
-							</CommandEmpty>
+							</div>
 						)}
 					</CommandList>
+
+					{query.trim() && !isSearching && currentResults.length > 0 && (
+						<div className="border-t border-border/50 px-4 py-2">
+							<p className="text-[10px] text-muted-foreground/40">
+								↑↓ navigate &middot; ↵ select &middot; esc close
+							</p>
+						</div>
+					)}
 				</Command>
 			</ModalContent>
 		</Modal>

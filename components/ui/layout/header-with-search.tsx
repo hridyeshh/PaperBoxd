@@ -3,7 +3,7 @@
 import Image from "next/image";
 import React from "react";
 import { ChevronDown, Grid2x2PlusIcon, MenuIcon, SearchIcon, LinkIcon, Trash2 } from "lucide-react";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
+import BookLoader from "@/components/ui/features/book-loader";
 import { useAuth } from "@/components/providers/auth-provider";
 import { logoutAction } from "@/lib/auth/actions";
 import { signOut } from "next-auth/react";
@@ -173,13 +173,13 @@ export function Header({
     
     // Get last viewed timestamp from localStorage
     const lastViewed = localStorage.getItem(`activity_last_viewed_${username}`);
-    
+
     const checkNewActivities = async () => {
       try {
         const url = lastViewed
           ? `/api/users/${encodeURIComponent(username)}/activities/check-new?lastViewed=${encodeURIComponent(lastViewed)}`
           : `/api/users/${encodeURIComponent(username)}/activities/check-new`;
-        
+
         const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
@@ -190,8 +190,15 @@ export function Header({
       }
     };
 
-    // Check immediately
-    checkNewActivities();
+    // Throttle the immediate check: skip if we fired within the last 10 seconds
+    // (prevents 429s when the user refreshes rapidly)
+    const THROTTLE_KEY = `activity_last_check_${username}`;
+    const lastCheck = Number(sessionStorage.getItem(THROTTLE_KEY) ?? 0);
+    const now = Date.now();
+    if (now - lastCheck > 10_000) {
+      sessionStorage.setItem(THROTTLE_KEY, String(now));
+      checkNewActivities();
+    }
 
     // Check every 30 seconds
     const interval = setInterval(checkNewActivities, 30000);
@@ -286,13 +293,13 @@ export function Header({
       {isNavigatingToProfile && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-4">
-            <TetrisLoading size="sm" speed="fast" loadingText="Loading profile..." />
+            <BookLoader size="sm" speed="fast" loadingText="Loading profile..." />
           </div>
         </div>
       )}
       {isLoggingOut && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <TetrisLoading size="sm" speed="fast" loadingText="Signing out..." />
+          <BookLoader size="sm" speed="fast" loadingText="Signing out..." />
         </div>
       )}
       <header
