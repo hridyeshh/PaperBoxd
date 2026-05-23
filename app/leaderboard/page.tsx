@@ -3,19 +3,30 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Playfair_Display } from "next/font/google";
-import { Trophy, Zap, BookOpen, FileText, Flame, Users, TrendingUp } from "lucide-react";
+import { Trophy, BookOpen, FileText, Flame, Users, TrendingUp, Zap } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { Header } from "@/components/ui/layout/header-with-search";
-import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
-import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
+import { HomeLayoutHeader } from "@/components/ui/layout/home-layout-header";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-media-query";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
   display: "swap",
-  weight: ["400", "600", "700", "800"],
-  style: ["normal", "italic"],
+  weight: ["700", "800"],
+});
+
+// ── Comic speed lines (precomputed, static — no re-render cost) ───────────────
+// 26 lines fanning downward from top-center, alternating thick/thin like real comic action lines.
+const SPEED_LINES = Array.from({ length: 26 }, (_, i) => {
+  const t = i / 25;
+  const angle = Math.PI * 0.07 + t * Math.PI * 0.86; // 12.6° → 154.8°
+  const len = 2100;
+  return {
+    x2: Math.round(720 + Math.cos(angle) * len),
+    y2: Math.round(-70 + Math.sin(angle) * len),
+    thick: i % 5 === 2,
+  };
 });
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -75,13 +86,45 @@ function fmtXP(xp: number | undefined | null): string {
 
 function getStatForTab(entry: LeaderboardEntry, tab: Tab): { value: number; label: string } {
   switch (tab) {
-    case "books":    return { value: entry.books_read, label: "books" };
-    case "pages":    return { value: entry.pages_read, label: "pages" };
-    case "streak":   return { value: entry.current_streak, label: "day streak" };
-    case "diary":    return { value: entry.diary_entries, label: "entries" };
-    default:         return { value: entry.total_xp, label: "XP" };
+    case "books":  return { value: entry.books_read,     label: "books"   };
+    case "pages":  return { value: entry.pages_read,     label: "pages"   };
+    case "streak": return { value: entry.current_streak, label: "day streak" };
+    case "diary":  return { value: entry.diary_entries,  label: "entries" };
+    default:       return { value: entry.total_xp,       label: "XP"      };
   }
 }
+
+// ── Medal config ──────────────────────────────────────────────────────────────
+
+const MEDAL = {
+  1: {
+    color:    "oklch(0.68 0.11 78)",
+    border:   "oklch(0.68 0.11 78 / 0.45)",
+    bg:       "oklch(0.68 0.11 78 / 0.07)",
+    ring:     "0 0 0 2.5px oklch(0.68 0.11 78), 0 6px 28px oklch(0.68 0.11 78 / 0.22)",
+    topPad:   "pt-0",
+    numSize:  "2.75rem",
+    statSize: "1.5rem",
+  },
+  2: {
+    color:    "oklch(0.68 0.015 0)",
+    border:   "oklch(0.68 0.015 0 / 0.35)",
+    bg:       "oklch(0.68 0.015 0 / 0.05)",
+    ring:     undefined,
+    topPad:   "pt-10",
+    numSize:  "2rem",
+    statSize: "1.125rem",
+  },
+  3: {
+    color:    "oklch(0.60 0.07 50)",
+    border:   "oklch(0.60 0.07 50 / 0.32)",
+    bg:       "oklch(0.60 0.07 50 / 0.05)",
+    ring:     undefined,
+    topPad:   "pt-16",
+    numSize:  "2rem",
+    statSize: "1.125rem",
+  },
+} as const;
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -115,97 +158,65 @@ function AvatarCircle({
 function PodiumCard({
   entry,
   rank,
-  isFirst,
   tab,
   onClick,
 }: {
   entry: LeaderboardEntry;
   rank: 1 | 2 | 3;
-  isFirst?: boolean;
   tab: Tab;
   onClick: () => void;
 }) {
   const stat = getStatForTab(entry, tab);
-  const medalColors = {
-    1: { bg: "rgba(168,137,63,.10)", border: "#a8893f", text: "#a8893f", dark: { bg: "rgba(212,176,106,.12)", text: "#d4b06a" } },
-    2: { bg: "rgba(138,133,128,.10)", border: "#8a8580", text: "#8a8580", dark: { bg: "rgba(184,179,173,.10)", text: "#b8b3ad" } },
-    3: { bg: "rgba(156,106,62,.10)", border: "#9c6a3e", text: "#9c6a3e", dark: { bg: "rgba(192,133,96,.10)", text: "#c08560" } },
-  }[rank];
-
-  const rankLabels = { 1: "1st", 2: "2nd", 3: "3rd" };
-  const avatarSize = isFirst ? 72 : 60;
+  const m = MEDAL[rank];
 
   return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "group relative flex w-full flex-col items-center rounded-2xl border p-5 text-center transition-all duration-200",
-        "hover:-translate-y-1 hover:shadow-xl",
-        "border-border bg-card",
-        isFirst && "border-[rgba(168,137,63,.25)] bg-gradient-to-b from-[rgba(168,137,63,.08)] to-card dark:from-[rgba(212,176,106,.12)] dark:to-card",
-      )}
-    >
-      {/* Medal + rank label */}
-      <div className="mb-3 flex items-center gap-2">
+    <div className={m.topPad}>
+      <button
+        onClick={onClick}
+        className="group relative flex w-full flex-col items-center rounded-2xl border p-5 text-center transition-all duration-200 hover:-translate-y-1.5 hover:shadow-xl"
+        style={{ borderColor: m.border, background: m.bg }}
+      >
+        {/* Trophy icon for rank 1 */}
+        {rank === 1 && (
+          <Trophy className="mb-1 h-6 w-6" style={{ color: m.color }} />
+        )}
+
+        {/* Large rank number */}
         <div
-          className={cn("flex h-8 w-8 items-center justify-center rounded-full border-2", playfair.className)}
-          style={{
-            background: medalColors.bg,
-            borderColor: medalColors.border,
-            color: medalColors.text,
-            fontWeight: 700,
-            fontSize: "0.875rem",
-          }}
+          className="mb-3 font-mono font-black leading-none"
+          style={{ fontSize: m.numSize, color: m.color }}
         >
           {rank}
         </div>
-        <span
-          className={cn("text-sm text-muted-foreground", playfair.className)}
-          style={{ fontStyle: "italic" }}
+
+        {/* Avatar */}
+        <AvatarCircle
+          username={entry.username}
+          size={rank === 1 ? 72 : 60}
+          className="mb-2.5"
+          style={m.ring ? { boxShadow: m.ring } : undefined}
+        />
+
+        {/* Username */}
+        <p className="text-sm font-bold leading-tight tracking-tight">{entry.username}</p>
+
+        {/* Primary stat */}
+        <p
+          className="mt-2.5 font-mono font-black leading-none"
+          style={{ fontSize: m.statSize, color: m.color }}
         >
-          {rankLabels[rank]}
-        </span>
-      </div>
+          {tab === "global" ? fmtXP(stat.value) : stat.value.toLocaleString()}
+        </p>
+        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+          {stat.label}
+        </p>
 
-      {/* Avatar */}
-      <AvatarCircle
-        username={entry.username}
-        size={avatarSize}
-        className="mb-2.5"
-        style={
-          isFirst
-            ? {
-                boxShadow: "0 0 0 2px #a8893f, 0 8px 24px rgba(168,137,63,.25)",
-              }
-            : undefined
-        }
-      />
-
-      {/* Name / handle */}
-      <p className="text-sm font-bold leading-tight tracking-tight">{entry.username}</p>
-      <p className="mb-3 mt-0.5 text-xs text-muted-foreground">@{entry.username}</p>
-
-      {/* Primary stat */}
-      <p
-        className={cn("font-mono font-semibold leading-none tracking-tight", isFirst ? "text-2xl" : "text-xl")}
-      >
-        {tab === "global" ? fmtXP(stat.value) : stat.value.toLocaleString()}
-      </p>
-      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-        {stat.label}
-      </p>
-
-      {/* Level badge */}
-      <div className="mt-3 flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2.5 py-1">
-        <span className="text-xs">{entry.level_badge}</span>
-        <span
-          className={cn("text-xs font-semibold text-muted-foreground", playfair.className)}
-          style={{ fontStyle: "italic" }}
-        >
+        {/* Level name */}
+        <div className="mt-3 rounded-full border border-border bg-background/60 px-2.5 py-1 text-xs font-medium text-muted-foreground">
           {entry.level_name}
-        </span>
-      </div>
-    </button>
+        </div>
+      </button>
+    </div>
   );
 }
 
@@ -229,68 +240,70 @@ function LeaderboardRow({
     <button
       onClick={onClick}
       className={cn(
-        "grid w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-100",
+        "grid w-full items-center gap-3 px-4 py-3.5 text-left transition-colors duration-100",
         "border-b border-border last:border-b-0",
-        isMe
-          ? "bg-[rgba(184,92,56,.06)] hover:bg-[rgba(184,92,56,.09)] dark:bg-[rgba(217,127,90,.08)] dark:hover:bg-[rgba(217,127,90,.12)]"
-          : "hover:bg-muted/60",
+        "hover:bg-muted/60",
       )}
-      style={{ gridTemplateColumns: "44px 1fr auto auto auto" }}
+      style={{
+        gridTemplateColumns: "44px 1fr auto auto auto",
+        ...(isMe ? { background: "oklch(0.52 0.18 25 / 0.05)" } : {}),
+        animationName: "lb-row-in",
+        animationDuration: "0.3s",
+        animationTimingFunction: "ease-out",
+        animationFillMode: "both",
+        animationDelay: `${Math.min(index * 40, 600)}ms`,
+      }}
     >
-      {/* Rank */}
+      {/* Rank number */}
       <div className="flex items-center justify-center">
-        <span className="font-mono text-sm font-semibold text-muted-foreground">
+        <span
+          className={cn(
+            "font-mono font-bold",
+            displayRank <= 10 ? "text-sm text-foreground" : "text-sm text-muted-foreground",
+          )}
+        >
           {displayRank}
         </span>
       </div>
 
       {/* User */}
       <div className="flex min-w-0 items-center gap-2.5">
-        <AvatarCircle username={entry.username} size={34} />
+        <AvatarCircle username={entry.username} size={36} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-sm font-semibold leading-tight">
-              {entry.username}
-            </span>
+            <span className="truncate text-sm font-semibold leading-tight">{entry.username}</span>
             {isMe && (
               <span className="flex-shrink-0 rounded px-1.5 py-px text-[10px] font-bold uppercase tracking-wide bg-foreground text-background">
                 You
               </span>
             )}
           </div>
-          <span
-            className={cn("text-xs text-muted-foreground", playfair.className)}
-            style={{ fontStyle: "italic" }}
-          >
-            {entry.level_badge} {entry.level_name}
-          </span>
+          <span className="text-xs text-muted-foreground">{entry.level_name}</span>
         </div>
       </div>
 
-      {/* Streak — hidden on very small screens */}
+      {/* Streak */}
       <div className="hidden min-w-[72px] items-center justify-end gap-1 sm:flex">
-        <Flame className="h-3.5 w-3.5 text-[#b85c38] dark:text-[#d97f5a]" />
-        <span className="font-mono text-sm font-semibold text-[#b85c38] dark:text-[#d97f5a]">
+        <Flame className="h-3.5 w-3.5" style={{ color: "oklch(0.52 0.18 25)" }} />
+        <span className="font-mono text-sm font-semibold" style={{ color: "oklch(0.52 0.18 25)" }}>
           {entry.current_streak}d
         </span>
       </div>
 
-      {/* Books — hidden on mobile */}
+      {/* Books */}
       <div className="hidden min-w-[64px] items-center justify-end gap-1 md:flex">
         <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="font-mono text-sm font-medium text-muted-foreground">
-          {entry.books_read}
-        </span>
+        <span className="font-mono text-sm font-medium text-muted-foreground">{entry.books_read}</span>
       </div>
 
-      {/* Primary stat (XP or tab-specific) */}
+      {/* Primary stat */}
       <div className="min-w-[72px] text-right">
         <span className="font-mono text-base font-semibold leading-none tracking-tight">
           {tab === "global" ? fmtXP(stat.value) : stat.value.toLocaleString()}
         </span>
-        <span className="ml-0.5 font-mono text-[10px] font-medium text-muted-foreground">
-          {tab === "global" ? "xp" : ""}
-        </span>
+        {tab === "global" && (
+          <span className="ml-0.5 font-mono text-[10px] font-medium text-muted-foreground">xp</span>
+        )}
       </div>
     </button>
   );
@@ -299,7 +312,7 @@ function LeaderboardRow({
 function ColumnHeaders({ tab }: { tab: Tab }) {
   return (
     <div
-      className="grid items-center gap-3 border-b border-border bg-muted/40 px-4 py-2.5"
+      className="grid items-center gap-3 border-b border-border bg-muted/30 px-4 py-2.5"
       style={{ gridTemplateColumns: "44px 1fr auto auto auto" }}
     >
       <span className="text-center text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">#</span>
@@ -309,6 +322,43 @@ function ColumnHeaders({ tab }: { tab: Tab }) {
       <span className="min-w-[72px] text-right text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
         {tab === "books" ? "Books" : tab === "pages" ? "Pages" : tab === "streak" ? "Streak" : tab === "diary" ? "Entries" : "XP"}
       </span>
+    </div>
+  );
+}
+
+function LoadingSkeleton() {
+  return (
+    <div>
+      {/* Podium skeleton */}
+      <div className="mb-8 grid grid-cols-3 items-end gap-3">
+        <div className="pt-10">
+          <div className="h-52 animate-pulse rounded-2xl border border-border bg-muted/40" />
+        </div>
+        <div className="pt-0">
+          <div className="h-64 animate-pulse rounded-2xl border border-border bg-muted/40" />
+        </div>
+        <div className="pt-16">
+          <div className="h-44 animate-pulse rounded-2xl border border-border bg-muted/40" />
+        </div>
+      </div>
+      {/* Row skeletons */}
+      <div className="overflow-hidden rounded-2xl border border-border">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-3 border-b border-border px-4 py-3.5 last:border-b-0"
+          >
+            <div className="h-4 w-7 animate-pulse rounded bg-muted" />
+            <div className="h-9 w-9 animate-pulse rounded-full bg-muted" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3.5 w-28 animate-pulse rounded bg-muted" />
+              <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+            </div>
+            <div className="hidden h-4 w-14 animate-pulse rounded bg-muted sm:block" />
+            <div className="h-4 w-12 animate-pulse rounded bg-muted" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -326,7 +376,24 @@ export default function LeaderboardPage() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Fetch leaderboard data when tab changes
+  // Cache key per tab for stale-while-revalidate
+  const lbCacheKey = `pb_lb_${tab}`;
+
+  // Load cached entries immediately on tab change
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(lbCacheKey);
+      if (raw) {
+        const cached = JSON.parse(raw) as { list: LeaderboardEntry[] };
+        if (Array.isArray(cached.list) && cached.list.length > 0) {
+          setEntries(cached.list);
+          setIsLoading(false); // show stale data immediately, fetch in background
+        }
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
   React.useEffect(() => {
     setIsLoading(true);
     setError(null);
@@ -337,16 +404,28 @@ export default function LeaderboardPage() {
         : `/api/leaderboard?tab=${tab}`;
 
     fetch(url)
-      .then((r) => r.json())
+      .then((r) => {
+        if (r.status === 429 || r.status === 503) {
+          // Keep showing cached entries — don't clear
+          setIsLoading(false);
+          return null;
+        }
+        return r.json();
+      })
       .then((data) => {
+        if (!data) return;
         const list: LeaderboardEntry[] = (data.leaderboard ?? []) as LeaderboardEntry[];
         setEntries(list);
+        // Persist for next load / rate-limit fallback
+        try { localStorage.setItem(lbCacheKey, JSON.stringify({ list, ts: Date.now() })); } catch { /* ignore */ }
       })
-      .catch(() => setError("Failed to load leaderboard"))
+      .catch(() => {
+        // Keep existing entries visible on network error
+        if (entries.length === 0) setError("Failed to load leaderboard");
+      })
       .finally(() => setIsLoading(false));
   }, [tab]);
 
-  // Fetch my stats once when authenticated
   React.useEffect(() => {
     if (!isAuthenticated) return;
     fetch("/api/leaderboard/me")
@@ -356,80 +435,98 @@ export default function LeaderboardPage() {
   }, [isAuthenticated]);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode; requiresAuth?: boolean }[] = [
-    { id: "global", label: "All-time", icon: <Trophy className="h-3.5 w-3.5" /> },
-    { id: "books", label: "By Books", icon: <BookOpen className="h-3.5 w-3.5" /> },
-    { id: "pages", label: "By Pages", icon: <TrendingUp className="h-3.5 w-3.5" /> },
-    { id: "streak", label: "By Streak", icon: <Flame className="h-3.5 w-3.5" /> },
-    { id: "diary", label: "By Diary", icon: <FileText className="h-3.5 w-3.5" /> },
-    { id: "friends", label: "Friends", icon: <Users className="h-3.5 w-3.5" />, requiresAuth: true },
+    { id: "global",  label: "All-time",  icon: <Trophy className="h-3.5 w-3.5" /> },
+    { id: "books",   label: "By Books",  icon: <BookOpen className="h-3.5 w-3.5" /> },
+    { id: "pages",   label: "By Pages",  icon: <TrendingUp className="h-3.5 w-3.5" /> },
+    { id: "streak",  label: "By Streak", icon: <Flame className="h-3.5 w-3.5" /> },
+    { id: "diary",   label: "By Diary",  icon: <FileText className="h-3.5 w-3.5" /> },
+    { id: "friends", label: "Friends",   icon: <Users className="h-3.5 w-3.5" />, requiresAuth: true },
   ];
 
   const top3 = entries.slice(0, 3);
   const rest = entries.slice(3);
 
-  // Podium order: 2nd, 1st, 3rd
+  // Podium order: 2nd (left), 1st (center), 3rd (right)
   const podiumOrder: (0 | 1 | 2)[] = top3.length === 3 ? [1, 0, 2] : top3.length === 2 ? [1, 0] : [0];
   const podiumRanks: (1 | 2 | 3)[] = top3.length === 3 ? [2, 1, 3] : top3.length === 2 ? [2, 1] : [1];
 
-  const myRankInList = myStats
-    ? entries.findIndex((e) => e.user_id === myStats.user_id)
-    : -1;
-
-  const handleUserClick = (username: string) => {
-    router.push(`/u/${username}`);
-  };
+  const handleUserClick = (username: string) => router.push(`/u/${username}`);
 
   const myXpRank = myStats?.xp_rank;
 
   return (
-    <main className="relative min-h-screen bg-background">
+    <main className="relative min-h-screen bg-background leaderboard-page">
+      {/* Comic speed lines — fixed, behind all content */}
+      <svg
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-0 h-full w-full text-[#c24036] opacity-[0.032] dark:opacity-[0.048]"
+        viewBox="0 0 1440 900"
+        preserveAspectRatio="xMidYMin slice"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        {SPEED_LINES.map(({ x2, y2, thick }, i) => (
+          <line
+            key={i}
+            x1="720"
+            y1="-70"
+            x2={x2}
+            y2={y2}
+            stroke="currentColor"
+            strokeWidth={thick ? "1.8" : "0.7"}
+          />
+        ))}
+      </svg>
+
       <div className="flex min-h-screen flex-col">
         {isMobile ? (
           <Header minimalMobile={isMobile} />
         ) : (
-          <>
-            <DesktopSidebar />
-            <MinimalDesktopHeader />
-          </>
+          <HomeLayoutHeader />
         )}
 
-        <div className={cn("flex-1", isMobile ? "mt-16" : "mt-16")}>
-          <div className="mx-auto w-full max-w-4xl px-4 pb-32 pt-8 sm:px-6 lg:px-8">
+        <div className="flex-1 mt-16">
+          <div className="mx-auto w-full max-w-4xl px-4 pb-32 pt-10 sm:px-6 lg:px-8">
 
             {/* ── Page heading ── */}
-            <div className="mb-6">
-              <h1
-                className={cn("text-4xl font-bold tracking-tight text-foreground md:text-5xl", playfair.className)}
-              >
-                The Reading Order
-              </h1>
-              <p
-                className={cn("mt-1 text-base text-muted-foreground", playfair.className)}
-                style={{ fontStyle: "italic" }}
-              >
-                ranked by reading devotion
-              </p>
+            <div className="mb-8 flex items-end justify-between gap-4">
+              <div>
+                <h1 className={cn("text-5xl font-bold tracking-tight text-foreground md:text-6xl", playfair.className)}>
+                  The Reading Order
+                </h1>
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  ranked by reading devotion
+                </p>
+              </div>
+              {isAuthenticated && myStats && (
+                <div className="hidden flex-col items-end sm:flex flex-shrink-0">
+                  <span
+                    className="font-mono text-3xl font-black leading-none tabular-nums"
+                    style={{ color: "oklch(0.52 0.18 25)" }}
+                  >
+                    #{myXpRank ?? "—"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">your rank</span>
+                </div>
+              )}
             </div>
 
-            {/* ── Tabs ── */}
-            <div className="mb-6 flex gap-0 overflow-x-auto border-b border-border scrollbar-hide">
+            {/* ── Tabs (pill segmented control) ── */}
+            <div className="mb-8 flex overflow-x-auto rounded-2xl border border-border bg-muted/30 p-1 gap-0.5 scrollbar-hide">
               {tabs.map(({ id, label, icon, requiresAuth }) => {
                 const disabled = requiresAuth && !isAuthenticated;
+                const isActive = tab === id;
                 return (
                   <button
                     key={id}
                     onClick={() => {
-                      if (disabled) {
-                        router.push("/auth");
-                        return;
-                      }
+                      if (disabled) { router.push("/auth"); return; }
                       setTab(id);
                     }}
                     className={cn(
-                      "flex flex-shrink-0 items-center gap-1.5 border-b-2 px-4 py-3 text-sm font-medium transition-colors duration-150 whitespace-nowrap",
-                      tab === id
-                        ? "border-foreground text-foreground"
-                        : "border-transparent text-muted-foreground hover:text-foreground",
+                      "flex flex-shrink-0 items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150 whitespace-nowrap",
+                      isActive
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground hover:bg-background/50",
                       disabled && "opacity-50",
                     )}
                   >
@@ -441,12 +538,7 @@ export default function LeaderboardPage() {
             </div>
 
             {/* ── Loading ── */}
-            {isLoading && (
-              <div className="flex flex-col items-center justify-center py-24">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-foreground" />
-                <p className="mt-4 text-sm text-muted-foreground">Loading leaderboard…</p>
-              </div>
-            )}
+            {isLoading && <LoadingSkeleton />}
 
             {/* ── Error ── */}
             {!isLoading && error && (
@@ -488,7 +580,6 @@ export default function LeaderboardPage() {
                       key={entry.user_id}
                       entry={entry}
                       rank={rank}
-                      isFirst={rank === 1}
                       tab={tab}
                       onClick={() => handleUserClick(entry.username)}
                     />
@@ -520,11 +611,7 @@ export default function LeaderboardPage() {
 
       {/* ── Sticky your-rank footer ── */}
       {isAuthenticated && myStats && (
-        <div className={cn(
-          "fixed bottom-0 left-0 right-0 z-30 px-4 pb-4 pt-8",
-          "bg-gradient-to-t from-background via-background/90 to-transparent",
-          "",
-        )}>
+        <div className="fixed bottom-0 left-0 right-0 z-30 px-4 pb-4 pt-10 bg-gradient-to-t from-background via-background/92 to-transparent">
           <div className="mx-auto max-w-4xl">
             <div
               className={cn(
@@ -532,17 +619,12 @@ export default function LeaderboardPage() {
                 "bg-foreground text-background dark:bg-card dark:text-foreground dark:border dark:border-border",
               )}
             >
-              {/* Rank disc */}
-              <div className="flex flex-col items-center">
-                <span
-                  className={cn("text-2xl font-bold leading-none", playfair.className)}
-                  style={{ opacity: 1 }}
-                >
+              {/* Rank */}
+              <div className="flex flex-col items-center flex-shrink-0">
+                <span className="font-mono text-2xl font-black leading-none tabular-nums">
                   {myXpRank ?? "—"}
                 </span>
-                <span
-                  className="text-[10px] font-semibold uppercase tracking-widest opacity-60"
-                >
+                <span className="text-[10px] font-semibold uppercase tracking-widest opacity-55">
                   rank
                 </span>
               </div>
@@ -552,20 +634,20 @@ export default function LeaderboardPage() {
               {/* Info */}
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold leading-tight">{user?.username}</p>
-                <p className="text-xs opacity-65">
-                  {myStats.level_badge} {myStats.level_name} · {fmtXP(myStats.total_xp)} XP
+                <p className="text-xs opacity-60">
+                  {myStats.level_name} · {fmtXP(myStats.total_xp)} XP
                 </p>
               </div>
 
               {/* Stats */}
-              <div className="hidden items-center gap-4 sm:flex">
+              <div className="hidden items-center gap-5 sm:flex">
                 <div className="text-center">
-                  <p className="font-mono text-base font-semibold leading-none">{myStats.books_read}</p>
-                  <p className="text-[10px] font-medium uppercase tracking-widest opacity-60">books</p>
+                  <p className="font-mono text-base font-semibold leading-none tabular-nums">{myStats.books_read}</p>
+                  <p className="text-[10px] font-medium uppercase tracking-widest opacity-55">books</p>
                 </div>
                 <div className="text-center">
-                  <p className="font-mono text-base font-semibold leading-none">{myStats.current_streak}d</p>
-                  <p className="text-[10px] font-medium uppercase tracking-widest opacity-60">streak</p>
+                  <p className="font-mono text-base font-semibold leading-none tabular-nums">{myStats.current_streak}d</p>
+                  <p className="text-[10px] font-medium uppercase tracking-widest opacity-55">streak</p>
                 </div>
               </div>
 
@@ -573,8 +655,8 @@ export default function LeaderboardPage() {
               <button
                 onClick={() => router.push(`/u/${user?.username}`)}
                 className={cn(
-                  "flex flex-shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold",
-                  "bg-white/12 hover:bg-white/20 transition-colors",
+                  "flex flex-shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition-colors",
+                  "bg-white/12 hover:bg-white/20",
                   "dark:bg-muted dark:text-foreground dark:hover:bg-muted/80",
                 )}
               >

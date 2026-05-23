@@ -253,7 +253,7 @@ export const bookshelfApi = {
     goFetch(`/api/v1/users/${encodeURIComponent(username)}/tbr?page=${page}&page_size=${pageSize}`),
 
   getCurrentlyReading: (username: string, page = 1, pageSize = 20) =>
-    goFetch(`/api/v1/users/${encodeURIComponent(username)}/reading?page=${page}&page_size=${pageSize}`),
+    goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/reading?page=${page}&page_size=${pageSize}`),
 };
 
 // ── Favorites ─────────────────────────────────────────────────────────────────
@@ -346,6 +346,7 @@ export const diaryApi = {
   likeEntry: (username: string, entryId: string) =>
     goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/diary/${encodeURIComponent(entryId)}/like`, {
       method: "POST",
+      body: JSON.stringify({}),
     }),
 
   unlikeEntry: (username: string, entryId: string) =>

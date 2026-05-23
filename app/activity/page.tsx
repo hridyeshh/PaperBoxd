@@ -6,9 +6,8 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { useRouter } from "next/navigation";
 
 import { Header } from "@/components/ui/layout/header-with-search";
-import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
-import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
+import { HomeLayoutHeader } from "@/components/ui/layout/home-layout-header";
+import BookLoader from "@/components/ui/features/book-loader";
 import { DiaryEntryDialog } from "@/components/ui/dialogs/diary-entry-dialog";
 import { Button } from "@/components/ui/primitives/button";
 import { toast } from "sonner";
@@ -239,6 +238,17 @@ export default function ActivityPage() {
       return res;
     };
 
+    const actCacheKey = `pb_activities_${username}_p${currentPage}`;
+
+    // Load stale cache immediately so feed isn't blank while fetching
+    try {
+      const cached = JSON.parse(localStorage.getItem(actCacheKey) || "null");
+      if (cached?.list?.length) {
+        setActivities(cached.list);
+        setTotalPages(cached.totalPages || 1);
+      }
+    } catch { /* ignore */ }
+
     console.log("[ACTIVITY PAGE] Fetching activities for:", username);
     fetchFollowing()
         .then((res) => {
@@ -247,15 +257,17 @@ export default function ActivityPage() {
             router.replace("/auth");
             return Promise.reject(new Error("session_expired"));
           }
+          if (res.status === 429 || res.status === 503) {
+            // Rate limited — keep showing cached data
+            return Promise.reject(new Error("rate_limited"));
+          }
           if (!res.ok) {
             return res.json().then((body) => {
               const msg =
                 typeof body?.error === "string"
                   ? body.error
                   : body?.error?.message ??
-                    (res.status === 429
-                      ? "Too many requests. Please wait a moment and refresh."
-                      : `Failed to fetch following activities (${res.status})`);
+                    `Failed to fetch following activities (${res.status})`;
               throw new Error(msg);
             });
           }
@@ -268,7 +280,7 @@ export default function ActivityPage() {
           const transformedActivities: ActivityEntry[] = Array.isArray(data.activities)
             ? data.activities.map((activity: ActivityFromAPI, idx: number) => {
                 const { action, bookTitle } = formatActivity(activity);
-                
+
               const isListType = activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" || activity.type === "created_list";
               const detail = activity.detail !== undefined
                 ? (activity.detail ?? "")
@@ -294,7 +306,7 @@ export default function ActivityPage() {
                     : (activity.bookCover || null),
                 type: activity.type,
                 };
-              
+
               // Add diary entry specific fields if it's a diary entry
               if (activity.type === "diary_entry") {
                 baseEntry.diaryEntryId = activity.diaryEntryId;
@@ -307,7 +319,7 @@ export default function ActivityPage() {
                 baseEntry.likesCount = activity.likesCount;
                 baseEntry.isGeneralEntry = activity.isGeneralEntry;
               }
-              
+
               // Add shared list and collaboration request specific fields
               if (activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access") {
                 baseEntry.listId = activity.listId;
@@ -317,7 +329,7 @@ export default function ActivityPage() {
                   baseEntry.listBooksCount = activity.listBooksCount;
                 }
               }
-              
+
               // Add shared book specific fields
               if (activity.type === "shared_book") {
                 baseEntry.bookId = activity.bookId;
@@ -327,19 +339,27 @@ export default function ActivityPage() {
               if (activity.bookId && !baseEntry.bookId) {
                 baseEntry.bookId = activity.bookId;
               }
-              
+
               return baseEntry;
               })
             : [];
           setActivities(transformedActivities);
           setTotalPages(data.totalPages || 1);
+          try {
+            localStorage.setItem(actCacheKey, JSON.stringify({ list: transformedActivities, totalPages: data.totalPages || 1, ts: Date.now() }));
+          } catch { /* ignore */ }
         })
         .catch((error) => {
           if (error instanceof Error && error.message === "session_expired") return;
+          if (error instanceof Error && error.message === "rate_limited") {
+            if (!cancelled) toast.info("Showing saved feed", { description: "Rate limited. Refresh for latest." });
+            return;
+          }
           console.error("[ACTIVITY PAGE] Failed to fetch following activities:", error);
           if (!cancelled) {
             toast.error(error instanceof Error ? error.message : "Could not load activity feed");
-            setActivities([]);
+            // Only clear if no cached data to show
+            setActivities((prev) => prev.length > 0 ? prev : []);
             setTotalPages(1);
           }
         })
@@ -472,15 +492,14 @@ export default function ActivityPage() {
             <Header minimalMobile={isMobile} />
           ) : (
             <>
-              <DesktopSidebar />
-              <MinimalDesktopHeader />
+              <HomeLayoutHeader />
             </>
           )}
           <div className={cn(
             "flex flex-1 items-center justify-center px-4 pb-16 pt-20 md:pb-24 md:pt-24",
             isMobile ? "mt-16" : "mt-16"
           )}>
-            <TetrisLoading size="md" speed="fast" loadingText="Loading updates..." />
+            <BookLoader size="md" speed="fast" loadingText="Loading updates..." />
           </div>
         </div>
       </main>
@@ -505,8 +524,7 @@ export default function ActivityPage() {
           <Header minimalMobile={isMobile} />
         ) : (
           <>
-            <DesktopSidebar />
-            <MinimalDesktopHeader />
+            <HomeLayoutHeader />
           </>
         )}
         <div className={cn(

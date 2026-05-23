@@ -17,8 +17,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/primitives/pagination";
 import { Header } from "@/components/ui/layout/header-with-search";
-import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
-import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
+import { HomeLayoutHeader } from "@/components/ui/layout/home-layout-header";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 import { Dropdown } from "@/components/ui/primitives/dropdown";
 import { EditProfileForm, defaultProfile, type EditableProfile } from "@/components/ui/forms/edit-profile-form";
@@ -31,8 +30,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/primitives/dialog";
-import { Edit, MoreVertical, Trash2, Plus, X, Heart, AlertTriangle } from "lucide-react";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
+import { Edit, MoreVertical, Trash2, Plus, X, Heart, AlertTriangle, Link2, Check, Share2 } from "lucide-react";
+import BookLoader from "@/components/ui/features/book-loader";
 import { createBookSlug } from "@/lib/utils/book-slug";
 import { cn, DEFAULT_AVATAR, formatDiaryDate } from "@/lib/utils";
 import {
@@ -265,7 +264,7 @@ function FollowersFollowingDialog({
             <div className="flex-1 overflow-y-auto px-1">
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-12">
-                  <TetrisLoading size="sm" speed="fast" loadingText="Loading..." />
+                  <BookLoader size="sm" speed="fast" loadingText="Loading..." />
                 </div>
               ) : error ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -712,7 +711,7 @@ function FavoriteBookSearchDialog({
           <div className="flex-1 overflow-y-auto px-1 -mx-1">
             {isSearching ? (
               <div className="flex items-center justify-center py-16">
-                <TetrisLoading size="md" speed="fast" loadingText="Searching books..." />
+                <BookLoader size="md" speed="fast" loadingText="Searching books..." />
               </div>
             ) : bookResults.length === 0 && query.trim() ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -1369,7 +1368,7 @@ function BookshelfSection({
                 <h3 className="text-xs font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
                 <p className="text-xs text-muted-foreground truncate">{book.author}</p>
                 {book.rating ? (
-                  <p className="text-xs text-yellow-500">
+                  <p className="text-xs text-muted-foreground">
                     {"★".repeat(book.rating)}
                     {"☆".repeat(5 - book.rating)}
                   </p>
@@ -1380,7 +1379,7 @@ function BookshelfSection({
                 <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</h3>
                 <p className="text-xs text-muted-foreground truncate">{book.author}</p>
                 {book.rating ? (
-                  <p className="text-xs text-yellow-500">
+                  <p className="text-xs text-muted-foreground">
                     {"★".repeat(book.rating)}
                     {"☆".repeat(5 - book.rating)}
                   </p>
@@ -1715,20 +1714,26 @@ function TbrSection({
                     <p className="text-xs font-semibold text-muted-foreground">{book.urgency}</p>
                   ) : null}
                   {/* Reading progress for mobile - show at bottom right */}
-                  {progress && progress.pagesRead > 0 && progress.totalPages > 0 && (
+                  {progress && progress.pagesRead > 0 && (
                     <div className="absolute bottom-2 right-2">
                       <div className="relative">
-                        <ReadingProgressCompact
-                          totalPages={progress.totalPages}
-                          pagesRead={progress.pagesRead}
-                          size={40}
-                          strokeWidth={4}
-                        />
+                        {progress.totalPages > 0 ? (
+                          <ReadingProgressCompact
+                            totalPages={progress.totalPages}
+                            pagesRead={progress.pagesRead}
+                            size={40}
+                            strokeWidth={4}
+                          />
+                        ) : (
+                          <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                            {progress.pagesRead}p
+                          </span>
+                        )}
                         {/* Hover tooltip */}
                         <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-20">
                           <div className="bg-background border border-border rounded-lg p-2 shadow-lg whitespace-nowrap">
                             <div className="text-xs font-semibold text-foreground">
-                              {progress.pagesRead} {progress.totalPages > 0 ? `/ ${progress.totalPages}` : ''} pages
+                              {progress.pagesRead}{progress.totalPages > 0 ? ` / ${progress.totalPages}` : ''} pages read
                             </div>
                             {progress.totalPages > 0 && (
                               <div className="text-xs text-muted-foreground">
@@ -1752,19 +1757,25 @@ function TbrSection({
                     ) : null}
                   </div>
                   {/* Reading progress for desktop - always visible on right */}
-                  {progress && progress.pagesRead > 0 && progress.totalPages > 0 && (
+                  {progress && progress.pagesRead > 0 && (
                     <div className="flex-shrink-0 relative">
-                      <ReadingProgressCompact
-                        totalPages={progress.totalPages}
-                        pagesRead={progress.pagesRead}
-                        size={50}
-                        strokeWidth={5}
-                      />
+                      {progress.totalPages > 0 ? (
+                        <ReadingProgressCompact
+                          totalPages={progress.totalPages}
+                          pagesRead={progress.pagesRead}
+                          size={50}
+                          strokeWidth={5}
+                        />
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground">
+                          {progress.pagesRead}p
+                        </span>
+                      )}
                       {/* Hover tooltip */}
                       <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-20 whitespace-nowrap">
                         <div className="bg-background border border-border rounded-lg p-2 shadow-lg">
                           <div className="text-xs font-semibold text-foreground">
-                            {progress.pagesRead} {progress.totalPages > 0 ? `/ ${progress.totalPages}` : ''} pages
+                            {progress.pagesRead}{progress.totalPages > 0 ? ` / ${progress.totalPages}` : ''} pages read
                           </div>
                           {progress.totalPages > 0 && (
                             <div className="text-xs text-muted-foreground">
@@ -2989,10 +3000,8 @@ function CollaborationRequestCard({
 
 function StatCell({
   label,
-  icon,
   value,
   sub,
-  accent,
   streak,
 }: {
   label: string;
@@ -3003,39 +3012,23 @@ function StatCell({
   streak?: boolean;
 }) {
   return (
-    <div
-      className={`px-5 py-4 border-l border-border first:border-l-0 min-w-0 overflow-hidden transition-colors hover:bg-muted/30 cursor-default ${streak ? "bg-gradient-to-br from-transparent to-[#b85c38]/5" : ""}`}
-    >
-      <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 flex items-center gap-1">
-        {icon && <span className="opacity-60 text-xs">{icon}</span>}
+    <div className="px-5 py-4 border-l border-border first:border-l-0 min-w-0 overflow-hidden transition-colors hover:bg-muted/30 cursor-default">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
         {label}
       </div>
-      <div
-        className={`font-serif font-extrabold text-3xl tracking-tight leading-none ${accent ? "text-[#a8893f]" : streak ? "text-[#b85c38]" : "text-foreground"}`}
-      >
+      <div className="font-bold text-3xl tracking-tight leading-none text-foreground">
         {streak ? (
-          <span className="flex items-center gap-2">
-            <span
-              className="text-2xl"
-              style={{
-                filter: "drop-shadow(0 0 8px rgba(184,92,56,0.35))",
-                animation: "flick 1.4s ease-in-out infinite",
-                display: "inline-block",
-              }}
-            >
-              🔥
-            </span>
+          <span className="flex items-center gap-1.5">
             {value}
-            <span className="text-sm font-medium text-muted-foreground ml-0.5">days</span>
+            <span className="text-sm font-medium text-muted-foreground">days</span>
           </span>
         ) : (
           value
         )}
       </div>
       {sub && (
-        <div className="text-[11px] text-muted-foreground mt-1 italic font-serif">{sub}</div>
+        <div className="text-[11px] text-muted-foreground mt-1">{sub}</div>
       )}
-      <style>{`@keyframes flick{0%,100%{transform:scale(1) rotate(-2deg)}50%{transform:scale(1.08) rotate(2deg)}}`}</style>
     </div>
   );
 }
@@ -3131,12 +3124,11 @@ function XPRingAvatar({
         style={{ bottom: "-8px" }}
       >
         <span
-          className="w-5 h-5 rounded-full flex items-center justify-center text-white font-black text-[10px] font-serif flex-shrink-0"
-          style={{ background: "linear-gradient(135deg,#a8893f,#8a4528)" }}
+          className="w-5 h-5 rounded-full flex items-center justify-center bg-foreground text-background font-black text-[10px] flex-shrink-0"
         >
           {level}
         </span>
-        <span className="font-serif font-bold text-[13px] leading-none">{levelName}</span>
+        <span className="font-semibold text-[13px] leading-none">{levelName}</span>
         <span className="font-mono text-[10px] text-muted-foreground font-semibold">L{level}</span>
       </div>
     </div>
@@ -3164,13 +3156,12 @@ function LevelProgressCard({
       <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Level progress</div>
       <div className="flex items-center gap-2.5 mb-3">
         <span
-          className="w-8 h-8 rounded-full flex items-center justify-center text-white font-black text-sm font-serif flex-shrink-0"
-          style={{ background: "linear-gradient(135deg,#a8893f,#8a4528)" }}
+          className="w-8 h-8 rounded-full flex items-center justify-center bg-foreground text-background font-black text-sm flex-shrink-0"
         >
           {level}
         </span>
         <div className="flex-1 min-w-0">
-          <div className="font-serif font-bold text-[15px] leading-tight">{levelName}</div>
+          <div className="font-semibold text-[15px] leading-tight">{levelName}</div>
           <div className="font-mono text-[10px] text-muted-foreground font-semibold mt-0.5">Level {level} · {formatXp(totalXp)} XP</div>
         </div>
       </div>
@@ -3179,27 +3170,18 @@ function LevelProgressCard({
           className="h-full rounded-full relative overflow-hidden"
           style={{
             width: `${Math.min(xpPct, 100)}%`,
-            background: "linear-gradient(to right,#b85c38,#a8893f)",
+            background: "var(--foreground)",
           }}
-        >
-          <div
-            className="absolute inset-0"
-            style={{
-              background: "linear-gradient(90deg,transparent,rgba(255,255,255,0.45),transparent)",
-              animation: "shimmer 2.4s infinite",
-            }}
-          />
-        </div>
+        />
       </div>
       <div className="flex justify-between font-mono text-[11px] text-muted-foreground">
         <strong className="text-foreground font-bold">{formatXp(totalXp)}</strong>
         <span>→ next level</span>
       </div>
-      <div className="text-[11px] text-muted-foreground mt-2 text-center italic font-serif">
-        — <strong className="text-[#b85c38] not-italic font-semibold font-sans">{formatXp(xpToNext)} XP</strong> to{" "}
-        <strong className="text-foreground not-italic font-semibold">{nextLevelName}</strong>
+      <div className="text-[11px] text-muted-foreground mt-2 text-center">
+        <strong className="text-foreground font-semibold">{formatXp(xpToNext)} XP</strong>{" "}to{" "}
+        <strong className="text-foreground font-semibold">{nextLevelName}</strong>
       </div>
-      <style>{`@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}`}</style>
     </div>
   );
 }
@@ -3224,6 +3206,7 @@ export default function UserProfilePage() {
   const [activityView, setActivityView] = React.useState<ActivityView>("Friends");
   const [profileData, setProfileData] = React.useState<EditableProfile | null>(null);
   const [activeUsername, setActiveUsername] = React.useState(username || defaultProfile.username);
+  const [linkCopied, setLinkCopied] = React.useState(false);
   const [bookshelfPage, setBookshelfPage] = React.useState(1);
   const [likesPage, setLikesPage] = React.useState(1);
   const [tbrPage, setTbrPage] = React.useState(1);
@@ -3255,6 +3238,9 @@ export default function UserProfilePage() {
     diary_entries?: number;
     xp_rank?: number | null;
   } | null>(null);
+
+  // Cookie-based streak (own profile only, more accurate than Go backend streak)
+  const [cookieStreak, setCookieStreak] = React.useState<number | null>(null);
 
   // Activities from API
   const [activities, setActivities] = React.useState<ActivityEntry[]>([]);
@@ -3478,6 +3464,19 @@ export default function UserProfilePage() {
               console.warn(`User not found: ${activeUsername}`);
               return null;
             }
+            if (res.status === 429 || res.status === 503) {
+              console.warn(`Profile fetch rate-limited (${res.status}), falling back to cache`);
+              try {
+                const raw = typeof window !== "undefined"
+                  ? localStorage.getItem(`pb_profile_full_${activeUsername}`)
+                  : null;
+                if (raw) {
+                  const cached = JSON.parse(raw) as { user: unknown; ts: number };
+                  if (cached?.user) return { user: cached.user, _fromCache: true as const };
+                }
+              } catch { /* ignore */ }
+              return null;
+            }
             throw new Error(`Failed to fetch profile: ${res.status}`);
           }
           return res.json();
@@ -3546,11 +3545,6 @@ export default function UserProfilePage() {
               }))
               : [];
             setFavoriteBooks(transformedFavoriteBooks);
-
-            // Clear cache to force fresh data on next load
-            if (typeof window !== "undefined") {
-              sessionStorage.removeItem(`profile_${activeUsername}`);
-            }
 
             // Bookshelf books - sort by finishedOn date (newest first)
             const transformedBookshelf: BookshelfBook[] = Array.isArray(data.user.bookshelf)
@@ -3623,32 +3617,40 @@ export default function UserProfilePage() {
                 type GoEntry = Record<string, unknown>;
                 const goBooks = goData.books as GoEntry[];
 
-                // Transform each Go TBRResponse into a TbrBook-compatible shape.
+                // Transform each TBR entry. The route returns flat fields
+                // (title, cover, authors, current_page, totalPages) directly on entry.
                 const goTbrBooks = goBooks.map((entry, idx) => {
-                  const b = (entry.book || entry) as GoEntry;
+                  // Support both flat (from route) and nested (raw Go pass-through) shapes.
+                  const b = (entry.book || {}) as GoEntry;
                   const vi = (b.volumeInfo || {}) as GoEntry;
                   const imageLinks = (vi.imageLinks || {}) as GoEntry;
-                  const authors = (vi.authors as string[] | undefined) || [];
-                  const cp = entry.current_page as number | undefined;
+                  const nestedAuthors = vi.authors as string[] | undefined;
+                  const flatAuthors = entry.authors as string[] | undefined;
+                  const authors = nestedAuthors || flatAuthors || [];
+                  const cp = (entry.current_page ?? entry.pagesRead) as number | undefined;
                   const addedAt = entry.created_at as string | undefined;
+                  const flatTitle = (entry.title as string) || undefined;
+                  const flatCover = (entry.cover as string) || undefined;
+                  const flatTotalPages = (entry.totalPages as number) || undefined;
                   return {
-                    id: String(entry.book_id || b.id || `go-tbr-${idx}`),
-                    bookId: String(entry.book_id || b.id || ""),
+                    id: String(entry.book_id || entry.bookId || b.id || `go-tbr-${idx}`),
+                    bookId: String(entry.book_id || entry.bookId || b.id || ""),
                     isbndbId: b.isbndbId as string | undefined,
                     openLibraryId: b.openLibraryId as string | undefined,
-                    title: (vi.title as string) || "Unknown Title",
+                    title: (vi.title as string) || flatTitle || "Unknown Title",
                     author: authors[0] || "Unknown Author",
                     cover:
                       (imageLinks.thumbnail as string) ||
                       (imageLinks.medium as string) ||
+                      flatCover ||
                       "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
                     addedOn: addedAt
                       ? `Added ${new Date(addedAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`
                       : "Added",
-                    urgency: entry.tbr_priority as "Soon" | "Eventually" | "This weekend" | undefined,
+                    urgency: (entry.tbr_priority as "Soon" | "Eventually" | "This weekend") || undefined,
                     whyNow: entry.tbr_notes as string | undefined,
                     pagesRead: typeof cp === "number" && cp > 0 ? cp : 0,
-                    totalPages: typeof vi.pageCount === "number" ? vi.pageCount : 0,
+                    totalPages: typeof vi.pageCount === "number" ? vi.pageCount : (flatTotalPages ?? 0),
                   };
                 });
 
@@ -3991,19 +3993,23 @@ export default function UserProfilePage() {
             setFollowersCount(data.user.followersCount || 0);
             setFollowingCount(data.user.followingCount || 0);
 
-            // Cache in sessionStorage
+            // Persist full user data to localStorage for stale-while-revalidate
+            const isFromCache = !!(data as { _fromCache?: boolean })?._fromCache;
             if (typeof window !== "undefined") {
-              try {
-                sessionStorage.setItem(cacheKey, JSON.stringify({
-                  data: profile,
-                  timestamp: Date.now(),
-                }));
-              } catch {
-                // Storage quota exceeded or not available
+              if (isFromCache) {
+                // Showing stale data — notify user
+                toast.info("Showing saved data", { description: "Rate limited. Refresh for latest." });
+              } else {
+                try {
+                  localStorage.setItem(
+                    `pb_profile_full_${activeUsername}`,
+                    JSON.stringify({ user: data.user, ts: Date.now() })
+                  );
+                } catch { /* storage quota exceeded */ }
               }
             }
-          } else {
-            // User not found
+          } else if (!(data as { _fromCache?: boolean })?._fromCache) {
+            // User not found (only clear state on true 404, not rate limits)
             console.warn("User profile not found in database");
             setProfileData(null);
             setFavoriteBooks([]);
@@ -4098,6 +4104,15 @@ export default function UserProfilePage() {
       .then(data => { if (data) setLeaderboardStats(data); })
       .catch(() => {});
   }, [isOwnProfile]);
+
+  // Fetch cookie-based streak (accurate, server-tracked)
+  React.useEffect(() => {
+    if (!isOwnProfile || !activeUsername) return;
+    fetch(`/api/users/${encodeURIComponent(activeUsername)}/streak`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data && typeof data.streak === 'number') setCookieStreak(data.streak); })
+      .catch(() => {});
+  }, [isOwnProfile, activeUsername]);
 
   // Handle follow/unfollow action (POST follow / DELETE unfollow — must match API routes)
   const handleFollow = React.useCallback(async () => {
@@ -4201,7 +4216,7 @@ export default function UserProfilePage() {
 
       // Avatar is now saved as Cloudinary URL (not base64), which is small enough for cookies
       type ProfileUpdatePayload = {
-        username: string;
+        username?: string;
         name: string;
         bio: string;
         birthday: string | null;
@@ -4211,7 +4226,9 @@ export default function UserProfilePage() {
         avatar: string;
       };
       const payload: ProfileUpdatePayload = {
-        username: profileData.username,
+        // Only include username when it's actually changing — sending unchanged
+        // username causes the Go backend to reject it as "already taken"
+        ...(profileData.username !== activeUsername ? { username: profileData.username } : {}),
         name: profileData.name,
         bio: profileData.bio,
         birthday: profileData.birthday || null,
@@ -4369,7 +4386,8 @@ export default function UserProfilePage() {
   const totalXp = leaderboardStats?.total_xp ?? 0;
   const level = leaderboardStats?.level ?? 1;
   const levelName = leaderboardStats?.level_name ?? "Newcomer";
-  const currentStreak = leaderboardStats?.current_streak ?? 0;
+  // Prefer cookie-based streak (accurate server-tracked) over Go backend streak (may lag)
+  const currentStreak = cookieStreak ?? leaderboardStats?.current_streak ?? 0;
   const booksReadStat = leaderboardStats?.books_read ?? bookshelfBooks.length;
   const diaryEntriesStat = leaderboardStats?.diary_entries ?? diaryEntries.length;
   // Simple XP-within-level calculation (assume each level needs 10000 XP; adjust if Go returns boundary info)
@@ -4389,15 +4407,14 @@ export default function UserProfilePage() {
             <Header minimalMobile={isMobile} />
           ) : (
             <>
-              <DesktopSidebar />
-              <MinimalDesktopHeader />
+              <HomeLayoutHeader />
             </>
           )}
           <div className={cn(
             "flex flex-1 items-center justify-center px-4 pb-16 pt-20 md:pb-24 md:pt-24",
             isMobile ? "mt-16" : "mt-16"
           )}>
-            <TetrisLoading size="md" speed="fast" loadingText="Loading profile..." />
+            <BookLoader size="md" speed="fast" loadingText="Loading profile..." />
           </div>
         </div>
       </main>
@@ -4464,7 +4481,7 @@ export default function UserProfilePage() {
   });
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-background profile-page">
       <div className="flex min-h-screen flex-col overflow-x-hidden w-full">
         {/* Navigation */}
         {(!isMobile || !isEditOpen) && (
@@ -4472,8 +4489,7 @@ export default function UserProfilePage() {
             <Header minimalMobile={isMobile} />
           ) : (
             <>
-              <DesktopSidebar />
-              <MinimalDesktopHeader />
+              <HomeLayoutHeader />
             </>
           )
         )}
@@ -4481,13 +4497,7 @@ export default function UserProfilePage() {
         <div className={cn("flex-1", isMobile ? "mt-16" : "mt-16")}>
 
           {/* ── HERO ──────────────────────────────────────────────── */}
-          <section
-            className="relative overflow-hidden px-4 md:px-9 pt-10 pb-6"
-            style={{
-              background:
-                "radial-gradient(ellipse 60% 70% at 30% 30%,rgba(168,137,63,0.07) 0%,transparent 60%), radial-gradient(ellipse 50% 60% at 80% 40%,rgba(184,92,56,0.06) 0%,transparent 65%)",
-            }}
-          >
+          <section className="relative overflow-hidden px-4 md:px-9 pt-10 pb-6">
             <div className="max-w-5xl mx-auto">
               {/* Hero inner: avatar-block + identity */}
               {isMobile ? (
@@ -4522,17 +4532,17 @@ export default function UserProfilePage() {
                   {/* Level badge */}
                   {isOwnProfile && (
                     <div className="inline-flex items-center gap-1.5 bg-background border border-border rounded-full px-2.5 py-1 shadow mb-2">
-                      <span className="w-4 h-4 rounded-full flex items-center justify-center text-white font-black text-[9px] font-serif" style={{ background: "linear-gradient(135deg,#a8893f,#8a4528)" }}>{level}</span>
+                      <span className="w-4 h-4 rounded-full flex items-center justify-center bg-foreground text-background font-black text-[9px]">{level}</span>
                       <span className="text-xs font-semibold">{levelName} · L{level}</span>
                     </div>
                   )}
-                  <h1 className="font-serif font-extrabold text-2xl tracking-tight mb-0.5">{profileData.name || profileData.username}</h1>
+                  <h1 className="font-extrabold text-2xl tracking-tight mb-0.5">{profileData.name || profileData.username}</h1>
                   <div className="text-xs text-muted-foreground mb-2">
                     @{profileData.username}
                     {profileData.pronouns?.length ? ` · ${profileData.pronouns.join("/")}` : ""}
                   </div>
                   {profileData.bio && (
-                    <p className="font-serif italic text-sm text-muted-foreground max-w-xs mx-auto mb-3 leading-snug">
+                    <p className="italic text-sm text-muted-foreground max-w-xs mx-auto mb-3 leading-snug">
                       &ldquo;{profileData.bio}&rdquo;
                     </p>
                   )}
@@ -4540,22 +4550,22 @@ export default function UserProfilePage() {
                   <div className="flex bg-card border border-border rounded-xl overflow-hidden mb-3">
                     {isOwnProfile && (
                       <div className="flex-1 py-3 text-center border-r border-border">
-                        <div className="font-serif font-extrabold text-lg text-[#b85c38]">🔥{currentStreak}<span className="text-xs font-medium text-muted-foreground ml-0.5">d</span></div>
+                        <div className="font-bold text-lg text-foreground">{currentStreak}<span className="text-xs font-medium text-muted-foreground ml-0.5">d</span></div>
                         <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5">Streak</div>
                       </div>
                     )}
                     <div className="flex-1 py-3 text-center border-r border-border">
-                      <div className="font-serif font-extrabold text-lg">{bookshelfBooks.length}</div>
+                      <div className="font-bold text-lg">{bookshelfBooks.length}</div>
                       <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5">Books</div>
                     </div>
                     {isOwnProfile && (
                       <div className="flex-1 py-3 text-center border-r border-border">
-                        <div className="font-serif font-extrabold text-lg text-[#a8893f]">{totalXp >= 1000 ? `${(totalXp / 1000).toFixed(1)}k` : totalXp}</div>
+                        <div className="font-bold text-lg text-foreground">{totalXp >= 1000 ? `${(totalXp / 1000).toFixed(1)}k` : totalXp}</div>
                         <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5">XP</div>
                       </div>
                     )}
                     <div className="flex-1 py-3 text-center">
-                      <div className="font-serif font-extrabold text-lg">{followersCount}</div>
+                      <div className="font-bold text-lg">{followersCount}</div>
                       <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5">Followers</div>
                     </div>
                   </div>
@@ -4597,12 +4607,12 @@ export default function UserProfilePage() {
                       levelName={isOwnProfile ? levelName : "Reader"}
                     />
                     {isOwnProfile && (
-                      <div className="text-center text-[11px] text-muted-foreground font-serif italic max-w-[160px] leading-snug">
-                        <strong className="text-foreground not-italic font-semibold font-sans block mb-0.5">
+                      <div className="text-center text-[11px] text-muted-foreground max-w-[160px] leading-snug">
+                        <strong className="text-foreground font-semibold block mb-0.5">
                           {totalXp.toLocaleString()} XP
                         </strong>
                         {xpToNext.toLocaleString()} XP to{" "}
-                        <span className="text-[#b85c38] font-semibold font-sans not-italic">{nextLevelName}</span>
+                        <span className="text-foreground font-semibold">{nextLevelName}</span>
                       </div>
                     )}
                   </div>
@@ -4610,10 +4620,9 @@ export default function UserProfilePage() {
                   {/* Identity block */}
                   <div className="pt-2.5">
                     <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-                      <span className="text-[#a8893f]">✦</span>
                       <span>Reader since {profileData.birthday ? new Date(profileData.birthday).getFullYear() : new Date().getFullYear()}</span>
                     </div>
-                    <h1 className="font-serif font-extrabold text-5xl tracking-tight leading-none mb-1">
+                    <h1 className="font-extrabold text-5xl tracking-tight leading-none mb-1">
                       {profileData.name || profileData.username}
                       {profileData.pronouns?.length ? (
                         <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground uppercase tracking-widest ml-3 align-middle relative -top-2">
@@ -4623,7 +4632,7 @@ export default function UserProfilePage() {
                     </h1>
                     <div className="text-sm text-muted-foreground mb-3.5">@{profileData.username}</div>
                     {profileData.bio && (
-                      <p className="font-serif italic text-[17px] text-muted-foreground leading-snug mb-4 max-w-[560px]">
+                      <p className="italic text-[17px] text-muted-foreground leading-snug mb-4 max-w-[560px]">
                         &ldquo;{profileData.bio}&rdquo;
                       </p>
                     )}
@@ -4637,7 +4646,7 @@ export default function UserProfilePage() {
                       {isOwnProfile && leaderboardStats?.xp_rank && (
                         <>
                           <span className="text-muted-foreground/40">·</span>
-                          <span className="text-[#b85c38] font-semibold">#{leaderboardStats.xp_rank} on leaderboard</span>
+                          <span className="text-foreground font-semibold">#{leaderboardStats.xp_rank} on leaderboard</span>
                         </>
                       )}
                     </div>
@@ -4666,13 +4675,69 @@ export default function UserProfilePage() {
                           {isFollowLoading ? "..." : isFollowing ? "Following" : "Follow"}
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => { try { navigator.clipboard.writeText(window.location.href); } catch {/* */} }}
-                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-border bg-background text-foreground text-sm font-semibold transition hover:border-muted-foreground"
-                      >
-                        ↗ Share
-                      </button>
+                      <Dropdown.Root>
+                        <Dropdown.Trigger
+                          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-border bg-background text-foreground text-sm font-semibold transition hover:border-muted-foreground"
+                        >
+                          <Share2 className="size-3.5" />
+                          Share
+                        </Dropdown.Trigger>
+                        <Dropdown.Popover align="end">
+                          <Dropdown.Menu>
+                            <Dropdown.Item
+                              icon={linkCopied ? Check : Link2}
+                              label={linkCopied ? "Copied!" : "Copy link"}
+                              className={linkCopied ? "text-green-600 [&_svg]:text-green-600" : ""}
+                              onClick={() => {
+                                try { navigator.clipboard.writeText(window.location.href); } catch {/* */}
+                                setLinkCopied(true);
+                                setTimeout(() => setLinkCopied(false), 2000);
+                              }}
+                            />
+                            <Dropdown.Item
+                              icon={() => (
+                                <svg viewBox="0 0 24 24" className="size-4 fill-current text-muted-foreground" aria-hidden="true">
+                                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                                </svg>
+                              )}
+                              label="Share on X"
+                              onClick={() => {
+                                const url = window.location.href;
+                                const text = `Check out ${profileData?.name || profileData?.username || "this profile"} on PaperBoxd`;
+                                window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+                              }}
+                            />
+                            <Dropdown.Item
+                              icon={() => (
+                                <svg viewBox="0 0 24 24" className="size-4 fill-current text-muted-foreground" aria-hidden="true">
+                                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                                </svg>
+                              )}
+                              label="Share on WhatsApp"
+                              onClick={() => {
+                                const url = window.location.href;
+                                const text = `Check out ${profileData?.name || profileData?.username || "this profile"} on PaperBoxd`;
+                                window.open(`https://wa.me/?text=${encodeURIComponent(text + " " + url)}`, "_blank", "noopener,noreferrer");
+                              }}
+                            />
+                            {typeof navigator !== "undefined" && "share" in navigator && (
+                              <>
+                                <Dropdown.Separator />
+                                <Dropdown.Item
+                                  icon={Share2}
+                                  label="More options"
+                                  onClick={() => {
+                                    navigator.share({
+                                      title: `${profileData?.name || profileData?.username || "Profile"} on PaperBoxd`,
+                                      url: window.location.href,
+                                    }).catch(() => {/* user dismissed */});
+                                  }}
+                                />
+                              </>
+                            )}
+                          </Dropdown.Menu>
+                        </Dropdown.Popover>
+                      </Dropdown.Root>
                     </div>
                   </div>
                 </div>
@@ -4683,31 +4748,25 @@ export default function UserProfilePage() {
                 <div className="grid grid-cols-5 border border-border rounded-2xl bg-card overflow-hidden shadow-sm">
                   <StatCell
                     label="Total XP"
-                    icon="✦"
                     value={isOwnProfile ? totalXp.toLocaleString() : "—"}
                     sub={isOwnProfile ? `Level ${level} · ${levelName}` : undefined}
-                    accent
                   />
                   <StatCell
                     label="Streak"
-                    icon="🔥"
                     value={isOwnProfile ? currentStreak : "—"}
                     streak
                   />
                   <StatCell
                     label="Books read"
-                    icon="📚"
                     value={isOwnProfile ? booksReadStat : bookshelfBooks.length}
                     sub={bookshelfBooks.length > 0 ? `${bookshelfBooks.length} on shelf` : undefined}
                   />
                   <StatCell
                     label="Diary entries"
-                    icon="📝"
                     value={isOwnProfile ? diaryEntriesStat : diaryEntries.length}
                   />
                   <StatCell
                     label="Following"
-                    icon="👥"
                     value={followingCount}
                     sub={followersCount > 0 ? `${followersCount} followers` : undefined}
                   />
@@ -4734,7 +4793,7 @@ export default function UserProfilePage() {
                   {label}
                 </button>
               ))}
-              {/* Activity tab for own profile */}
+              {/* DNF tab for own profile (in-progress + TBR + did-not-finish books) */}
               {isAuthenticated && isOwnProfile && (
                 <button
                   key="Activity"
@@ -4745,7 +4804,7 @@ export default function UserProfilePage() {
                     activeTab === "Activity" && "border-foreground text-foreground font-semibold"
                   )}
                 >
-                  Activity
+                  DNF
                 </button>
               )}
             </div>
@@ -4762,11 +4821,11 @@ export default function UserProfilePage() {
                   {favoriteBooks.length > 0 && (
                     <div>
                       <div className="flex items-baseline justify-between mb-4">
-                        <h2 className="font-serif font-bold text-xl tracking-tight">Books I love</h2>
+                        <h2 className="font-bold text-xl tracking-tight">Books I love</h2>
                         <button
                           type="button"
                           onClick={() => setActiveTab("Favourites")}
-                          className="text-xs font-semibold text-[#b85c38]"
+                          className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
                         >
                           Edit favourites →
                         </button>
@@ -4781,7 +4840,7 @@ export default function UserProfilePage() {
                             <Image src={book.cover} alt={book.title} fill className="object-cover" sizes="120px" unoptimized />
                             <div className="absolute inset-0" style={{ background: "linear-gradient(to top,rgba(0,0,0,0.8) 0%,rgba(0,0,0,0.1) 60%,transparent 100%)" }} />
                             <div className="absolute bottom-0 left-0 right-0 p-3">
-                              <div className="font-serif font-bold text-white text-sm leading-tight mb-0.5 line-clamp-2">{book.title}</div>
+                              <div className="font-semibold text-white text-sm leading-tight mb-0.5 line-clamp-2">{book.title}</div>
                               <div className="text-white/80 text-[10px]">{book.author}</div>
                             </div>
                           </div>
@@ -4794,16 +4853,16 @@ export default function UserProfilePage() {
                   {currentlyReading.length > 0 && (
                     <div>
                       <div className="flex items-baseline justify-between mb-4">
-                        <h2 className="font-serif font-bold text-xl tracking-tight flex items-center gap-2">
+                        <h2 className="font-bold text-xl tracking-tight flex items-center gap-2">
                           Currently Reading
-                          <span className="text-[10px] font-extrabold tracking-widest uppercase px-2 py-0.5 rounded-full bg-[#b85c38]/10 text-[#b85c38]">
+                          <span className="text-[10px] font-extrabold tracking-widest uppercase px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                             {currentlyReading.length} active
                           </span>
                         </h2>
                         <button
                           type="button"
                           onClick={() => setActiveTab("Bookshelf")}
-                          className="text-xs font-semibold text-[#b85c38]"
+                          className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
                         >
                           View all →
                         </button>
@@ -4831,13 +4890,13 @@ export default function UserProfilePage() {
                                     className="h-full rounded-full"
                                     style={{
                                       width: `${pct}%`,
-                                      background: "linear-gradient(to right,#b85c38,#a8893f)",
+                                      background: "var(--foreground)",
                                     }}
                                   />
                                 </div>
                                 <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                                   <span>p. <strong className="text-foreground font-mono">{pagesRead}</strong>{totalPages > 0 ? ` / ${totalPages}` : ""}</span>
-                                  {pct > 0 && <span className="text-[#b85c38] font-semibold">{pct}%</span>}
+                                  {pct > 0 && <span className="text-foreground font-semibold">{pct}%</span>}
                                 </div>
                               </div>
                             </div>
@@ -4851,11 +4910,11 @@ export default function UserProfilePage() {
                   {authorStats.length > 0 && (
                     <div>
                       <div className="flex items-baseline justify-between mb-4">
-                        <h2 className="font-serif font-bold text-xl tracking-tight">Top Authors</h2>
+                        <h2 className="font-bold text-xl tracking-tight">Top Authors</h2>
                         <button
                           type="button"
                           onClick={() => setActiveTab("Authors")}
-                          className="text-xs font-semibold text-[#b85c38]"
+                          className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
                         >
                           All {authorStats.length} →
                         </button>
@@ -4892,55 +4951,8 @@ export default function UserProfilePage() {
                     </div>
                   )}
 
-                  {/* Recent Activity */}
-                  {activities.length > 0 && (
-                    <div>
-                      <div className="flex items-baseline justify-between mb-4">
-                        <h2 className="font-serif font-bold text-xl tracking-tight">Recent Activity</h2>
-                        {isOwnProfile && (
-                          <button
-                            type="button"
-                            onClick={() => setActiveTab("Activity" as DockLabel)}
-                            className="text-xs font-semibold text-[#b85c38]"
-                          >
-                            Full activity →
-                          </button>
-                        )}
-                      </div>
-                      <div className="bg-card border border-border rounded-xl px-4 divide-y divide-border">
-                        {activities.slice(0, 5).map((entry) => {
-                          const iconMap: Record<string, { icon: string; cls: string }> = {
-                            read: { icon: "📖", cls: "bg-green-50 border-green-300 dark:bg-green-950 dark:border-green-800" },
-                            rated: { icon: "★", cls: "bg-amber-50 border-amber-300 dark:bg-amber-950 dark:border-amber-800" },
-                            reviewed: { icon: "✎", cls: "bg-[#b85c38]/10 border-[#b85c38]/30" },
-                            diary_entry: { icon: "✎", cls: "bg-[#b85c38]/10 border-[#b85c38]/30" },
-                            added_to_list: { icon: "☰", cls: "bg-blue-50 border-blue-300 dark:bg-blue-950 dark:border-blue-800" },
-                          };
-                          const { icon = "📖", cls = "bg-muted border-border" } = iconMap[entry.type || ""] || {};
-                          return (
-                            <div key={entry.id} className="flex gap-3 py-3.5">
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm border flex-shrink-0 ${cls}`}>
-                                {icon}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                                  <div className="text-sm text-foreground">
-                                    <strong className="font-semibold">{entry.name}</strong>{" "}
-                                    {entry.action}{" "}
-                                    <em className="font-serif font-medium not-italic text-foreground">{entry.detail}</em>
-                                  </div>
-                                  <div className="text-[11px] text-muted-foreground italic font-serif flex-shrink-0">{entry.timeAgo}</div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
                   {/* Empty state for overview */}
-                  {favoriteBooks.length === 0 && currentlyReading.length === 0 && authorStats.length === 0 && activities.length === 0 && (
+                  {favoriteBooks.length === 0 && currentlyReading.length === 0 && authorStats.length === 0 && (
                     <div className="flex flex-col items-center justify-center rounded-2xl border border-border bg-muted/20 p-12 text-center">
                       <p className="text-lg font-semibold text-foreground">Nothing here yet</p>
                       <p className="mt-2 text-sm text-muted-foreground">Start tracking books to see your overview.</p>
@@ -5018,116 +5030,63 @@ export default function UserProfilePage() {
               </div>
 
             ) : activeTab === "Activity" ? (
-              <div className="space-y-10">
-                <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="space-y-6">
+                <div className="flex items-baseline justify-between">
                   <div>
-                    <h2 className="text-xl font-semibold text-foreground">Activity</h2>
-                    <p className="text-sm text-muted-foreground">See what friends are tracking or revisit your own updates.</p>
+                    <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
+                      DNF
+                      <span className="text-[10px] font-extrabold tracking-widest uppercase px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        {tbrBooks.length}
+                      </span>
+                    </h2>
+                    <p className="text-sm text-muted-foreground">Books you&apos;ve started or queued — none finished.</p>
                   </div>
-                  <DockToggle
-                    items={[
-                      {
-                        label: "Friends",
-                        icon: Users,
-                        isActive: activityView === "Friends",
-                        onClick: () => {
-                          setActivityView("Friends");
-                          if (isAuthenticated && user?.username) {
-                            localStorage.setItem(
-                              `activity_last_viewed_${user?.username}`,
-                              new Date().toISOString()
-                            );
-                          }
-                        },
-                      },
-                      {
-                        label: "Me",
-                        icon: UserRound,
-                        isActive: activityView === "Me",
-                        onClick: () => setActivityView("Me"),
-                      },
-                    ]}
-                  />
                 </div>
-                {activities.length === 0 ? (
+
+                {tbrBooks.length === 0 ? (
                   <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
-                    <p className="text-lg font-semibold text-foreground">No activity yet</p>
+                    <p className="text-lg font-semibold text-foreground">Nothing here yet</p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      {activityView === "Me"
-                        ? "Your reading activity will appear here once you start tracking books."
-                        : "No friend activity to show yet."}
+                      Books you start reading or add to TBR will show up here.
                     </p>
                   </div>
                 ) : (
-                  <div className="grid gap-6 md:grid-cols-2">
-                    {activities
-                      .filter((entry) => {
-                        if (activityView === "Me") return entry.name === "You";
-                        if (entry.type === "collaboration_request") return true;
-                        return entry.name !== "You";
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {[...tbrBooks]
+                      .sort((a, b) => {
+                        const ap = (a as TbrBook & { pagesRead?: number }).pagesRead ?? 0;
+                        const bp = (b as TbrBook & { pagesRead?: number }).pagesRead ?? 0;
+                        return bp - ap;
                       })
-                      .map((entry) => {
-                        if (entry.type === "collaboration_request") {
-                          return (
-                            <CollaborationRequestCard
-                              key={entry.id}
-                              activity={entry}
-                              onAccept={handleAccept}
-                              onReject={handleReject}
-                            />
-                          );
-                        }
+                      .map((book) => {
+                        const bw = book as TbrBook & { pagesRead?: number; totalPages?: number };
+                        const pagesRead = bw.pagesRead ?? 0;
+                        const totalPages = bw.totalPages ?? 0;
+                        const pct = totalPages > 0 ? Math.round((pagesRead / totalPages) * 100) : 0;
                         return (
-                          <article
-                            key={entry.id}
-                            onClick={() => {
-                              if (entry.type === "diary_entry" && entry.diaryEntryId) {
-                                setSelectedActivityDiaryEntry({
-                                  id: entry.diaryEntryId,
-                                  bookId: entry.bookId,
-                                  bookTitle: entry.bookTitle,
-                                  bookAuthor: entry.bookAuthor,
-                                  bookCover: entry.cover,
-                                  content: entry.content,
-                                  createdAt: entry.createdAt,
-                                  updatedAt: entry.updatedAt,
-                                  isLiked: entry.isLiked,
-                                  likesCount: entry.likesCount,
-                                });
-                              }
-                            }}
-                            className={`flex gap-4 rounded-3xl border border-border/70 bg-background/90 p-4 shadow-sm transition hover:-translate-y-1 ${entry.type === "diary_entry" ? "cursor-pointer" : ""}`}
+                          <div
+                            key={book.id}
+                            className="grid grid-cols-[72px_1fr] gap-3 items-start p-3.5 bg-card border border-border rounded-xl cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md"
+                            onClick={() => { try { window.location.href = `/b/${book.id}`; } catch {/**/} }}
                           >
-                            <div className="relative h-24 w-24 overflow-hidden rounded-2xl bg-muted">
-                              <Image
-                                src={entry.cover}
-                                alt={entry.detail}
-                                fill
-                                className="object-cover"
-                                sizes="96px"
-                                quality={100}
-                                unoptimized
-                              />
+                            <div className="relative aspect-[2/3] rounded overflow-hidden bg-muted shadow-md w-[72px] flex-shrink-0">
+                              <Image src={book.cover} alt={book.title} fill className="object-cover" sizes="72px" unoptimized />
                             </div>
-                            <div className="flex flex-1 flex-col justify-between">
-                              <div>
-                                <p className="text-sm text-muted-foreground">{entry.timeAgo}</p>
-                                <p className="text-base font-semibold text-foreground">
-                                  {entry.name} {entry.action}
-                                </p>
-                                <p className="text-sm text-muted-foreground">{entry.detail}</p>
+                            <div className="min-w-0">
+                              <div className="font-semibold text-[13px] leading-tight mb-0.5 line-clamp-2">{book.title}</div>
+                              <div className="text-[11px] text-muted-foreground mb-2 truncate">{book.author}</div>
+                              <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-1.5">
+                                <div
+                                  className="h-full rounded-full"
+                                  style={{ width: `${pct}%`, background: "linear-gradient(to right,#b85c38,#a8893f)" }}
+                                />
                               </div>
-                              {entry.type === "diary_entry" ? (
-                                <button className="text-sm font-semibold text-primary transition hover:text-primary/80">
-                                  View diary entry
-                                </button>
-                              ) : (
-                                <button className="text-sm font-semibold text-primary transition hover:text-primary/80">
-                                  View details
-                                </button>
-                              )}
+                              <div className="flex items-center justify-between text-[10.5px] text-muted-foreground">
+                                <span>p. <strong className="text-foreground font-mono">{pagesRead}</strong>{totalPages > 0 ? ` / ${totalPages}` : ""}</span>
+                                <span className={pct > 0 ? "text-foreground font-semibold" : "text-muted-foreground/70"}>{pct}%</span>
+                              </div>
                             </div>
-                          </article>
+                          </div>
                         );
                       })}
                   </div>

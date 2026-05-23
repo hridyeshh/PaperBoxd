@@ -197,7 +197,9 @@ export async function GET(
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
     if (userResult.status === "fulfilled" && userResult.value.status >= 400) {
-      return NextResponse.json({ error: "Failed to fetch user" }, { status: userResult.value.status });
+      const status = userResult.value.status === 429 ? 503 : userResult.value.status;
+      const headers = userResult.value.status === 429 ? { "Retry-After": "10" } : undefined;
+      return NextResponse.json({ error: "Failed to fetch user" }, { status, headers });
     }
 
     const goUser = userResult.status === "fulfilled" ? (userResult.value.data as Record<string, unknown>) : {};

@@ -4,7 +4,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { EditProfileForm, type EditableProfile } from "@/components/ui/forms/edit-profile-form";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
+import BookLoader from "@/components/ui/features/book-loader";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 import { toast } from "sonner";
 import { DEFAULT_AVATAR } from "@/lib/utils";
@@ -173,7 +173,7 @@ export default function SetupProfilePage() {
           className="text-slate-500 dark:text-slate-400"
         />
         <div className="relative z-10 flex min-h-screen items-center justify-center">
-          <TetrisLoading size="md" speed="fast" loadingText="Loading..." />
+          <BookLoader size="md" speed="fast" loadingText="Loading..." />
         </div>
       </main>
     );

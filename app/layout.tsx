@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Playfair_Display, Pinyon_Script } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { MobileDock } from "@/components/ui/layout/mobile-dock";
+import { SiteSplash } from "@/components/ui/features/site-splash";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,6 +14,19 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const playfairDisplay = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  style: ["normal", "italic"],
+});
+
+const pinyonScript = Pinyon_Script({
+  variable: "--font-pinyon",
+  subsets: ["latin"],
+  weight: "400",
 });
 
 export const metadata: Metadata = {
@@ -94,7 +108,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${playfairDisplay.variable} ${pinyonScript.variable} antialiased`}
         suppressHydrationWarning
       >
         <Script
@@ -117,6 +131,7 @@ export default function RootLayout({
           }}
         />
         <Providers>
+          <SiteSplash />
           {children}
           <MobileDock />
         </Providers>

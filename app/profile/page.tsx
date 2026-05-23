@@ -3,7 +3,7 @@
 import { useAuth } from "@/components/providers/auth-provider";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
+import BookLoader from "@/components/ui/features/book-loader";
 
 export default function ProfilePage() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -65,7 +65,7 @@ export default function ProfilePage() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <TetrisLoading size="md" speed="fast" loadingText="Redirecting..." />
+          <BookLoader size="md" speed="fast" loadingText="Redirecting..." />
         </div>
       </div>
     );

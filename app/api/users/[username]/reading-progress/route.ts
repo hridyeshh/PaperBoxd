@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bookshelfApi } from "@/lib/api/endpoints";
 import { cookies } from "next/headers";
+import { getSession } from "@/lib/auth/jwt-session";
+import { recordActivity, STREAK_COOKIE_OPTIONS } from "@/lib/streak";
 
 /**
  * GET /api/users/[username]/reading-progress?bookId=...
@@ -127,6 +129,25 @@ export async function POST(
     const row = data as { current_page?: number | null; book_id?: string };
     const resolvedPages =
       typeof row?.current_page === "number" ? row.current_page : currentPage;
+
+    // Only count streak if user actually logged pages (pagesRead > 0)
+    if (currentPage > 0) {
+      const session = await getSession();
+      const userId = session.user?.id;
+      if (userId) {
+        const { result, cookieName, cookieValue } = await recordActivity(userId);
+        const res = NextResponse.json({
+          success: true,
+          pagesRead: resolvedPages,
+          totalPages: 0,
+          isComplete: false,
+          streak: result.streak,
+          streakUpdatedToday: result.updatedToday,
+        });
+        res.cookies.set(cookieName, cookieValue, STREAK_COOKIE_OPTIONS);
+        return res;
+      }
+    }
 
     return NextResponse.json({
       success: true,

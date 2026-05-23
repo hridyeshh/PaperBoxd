@@ -5,9 +5,8 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { PinterestGrid } from "@/components/ui/home/pinterest-grid";
 import { Header } from "@/components/ui/layout/header-with-search";
-import { DesktopSidebar } from "@/components/ui/layout/desktop-sidebar";
-import { MinimalDesktopHeader } from "@/components/ui/layout/minimal-desktop-header";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
+import { HomeLayoutHeader } from "@/components/ui/layout/home-layout-header";
+import BookLoader from "@/components/ui/features/book-loader";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { Playfair_Display } from "next/font/google";
@@ -109,9 +108,9 @@ export default function RecommendationsPage() {
     return (
       <main className="min-h-screen bg-background">
         <div className="flex min-h-screen flex-col">
-          {isMobile ? <Header minimalMobile={isMobile} /> : <><DesktopSidebar /><MinimalDesktopHeader /></>}
-          <div className={cn("flex flex-1 items-center justify-center", isMobile ? "mt-16" : "mt-16")}>
-            <TetrisLoading size="md" speed="fast" loadingText="Finding your next read…" />
+          {isMobile ? <Header minimalMobile={isMobile} /> : <HomeLayoutHeader />}
+          <div className="flex flex-1 items-center justify-center mt-16">
+            <BookLoader size="md" speed="fast" loadingText="Finding your next read…" />
           </div>
         </div>
       </main>
@@ -123,9 +122,9 @@ export default function RecommendationsPage() {
   return (
     <main className="min-h-screen bg-background">
       <div className="flex min-h-screen flex-col">
-        {isMobile ? <Header minimalMobile={isMobile} /> : <><DesktopSidebar /><MinimalDesktopHeader /></>}
+        {isMobile ? <Header minimalMobile={isMobile} /> : <HomeLayoutHeader />}
 
-        <div className={cn("flex-1", isMobile ? "mt-16" : "mt-16")}>
+        <div className="flex-1 mt-16">
           <div className="mx-auto w-full max-w-7xl px-4 py-8 pb-24 sm:px-6 lg:px-8 md:pb-8">
 
             {/* Heading */}

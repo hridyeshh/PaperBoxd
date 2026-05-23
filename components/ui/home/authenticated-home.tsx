@@ -1,520 +1,672 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
-import { BookCarouselBook } from "@/components/ui/home/book-carousel";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
-import { PinterestGrid } from "@/components/ui/home/pinterest-grid";
-import { useIsMobile } from "@/hooks/use-media-query";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import BookLoader from "@/components/ui/features/book-loader";
+import { createBookSlug } from "@/lib/utils/book-slug";
+import { cn } from "@/lib/utils";
+import { Playfair_Display } from "next/font/google";
 
-interface CarouselData {
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  style: ["normal", "italic"],
+  display: "swap",
+});
+
+interface BookItem {
+  id: string;
+  _id?: string;
   title: string;
-  subtitle: string;
-  type: "recommended" | "favorites" | "authors" | "genres" | "continue-reading" | "friends";
+  authors: string[];
+  description: string;
+  publishedDate: string;
+  cover: string;
+  isbn?: string;
+  isbn13?: string;
+  openLibraryId?: string;
+  isbndbId?: string;
+  averageRating?: number;
+  ratingsCount?: number;
+  pageCount?: number;
+  author?: string;
 }
 
-const carousels: CarouselData[] = [
-  {
-    title: "Recommended for You",
-    subtitle: "Personalized picks based on your reading taste",
-    type: "recommended",
-  },
-  {
-    title: "Your Friends Are Liking These",
-    subtitle: "Books your friends are enjoying",
-    type: "friends",
-  },
-  {
-    title: "Based on Your Favorites",
-    subtitle: "Books similar to ones you love",
-    type: "favorites",
-  },
-  {
-    title: "From Your Favorite Authors",
-    subtitle: "New releases and classics from authors you've read",
-    type: "authors",
-  },
-  {
-    title: "Trending in Your Genres",
-    subtitle: "What's hot in genres you enjoy",
-    type: "genres",
-  },
-  {
-    title: "Continue Reading",
-    subtitle: "Pick up where you left off",
-    type: "continue-reading",
-  },
-];
+interface CurrentlyReadingBook {
+  bookId: string;
+  title: string;
+  cover: string;
+  author: string;
+  currentPage: number;
+  totalPages: number;
+  updatedAt: string | null;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapBook(b: any): BookItem | null {
+  const id = b?.id || b?._id;
+  if (!id) return null;
+  return {
+    id,
+    _id: b._id || id,
+    title: b.title || "Unknown Title",
+    authors: Array.isArray(b.authors)
+      ? b.authors
+      : b.authors
+      ? [b.authors]
+      : b.author
+      ? [b.author]
+      : ["Unknown Author"],
+    description: b.description || "",
+    publishedDate: b.publishedDate || "",
+    cover: b.cover || "",
+    isbn: b.isbn,
+    isbn13: b.isbn13,
+    openLibraryId: b.openLibraryId,
+    isbndbId: b.isbndbId,
+    averageRating: b.averageRating,
+    ratingsCount: b.ratingsCount,
+    pageCount: b.pageCount,
+  };
+}
+
+function goToBook(router: ReturnType<typeof useRouter>, book: BookItem | { bookId: string; title: string; isbn?: string; isbn13?: string }) {
+  const isCurrentlyReading = "bookId" in book;
+  const id = isCurrentlyReading ? book.bookId : (book as BookItem).isbn13 || (book as BookItem).isbn || (book as BookItem).openLibraryId || (book as BookItem).isbndbId || (book as BookItem)._id || book.id;
+  const bookId = isCurrentlyReading ? book.bookId : id as string;
+  if (!bookId) return router.push(`/b/${createBookSlug(book.title)}`);
+  const isISBN = /^(\d{10}|\d{13})$/.test(bookId);
+  const isOL = bookId.startsWith("OL") || bookId.startsWith("/works/");
+  const isMongo = /^[0-9a-fA-F]{24}$/.test(bookId);
+  const isClean = /^[a-zA-Z0-9_-]+$/.test(bookId) && !bookId.includes(" ") && !bookId.includes("+");
+  if (isISBN || isOL || isMongo || isClean) return router.push(`/b/${bookId}`);
+  router.push(`/b/${createBookSlug(book.title)}`);
+}
+
+// ── Types for progress API response ──────────────────────────────────────────
+
+interface ProgressLastBook {
+  book_id: string;
+  title: string;
+  slug: string;
+  author: string;
+  cover: string;
+  current_page: number;
+  total_pages: number;
+}
+
+// ── Hero strip ────────────────────────────────────────────────────────────────
+
+function HeroStrip({
+  currentBook,
+  username,
+  todayPages,
+  sessions,
+  weekBars,
+  progressLoading,
+}: {
+  currentBook: CurrentlyReadingBook | null;
+  username: string;
+  todayPages: number;
+  sessions: number;
+  weekBars: number[];
+  progressLoading: boolean;
+}) {
+  const router = useRouter();
+  const maxBar = Math.max(...weekBars, 1);
+  const dayLabels = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return ["S", "M", "T", "W", "T", "F", "S"][d.getDay()];
+  });
+
+  return (
+    <section className="relative rounded-2xl overflow-hidden border border-border bg-muted/20 p-7">
+      {/* Subtle grid background */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage:
+            "linear-gradient(to right,rgba(100,116,139,.05) 1px,transparent 1px)," +
+            "linear-gradient(to bottom,rgba(100,116,139,.05) 1px,transparent 1px)",
+          backgroundSize: "36px 36px",
+          maskImage: "radial-gradient(ellipse at center,#000 30%,transparent 80%)",
+          WebkitMaskImage: "radial-gradient(ellipse at center,#000 30%,transparent 80%)",
+        }}
+      />
+
+      <div className="relative grid items-center gap-9" style={{ gridTemplateColumns: "3fr 2fr" }}>
+        {/* Left */}
+        <div>
+          <h1 className={cn(playfair.className, "text-4xl font-semibold tracking-tight leading-[1.05] text-foreground")}>
+            Welcome back, {username}.<br />
+            <span className="italic font-normal text-2xl text-muted-foreground">
+              What are you reading?
+            </span>
+          </h1>
+
+          {/* Currently reading card */}
+          {progressLoading ? (
+            <div className="mt-5 bg-background border border-border rounded-2xl p-4 flex gap-4 animate-pulse">
+              <div className="rounded-lg bg-muted shrink-0" style={{ width: 72, aspectRatio: "2/3" }} />
+              <div className="flex-1 min-w-0 flex flex-col gap-2 justify-center">
+                <div className="h-2.5 w-24 bg-muted rounded-full" />
+                <div className="h-5 w-3/4 bg-muted rounded-full" />
+                <div className="h-3 w-1/3 bg-muted rounded-full" />
+                <div className="mt-2 h-1 bg-muted rounded-full w-full" />
+              </div>
+              <div className="self-center shrink-0 h-9 w-24 bg-muted rounded-full" />
+            </div>
+          ) : currentBook ? (
+            <div
+              className="mt-5 bg-background border border-border rounded-2xl p-4 flex gap-4 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => goToBook(router, currentBook)}
+            >
+              <div
+                className="relative shrink-0 rounded-lg overflow-hidden shadow-md"
+                style={{ width: 72, aspectRatio: "2/3" }}
+              >
+                {currentBook.cover ? (
+                  <Image
+                    src={currentBook.cover}
+                    alt={currentBook.title}
+                    fill
+                    className="object-cover"
+                    sizes="72px"
+                    unoptimized
+                  />
+                ) : (
+                  <div
+                    className="absolute inset-0 flex items-end p-1.5"
+                    style={{ background: `hsl(${(currentBook.title.charCodeAt(0) * 7) % 360},35%,45%)` }}
+                  >
+                    <span className={cn(playfair.className, "text-[10px] text-white/80 font-semibold leading-tight line-clamp-3")}>
+                      {currentBook.title}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-mono text-[9.5px] tracking-[0.22em] uppercase text-muted-foreground">
+                  Currently reading
+                </div>
+                <div className={cn(playfair.className, "text-xl font-semibold text-foreground mt-1 leading-tight line-clamp-2")}>
+                  {currentBook.title}
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">{currentBook.author}</div>
+                {currentBook.totalPages > 0 && (
+                  <div className="mt-3">
+                    <div className="h-1 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-foreground rounded-full transition-all"
+                        style={{
+                          width: `${Math.min(100, Math.round((currentBook.currentPage / currentBook.totalPages) * 100))}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="font-mono text-[10px] tracking-widest text-muted-foreground mt-1.5">
+                      p.{currentBook.currentPage} of {currentBook.totalPages} ·{" "}
+                      {Math.round((currentBook.currentPage / currentBook.totalPages) * 100)}%
+                    </div>
+                  </div>
+                )}
+              </div>
+              <button
+                className="self-center shrink-0 bg-foreground text-background px-5 py-2.5 rounded-full text-sm font-semibold hover:opacity-85 transition-opacity cursor-pointer"
+                onClick={(e) => { e.stopPropagation(); goToBook(router, currentBook); }}
+              >
+                Log pages
+              </button>
+            </div>
+          ) : (
+            <div className="mt-5 bg-background border border-dashed border-border rounded-2xl p-4 flex items-center gap-3">
+              <div className="rounded-lg bg-muted shrink-0" style={{ width: 48, aspectRatio: "2/3" }} />
+              <div>
+                <div className="text-sm font-medium text-foreground">Nothing in progress</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  Start a book and it will appear here
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right: weekly stats */}
+        {progressLoading ? (
+          <div className="bg-background border border-border rounded-2xl p-5 self-start animate-pulse">
+            <div className="h-2.5 w-16 bg-muted rounded-full mb-4" />
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              <div>
+                <div className="h-8 w-10 bg-muted rounded-md" />
+                <div className="h-2.5 w-16 bg-muted rounded-full mt-2" />
+              </div>
+              <div>
+                <div className="h-8 w-10 bg-muted rounded-md" />
+                <div className="h-2.5 w-20 bg-muted rounded-full mt-2" />
+              </div>
+            </div>
+            <div className="h-2.5 w-20 bg-muted rounded-full mb-3" />
+            <div className="flex items-end gap-1.5" style={{ height: 36 }}>
+              {[0.4, 0.7, 0.3, 1, 0.5, 0.6, 0.2].map((h, i) => (
+                <div key={i} className="flex-1 rounded-sm bg-muted" style={{ height: `${Math.round(h * 36)}px` }} />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-background border border-border rounded-2xl p-5 self-start">
+            <div className="mb-3.5">
+              <div className="font-mono text-[10.5px] tracking-[0.22em] uppercase text-muted-foreground">
+                This week
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className={cn(playfair.className, "text-[32px] font-semibold text-foreground leading-none")}>
+                  {todayPages}
+                </div>
+                <div className="text-[11.5px] text-muted-foreground mt-1">pages today</div>
+              </div>
+              <div>
+                <div className={cn(playfair.className, "text-[32px] font-semibold text-foreground leading-none")}>
+                  {sessions}
+                </div>
+                <div className="text-[11.5px] text-muted-foreground mt-1">books logged</div>
+              </div>
+            </div>
+
+            {/* 7-day bars */}
+            <div className="mt-4">
+              <div className="font-mono text-[10.5px] tracking-[0.22em] uppercase text-muted-foreground mb-2">
+                Last 7 days
+              </div>
+              <div className="flex items-end gap-1.5" style={{ height: 36 }}>
+                {weekBars.map((v, i) => {
+                  // Empty days: 2px ghost line. Active days: scale 10-36px so
+                  // even a single page on Monday shows as a visible bar.
+                  const height = v > 0 ? Math.max(10, Math.round((v / maxBar) * 36)) : 2;
+                  return (
+                    <div
+                      key={i}
+                      className={cn(
+                        "flex-1 rounded-sm transition-all",
+                        v > 0 ? "bg-foreground" : "bg-muted opacity-40"
+                      )}
+                      style={{ height: `${height}px` }}
+                      title={v > 0 ? `${v} ${v === 1 ? "page" : "pages"}` : "No activity"}
+                    />
+                  );
+                })}
+              </div>
+              <div className="flex gap-1.5 mt-1.5">
+                {dayLabels.map((d, i) => (
+                  <div key={i} className="flex-1 text-center font-mono text-[10px] text-muted-foreground">{d}</div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ── Friends rail ──────────────────────────────────────────────────────────────
+
+const FRIEND_VERBS = ["liked", "shelved", "started", "finished", "is reading"];
+const FRIEND_METAS = ["2 h ago", "4 h ago", "yesterday", "2 d ago", "3 d ago"];
+const FRIEND_HUE  = [210, 160, 30, 290, 340];
+
+function FriendsRail({ books }: { books: BookItem[] }) {
+  const router = useRouter();
+  if (books.length === 0) return null;
+  const shown = books.slice(0, 5);
+
+  return (
+    <section className="mt-6">
+      <div className="flex justify-between items-baseline mb-2.5">
+        <div>
+          <div className="font-mono text-[10.5px] tracking-[0.22em] uppercase text-muted-foreground">
+            Your friends · this week
+          </div>
+          <h2 className={cn(playfair.className, "text-[22px] font-semibold text-foreground mt-0.5")}>
+            Between covers.
+          </h2>
+        </div>
+        <button
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors bg-transparent border-none cursor-pointer"
+          onClick={() => router.push("/activity")}
+        >
+          Open feed →
+        </button>
+      </div>
+
+      <div className="grid grid-cols-5 gap-3.5 mt-2.5">
+        {shown.map((book, i) => (
+          <div
+            key={book.id}
+            className="bg-muted/25 border border-border rounded-2xl p-3.5 flex flex-col gap-2.5 min-h-[110px] cursor-pointer hover:shadow-sm hover:border-border/60 transition-all"
+            onClick={() => goToBook(router, book)}
+          >
+            <div className="flex items-center gap-2">
+              <div
+                className="w-7 h-7 rounded-full shrink-0"
+                style={{ background: `hsl(${FRIEND_HUE[i]}, 45%, 55%)` }}
+              />
+              <div className="text-xs font-semibold text-foreground truncate flex-1">
+                {book.authors?.[0]?.split(" ")[0] || "A reader"}
+              </div>
+              {book.cover && (
+                <div className="shrink-0 rounded overflow-hidden" style={{ width: 20, aspectRatio: "2/3" }}>
+                  <Image src={book.cover} alt="" width={20} height={30} className="object-cover w-full h-full" unoptimized />
+                </div>
+              )}
+            </div>
+            <div className="text-xs text-foreground/75 leading-snug flex-1">
+              {FRIEND_VERBS[i % FRIEND_VERBS.length]}{" "}
+              <em className={cn(playfair.className)} style={{ fontStyle: "italic" }}>{book.title}</em>
+            </div>
+            <div className="font-mono text-[9.5px] tracking-[0.05em] text-muted-foreground">
+              {FRIEND_METAS[i % FRIEND_METAS.length]}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── Horizontal carousel ───────────────────────────────────────────────────────
+
+function HomeCarousel({ title, subtitle, books }: { title: string; subtitle?: string; books: BookItem[] }) {
+  const router = useRouter();
+  if (books.length === 0) return null;
+
+  return (
+    <section className="bg-background border border-border rounded-2xl p-[18px]">
+      <div className="flex justify-between items-baseline mb-3">
+        <div>
+          <h3 className={cn(playfair.className, "text-lg font-semibold text-foreground")}>{title}</h3>
+          {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+        </div>
+        <button className="text-[11.5px] text-muted-foreground hover:text-foreground transition-colors bg-transparent border-none cursor-pointer tracking-wide">
+          See all →
+        </button>
+      </div>
+
+      <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+        {books.map((book) => (
+          <div
+            key={book.id}
+            className="w-[130px] shrink-0 cursor-pointer group"
+            onClick={() => goToBook(router, book)}
+          >
+            <div className="rounded-xl overflow-hidden border border-border/50 bg-background shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+              <div className="relative overflow-hidden bg-muted" style={{ aspectRatio: "2/3" }}>
+                {book.cover ? (
+                  <Image
+                    src={book.cover}
+                    alt={book.title}
+                    fill
+                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                    sizes="130px"
+                    unoptimized
+                  />
+                ) : (
+                  <div
+                    className="absolute inset-0 flex items-end p-2"
+                    style={{ background: `hsl(${(book.title.charCodeAt(0) * 7) % 360}, 35%, 45%)` }}
+                  >
+                    <span className={cn(playfair.className, "text-xs text-white/80 font-semibold leading-tight")}>
+                      {book.title}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="p-2.5 pb-3">
+                <div className="text-xs font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</div>
+                <div className="text-[10.5px] text-muted-foreground truncate mt-0.5">{book.authors?.[0] || ""}</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+const CAROUSEL_TYPES = ["continue-reading", "friends", "recommended", "favorites"] as const;
+const CACHE_KEY      = "home_carousel_data_v3";
+const CACHE_TS_KEY   = "home_carousel_timestamp_v3";
+const CACHE_TTL      = 5 * 60 * 1000;
+const STATS_CACHE_KEY = "home_stats_cache_v1";
+
+function readCarouselCache(): { data: Record<string, BookItem[]>; fresh: boolean } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    const ts = localStorage.getItem(CACHE_TS_KEY);
+    if (!cached || !ts) return null;
+    const fresh = Date.now() - parseInt(ts) < CACHE_TTL;
+    return { data: JSON.parse(cached), fresh };
+  } catch { return null; }
+}
+
+function readStatsCache(): { stats: unknown; progress: unknown } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STATS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
 
 export function AuthenticatedHome() {
-  const { isAuthenticated } = useAuth();
-  const isMobile = useIsMobile();
-  const [carouselData, setCarouselData] = useState<Record<string, BookCarouselBook[]>>({});
-  const [loading, setLoading] = useState(true);
-  const hasLoadedRef = React.useRef(false);
-  
-  // For desktop Pinterest grid: combine all books from all carousels
-  const [allBooks, setAllBooks] = useState<BookCarouselBook[]>([]);
-  const [displayedBooks, setDisplayedBooks] = useState<BookCarouselBook[]>([]);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  
-  // Pull-to-refresh state for mobile
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [pullDistance, setPullDistance] = useState(0);
-  const pullDistanceRef = React.useRef(0);
-  const pullStartY = React.useRef<number | null>(null);
-  const containerRef = React.useRef<HTMLDivElement>(null);
+  const { user, isAuthenticated } = useAuth();
+  // Seed from cache so tab-switching back doesn't show loading spinner
+  const [carouselData, setCarouselData] = useState<Record<string, BookItem[]>>(
+    () => readCarouselCache()?.data ?? {}
+  );
+  const [loading, setLoading] = useState(() => !readCarouselCache()?.fresh);
+  const hasLoadedRef = useRef(false);
 
+  // Stats from /api/home/stats + /api/home/progress
+  const [currentlyReading, setCurrentlyReading] = useState<CurrentlyReadingBook[]>([]);
+  const [lastLoggedBook, setLastLoggedBook] = useState<ProgressLastBook | null>(null);
+  const [todayPages, setTodayPages] = useState(0);
+  const [sessions, setSessions] = useState(0);
+  const [weekBars, setWeekBars] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
+  const [progressLoading, setProgressLoading] = useState(true);
+
+  const lastFetchRef = useRef(0);
+  const hiddenAtRef = useRef(0);
+
+  const applyStats = React.useCallback((stats: unknown, progress: unknown) => {
+    if (stats) {
+      const s = stats as { currentlyReading?: CurrentlyReadingBook[] };
+      const cr: CurrentlyReadingBook[] = s.currentlyReading || [];
+      cr.sort((a, b) => {
+        const ta = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const tb = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return tb - ta;
+      });
+      setCurrentlyReading(cr);
+    }
+    if (progress) {
+      const p = progress as { todayPages?: number; todayBooks?: number; weekBars?: number[]; lastBook?: ProgressLastBook | null };
+      setTodayPages(p.todayPages ?? 0);
+      setSessions(p.todayBooks ?? 0);
+      setWeekBars(p.weekBars ?? [0, 0, 0, 0, 0, 0, 0]);
+      setLastLoggedBook(p.lastBook ?? null);
+    }
+  }, []);
+
+  const fetchStats = React.useCallback(() => {
+    if (!isAuthenticated) return;
+    // Seed from cache immediately so panel isn't blank on rapid refreshes
+    const cached = readStatsCache();
+    if (cached) {
+      applyStats(cached.stats, cached.progress);
+      setProgressLoading(false);
+    }
+    // Dedupe: don't refetch if a fetch completed within the last 30s
+    if (Date.now() - lastFetchRef.current < 30_000) return;
+    lastFetchRef.current = Date.now();
+
+    Promise.all([
+      fetch("/api/home/stats").then((r) => r.ok ? r.json() : null),
+      fetch("/api/home/progress").then((r) => r.ok ? r.json() : null),
+    ]).then(([stats, progress]) => {
+      if (stats || progress) {
+        applyStats(stats, progress);
+        try { localStorage.setItem(STATS_CACHE_KEY, JSON.stringify({ stats, progress })); } catch { /* ignore */ }
+      }
+      setProgressLoading(false);
+    }).catch(() => { setProgressLoading(false); });
+  }, [isAuthenticated, applyStats]);
+
+  useEffect(() => { fetchStats(); }, [fetchStats]);
+
+  // Only refetch on tab-return if user was away for >60s (e.g. just logged pages elsewhere).
+  // Short tab switches (code editor, Slack, etc.) are ignored.
   useEffect(() => {
-    if (!isAuthenticated) {
-      setLoading(false);
-      return;
-    }
-
-    // Background fetch function (doesn't show loading state)
-    const fetchCarouselsInBackground = async () => {
-      try {
-        const data: Record<string, BookCarouselBook[]> = {};
-
-        const promises = carousels.map(async (carousel) => {
-          try {
-            const response = await fetch(
-              `/api/books/personalized?type=${carousel.type}&limit=20`
-            );
-            if (response.ok) {
-              const result = await response.json();
-              data[carousel.type] = result.books || [];
-            }
-          } catch (error) {
-            console.error(`Error fetching ${carousel.type} in background:`, error);
-          }
-        });
-
-        await Promise.all(promises);
-        
-        // Update cache silently
-        if (typeof window !== 'undefined' && Object.keys(data).length > 0) {
-          localStorage.setItem('home_carousel_data_v2', JSON.stringify(data));
-          localStorage.setItem('home_carousel_timestamp_v2', Date.now().toString());
-          // Update state if component is still mounted
-          setCarouselData(data);
-        }
-      } catch (error) {
-        console.error("Error in background fetch:", error);
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAtRef.current = Date.now();
+      } else if (document.visibilityState === "visible") {
+        const awayMs = Date.now() - hiddenAtRef.current;
+        if (awayMs > 60_000) fetchStats();
       }
     };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [fetchStats]);
 
-    // Check if this is an explicit page refresh (user pressed refresh button)
-    const isExplicitRefresh = typeof window !== 'undefined' && 
-      (performance.navigation?.type === 1 || 
-       (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming)?.type === 'reload');
-
-    // Check if we have cached data in localStorage (persists across sessions)
-    const cachedData = typeof window !== 'undefined' ? localStorage.getItem('home_carousel_data_v2') : null;
-    const cachedTimestamp = typeof window !== 'undefined' ? localStorage.getItem('home_carousel_timestamp_v2') : null;
-    
-    // Use cached data only on non-refresh navigations and only if fresh (5 min)
-    if (!isExplicitRefresh && cachedData && cachedTimestamp) {
-      const age = Date.now() - parseInt(cachedTimestamp);
-      const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
-      if (age < CACHE_DURATION) {
-        try {
-          const parsed = JSON.parse(cachedData);
-          setCarouselData(parsed);
-          setLoading(false);
-          hasLoadedRef.current = true;
-          return;
-        } catch {
-          // parsing failed — fall through to fetch
-        }
-      }
-    }
-
-    // Only fetch if we haven't loaded yet
-    if (hasLoadedRef.current) {
-      setLoading(false);
-      return;
-    }
-
-    const fetchCarousels = async () => {
-      try {
-        setLoading(true);
-        const data: Record<string, BookCarouselBook[]> = {};
-
-        const promises = carousels.map(async (carousel) => {
-          try {
-            const response = await fetch(
-              `/api/books/personalized?type=${carousel.type}&limit=20`
-            );
-            if (!response.ok) throw new Error(`Failed to fetch ${carousel.type}`);
-            const result = await response.json();
-            data[carousel.type] = result.books || [];
-          } catch (error) {
-            console.error(`Error fetching ${carousel.type}:`, error);
-            data[carousel.type] = [];
-          }
-        });
-
-        await Promise.all(promises);
-        setCarouselData(data);
-
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('home_carousel_data_v2', JSON.stringify(data));
-          localStorage.setItem('home_carousel_timestamp_v2', Date.now().toString());
-        }
-
-        setLoading(false);
-        hasLoadedRef.current = true;
-      } catch (error) {
-        console.error("Error in fetchCarousels:", error);
-        setLoading(false);
-        hasLoadedRef.current = true;
-      }
-    };
-
-    fetchCarousels().catch((error) => {
-      console.error("Unhandled error in fetchCarousels:", error);
-    });
+  // Discover fallback — shown when personalized carousels are all empty
+  const [discoverBooks, setDiscoverBooks] = useState<BookItem[]>([]);
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetch("/api/books/landing?limit=20")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (d?.books?.length) setDiscoverBooks((d.books as Parameters<typeof mapBook>[0][]).map(mapBook).filter(Boolean) as BookItem[]);
+      })
+      .catch(() => {/* non-critical */});
   }, [isAuthenticated]);
 
-  // Combine all books for Pinterest grid (both desktop and mobile)
-  React.useEffect(() => {
-    if (Object.keys(carouselData).length === 0) return;
-    
-    const combined: BookCarouselBook[] = [];
-    carousels.forEach((carousel) => {
-      const books = carouselData[carousel.type] || [];
-      combined.push(...books);
-    });
-    // Remove duplicates based on book ID, then shuffle for variety on each load
-    const uniqueBooks = Array.from(
-      new Map(combined.map(book => [book.id || Math.random().toString(), book])).values()
-    );
-    for (let i = uniqueBooks.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [uniqueBooks[i], uniqueBooks[j]] = [uniqueBooks[j], uniqueBooks[i]];
+  // Fetch carousel data — stale-while-revalidate
+  useEffect(() => {
+    if (!isAuthenticated) { setLoading(false); return; }
+
+    const cache = readCarouselCache();
+    if (cache) {
+      setCarouselData(cache.data);
+      setLoading(false);
+      hasLoadedRef.current = true;
+      if (cache.fresh) return; // No refetch needed
+      // Stale: refetch in background, but DON'T toggle loading (data already showing)
     }
-    setAllBooks(uniqueBooks);
-    setDisplayedBooks(uniqueBooks);
-  }, [carouselData, isMobile]);
 
-  const [hasMoreData, setHasMoreData] = useState(true);
-  // Tracks the last server page fetched from the onboarding endless-feed endpoint.
-  // The initial carousel loads don't use this, so we start at 0.
-  const onboardingPageRef = React.useRef(0);
-  // Skip the onboarding phase entirely — it overlaps too heavily with the initial
-  // carousel pool. Go straight to ISBNdb for scroll, starting from a random page
-  // offset so every session scrolls through a different set of books.
-  const emptyStreakRef = React.useRef(2); // pre-trip the onboarding drain threshold
-  const useIsbndbRef = React.useRef(true); // start on ISBNdb immediately
-  const isbndbPageRef = React.useRef(Math.floor(Math.random() * 50)); // random start
-  // Consecutive empty ISBNdb responses. Only stop the feed after several misses
-  // so a single slow genre-page can't terminate "worldwide" scrolling.
-  const isbndbEmptyStreakRef = React.useRef(0);
-
-  // Load more books for the Pinterest grid.
-  // Strategy:
-  //  1. Drain the onboarding endless-feed endpoint (DB-backed, tier 1/2/3).
-  //  2. After 2 consecutive empty onboarding pages, flip to /api/books/from-isbndb
-  //     which pulls fresh books from ISBNdb worldwide and persists them.
-  //  3. Only give up after several empty ISBNdb pages in a row.
-  const handleLoadMore = React.useCallback(async () => {
-    if (isLoadingMore || !hasMoreData) return;
-    setIsLoadingMore(true);
-
-    try {
-      const existingBookIds = new Set<string>();
-      allBooks.forEach((b) => { if (b.id) existingBookIds.add(b.id); });
-
-      if (!useIsbndbRef.current) {
-        const nextServerPage = onboardingPageRef.current + 1;
-        const response = await fetch(
-          `/api/books/personalized?type=onboarding&page=${nextServerPage}&limit=60`
-        );
-        if (response.ok) {
-          const result = await response.json() as { books?: BookCarouselBook[]; hasMore?: boolean };
-          const fetched = result.books || [];
-          const newBooks = fetched.filter((b) => b.id && !existingBookIds.has(b.id));
-
-          if (newBooks.length > 0) {
-            const combined = [...allBooks, ...newBooks];
-            setAllBooks(combined);
-            setDisplayedBooks(combined);
-            onboardingPageRef.current = nextServerPage;
-            emptyStreakRef.current = 0;
-            return;
-          }
-
-          onboardingPageRef.current = nextServerPage;
-          emptyStreakRef.current += 1;
-          if (emptyStreakRef.current < 2) {
-            return;
-          }
-          // 2 empties in a row → DB pool is drained, flip to ISBNdb.
-          useIsbndbRef.current = true;
-        } else {
-          // Treat HTTP error as a miss and flip immediately to the fallback.
-          useIsbndbRef.current = true;
-        }
-      }
-
-      const nextIsbndbPage = isbndbPageRef.current + 1;
-      const isbndbResp = await fetch(
-        `/api/books/from-isbndb?page=${nextIsbndbPage}&limit=20`
-      );
-      if (!isbndbResp.ok) {
-        isbndbEmptyStreakRef.current += 1;
-        isbndbPageRef.current = nextIsbndbPage;
-        if (isbndbEmptyStreakRef.current >= 5) {
-          setHasMoreData(false);
-        }
-        return;
-      }
-
-      const isbndbResult = await isbndbResp.json() as { books?: BookCarouselBook[] };
-      const isbndbFetched = isbndbResult.books || [];
-      const isbndbNewBooks = isbndbFetched.filter(
-        (b) => b.id && !existingBookIds.has(b.id)
-      );
-
-      if (isbndbNewBooks.length > 0) {
-        const combined = [...allBooks, ...isbndbNewBooks];
-        setAllBooks(combined);
-        setDisplayedBooks(combined);
-        isbndbPageRef.current = nextIsbndbPage;
-        isbndbEmptyStreakRef.current = 0;
-      } else {
-        isbndbPageRef.current = nextIsbndbPage;
-        isbndbEmptyStreakRef.current += 1;
-        if (isbndbEmptyStreakRef.current >= 5) {
-          setHasMoreData(false);
-        }
-      }
-    } catch {
-      setHasMoreData(false);
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }, [allBooks, isLoadingMore, hasMoreData]);
-
-  const hasMore = hasMoreData;
-
-  // Pull-to-refresh handler for mobile
-  React.useEffect(() => {
-    if (!isMobile || typeof window === 'undefined') return;
-
-    const container = containerRef.current;
-    if (!container) return;
-
-    let startY = 0;
-    let currentY = 0;
-    let isPulling = false;
-
-    const handleStart = (clientY: number) => {
-      // Only allow pull-to-refresh when at the top of the page
-      if (window.scrollY === 0) {
-        startY = clientY;
-        pullStartY.current = clientY;
-        isPulling = true;
-      }
-    };
-
-    const handleMove = (clientY: number, preventDefault?: () => void) => {
-      if (!isPulling || window.scrollY > 0) {
-        isPulling = false;
-        return;
-      }
-
-      currentY = clientY;
-      const distance = Math.max(0, currentY - startY);
-      
-      // Only allow pull if scrolling down from the top
-      if (distance > 0 && window.scrollY === 0) {
-        if (preventDefault) preventDefault();
-        const cappedDistance = Math.min(distance, 100); // Cap at 100px
-        pullDistanceRef.current = cappedDistance;
-        setPullDistance(cappedDistance);
-      } else {
-        isPulling = false;
-        pullDistanceRef.current = 0;
-        setPullDistance(0);
-      }
-    };
-
-    const handleEnd = async () => {
-      if (!isPulling) return;
-      
-      isPulling = false;
-      const finalDistance = pullDistanceRef.current;
-      
-      // If pulled enough (60px), trigger refresh
-      if (finalDistance >= 60) {
-        setIsRefreshing(true);
-        setPullDistance(0);
-        
-        // Clear cache and reload
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('home_carousel_data_v2');
-          localStorage.removeItem('home_carousel_timestamp_v2');
-        }
-        
-        hasLoadedRef.current = false;
-        
-        // Fetch fresh data
-        try {
-          const data: Record<string, BookCarouselBook[]> = {};
-          
-          const promises = carousels.map(async (carousel) => {
-            try {
-              const response = await fetch(
-                `/api/books/personalized?type=${carousel.type}&limit=20`
-              );
-              if (response.ok) {
-                const result = await response.json();
-                data[carousel.type] = result.books || [];
-              }
-            } catch (error) {
-              console.error(`Error fetching ${carousel.type}:`, error);
-              data[carousel.type] = [];
+    const load = async () => {
+      if (!cache) setLoading(true);
+      const stale = cache?.data ?? {};
+      const data: Record<string, BookItem[]> = { ...stale };
+      let anyFetched = false;
+      await Promise.all(
+        CAROUSEL_TYPES.map(async (type) => {
+          try {
+            const res = await fetch(`/api/books/personalized?type=${type}&limit=20`);
+            if (res.status === 429 || res.status === 503) return; // keep stale
+            if (res.ok) {
+              data[type] = ((await res.json()).books || []).map(mapBook).filter(Boolean);
+              anyFetched = true;
             }
-          });
-
-          await Promise.all(promises);
-          setCarouselData(data);
-          
-          // Cache new data
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('home_carousel_data_v2', JSON.stringify(data));
-            localStorage.setItem('home_carousel_timestamp_v2', Date.now().toString());
-          }
-        } catch (error) {
-          console.error("Error refreshing:", error);
-        } finally {
-          setIsRefreshing(false);
-          hasLoadedRef.current = true;
-        }
-      } else {
-        // Spring back
-        setPullDistance(0);
+          } catch { /* keep stale */ }
+        }),
+      );
+      setCarouselData(data);
+      if (anyFetched && typeof window !== "undefined") {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+        localStorage.setItem(CACHE_TS_KEY, Date.now().toString());
       }
-      
-      pullStartY.current = null;
+      setLoading(false);
+      hasLoadedRef.current = true;
     };
+    load();
+  }, [isAuthenticated]);
 
-    // Touch events for mobile
-    const handleTouchStart = (e: TouchEvent) => {
-      handleStart(e.touches[0].clientY);
-    };
 
-    const handleTouchMove = (e: TouchEvent) => {
-      handleMove(e.touches[0].clientY, () => e.preventDefault());
-    };
-
-    const handleTouchEnd = () => {
-      handleEnd();
-    };
-
-    // Mouse events for testing in dev tools
-    const handleMouseDown = (e: MouseEvent) => {
-      if (window.scrollY === 0) {
-        handleStart(e.clientY);
-        e.preventDefault();
-      }
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isPulling) {
-        handleMove(e.clientY, () => e.preventDefault());
-      }
-    };
-
-    const handleMouseUp = () => {
-      handleEnd();
-    };
-
-    container.addEventListener('touchstart', handleTouchStart, { passive: false });
-    container.addEventListener('touchmove', handleTouchMove, { passive: false });
-    container.addEventListener('touchend', handleTouchEnd);
-    
-    // Also support mouse events for testing
-    container.addEventListener('mousedown', handleMouseDown);
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart);
-      container.removeEventListener('touchmove', handleTouchMove);
-      container.removeEventListener('touchend', handleTouchEnd);
-      container.removeEventListener('mousedown', handleMouseDown);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isMobile]);
-
-  // Show loading state only if we're actually loading and don't have data yet
-  if (loading && !hasLoadedRef.current && Object.keys(carouselData).length === 0) {
+  if (loading && Object.keys(carouselData).length === 0) {
     return (
-      <div className="w-full">
-        <div className="flex items-center justify-center min-h-screen pb-8">
-          <TetrisLoading size="md" speed="fast" loadingText="Loading..." />
-        </div>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <BookLoader size="md" speed="fast" loadingText="Loading…" />
       </div>
     );
   }
 
+  // Prefer the most recently logged book today; fall back to most recently updated in progress
+  const currentBook: CurrentlyReadingBook | null = lastLoggedBook
+    ? {
+        bookId: lastLoggedBook.book_id,
+        title: lastLoggedBook.title,
+        cover: lastLoggedBook.cover,
+        author: lastLoggedBook.author,
+        currentPage: lastLoggedBook.current_page,
+        totalPages: lastLoggedBook.total_pages,
+        updatedAt: null,
+      }
+    : (currentlyReading[0] ?? null);
+  const friendBooks = carouselData["friends"] ?? [];
+  const recBooks    = carouselData["recommended"] ?? [];
+  const favBooks    = carouselData["favorites"] ?? [];
+  const username    = user?.username || (user?.name ? user.name.split(" ")[0] : "") || "there";
+
   return (
-    <div className="w-full" ref={containerRef}>
-      {/* Pull-to-refresh indicator for mobile */}
-      {isMobile && (
-        <div 
-          className="fixed top-16 left-0 right-0 z-50 flex items-center justify-center pointer-events-none transition-opacity duration-200"
-          style={{ 
-            opacity: pullDistance > 10 || isRefreshing ? Math.min(1, Math.max(0.3, pullDistance / 60)) : 0
-          }}
-        >
-          <div className="mt-4">
-            {isRefreshing ? (
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-                <span className="text-xs text-muted-foreground">Refreshing...</span>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2">
-                <div 
-                  className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full transition-transform"
-                  style={{ 
-                    transform: `rotate(${Math.min(180, (pullDistance / 60) * 180)}deg)`,
-                    opacity: pullDistance > 10 ? Math.min(1, pullDistance / 60) : 0
-                  }}
-                />
-                <span className="text-xs text-muted-foreground">
-                  {pullDistance >= 60 ? 'Release to refresh' : 'Pull to refresh'}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+    <div className="w-full px-8 pb-16 pt-6">
+      <HeroStrip
+        currentBook={currentBook}
+        username={username}
+        todayPages={todayPages}
+        sessions={sessions}
+        weekBars={weekBars}
+        progressLoading={progressLoading}
+      />
 
-      {/* Pinterest Grid - Endless Feed */}
-      <div className="w-full px-8 md:px-12 lg:px-16 xl:px-20 pb-16 pt-8">
-        <PinterestGrid
-          books={displayedBooks.map(book => ({
-            id: book.id || '',
-            title: book.title || 'Unknown Title',
-            authors: book.author ? [book.author] : [],
-            description: '',
-            publishedDate: '',
-            cover: book.cover || '',
-          }))}
-          onLoadMore={handleLoadMore}
-          hasMore={hasMore}
-          isLoading={isLoadingMore}
-            />
+      <FriendsRail books={friendBooks} />
+
+      <div className="flex flex-col gap-4 mt-6">
+        {friendBooks.length > 0 && (
+          <HomeCarousel
+            title="Your friends are liking these"
+            subtitle="Books people you follow added this week."
+            books={friendBooks}
+          />
+        )}
+        {recBooks.length > 0 && (
+          <HomeCarousel
+            title="Worth your shelf"
+            subtitle="Hand-picked picks we think you'll love."
+            books={recBooks}
+          />
+        )}
+        {favBooks.length > 0 && (
+          <HomeCarousel
+            title="Because you read…"
+            subtitle="Quiet, melancholy, a little odd."
+            books={favBooks}
+          />
+        )}
+        {friendBooks.length === 0 && recBooks.length === 0 && favBooks.length === 0 && discoverBooks.length > 0 && (
+          <HomeCarousel
+            title="Discover"
+            subtitle="New arrivals and reader favourites."
+            books={discoverBooks}
+          />
+        )}
       </div>
-
     </div>
   );
 }
-

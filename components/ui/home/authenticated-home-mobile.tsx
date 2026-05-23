@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/auth-provider";
 import { motion } from "framer-motion";
 import Image from "next/image";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
+import BookLoader from "@/components/ui/features/book-loader";
 import { createBookSlug } from "@/lib/utils/book-slug";
 
 type Book = {
@@ -122,7 +122,7 @@ export function AuthenticatedHomeMobile() {
                   authors: Array.isArray(book.authors) ? book.authors : (book.authors ? [book.authors] : (book.author ? [book.author] : ["Unknown Author"])),
                   description: book.description || "",
                   publishedDate: book.publishedDate || "",
-                  cover: book.cover || getFallbackCover(),
+                  cover: book.cover || "",
                   isbn: book.isbn,
                   isbn13: book.isbn13,
                   openLibraryId: book.openLibraryId,
@@ -326,9 +326,11 @@ export function AuthenticatedHomeMobile() {
         setHasMore(combinedBooks.length > BOOKS_PER_PAGE);
       } catch (error) {
         console.error("Error fetching books:", error);
-        setBooks([]);
-        allBooksRef.current = [];
-        setHasMore(false);
+        // Don't clear books if we already have cached data showing
+        if (allBooksRef.current.length === 0) {
+          setBooks([]);
+          setHasMore(false);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -507,7 +509,7 @@ export function AuthenticatedHomeMobile() {
     return (
       <div className="w-full">
         <div className="flex items-center justify-center min-h-screen pb-8">
-          <TetrisLoading size="md" speed="fast" loadingText="Loading your feed..." />
+          <BookLoader size="md" speed="fast" loadingText="Loading your feed..." />
         </div>
       </div>
     );
@@ -569,7 +571,7 @@ export function AuthenticatedHomeMobile() {
         {/* Loading more indicator */}
         {isLoadingMore && (
           <div className="flex justify-center py-8">
-            <TetrisLoading size="sm" speed="fast" loadingText="Loading more..." />
+            <BookLoader size="sm" speed="fast" loadingText="Loading more..." />
           </div>
         )}
 

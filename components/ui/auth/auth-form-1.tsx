@@ -29,7 +29,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { PrivacyPolicyDialog } from "@/components/ui/dialogs/privacy-policy-dialog";
 import { TermsOfServiceDialog } from "@/components/ui/dialogs/terms-of-service-dialog";
 import { useIsMobile } from "@/hooks/use-media-query";
-import TetrisLoading from "@/components/ui/features/tetris-loader";
+
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -366,7 +366,7 @@ function AuthSignIn({ onSignUp, onForgotPassword }: AuthSignInProps) {
     <>
     {isNavigating && (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
-        <TetrisLoading size="sm" speed="fast" loadingText="Signing in..." />
+        <Loader2 className="w-8 h-8 animate-spin text-foreground/60" />
       </div>
     )}
     <motion.div
@@ -661,7 +661,7 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
     <>
     {isNavigating && (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
-        <TetrisLoading size="sm" speed="fast" loadingText="Creating account..." />
+        <Loader2 className="w-8 h-8 animate-spin text-foreground/60" />
       </div>
     )}
     <motion.div
@@ -1231,7 +1231,7 @@ function OTPLoginCard({ onBack }: OTPLoginCardProps) {
     <>
     {isNavigating && (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
-        <TetrisLoading size="sm" speed="fast" loadingText="Signing in..." />
+        <Loader2 className="w-8 h-8 animate-spin text-foreground/60" />
       </div>
     )}
     <motion.div

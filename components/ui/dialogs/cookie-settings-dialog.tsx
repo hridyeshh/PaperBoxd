@@ -4,147 +4,205 @@ import * as React from "react"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/primitives/dialog"
 import { Switch } from "@/components/ui/primitives/switch"
-import { Label } from "@/components/ui/primitives/label"
 
 interface CookieSettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export function CookieSettingsDialog({
-  open,
-  onOpenChange,
-}: CookieSettingsDialogProps) {
-  const [essentialCookies, setEssentialCookies] = React.useState(true)
+const serif = 'var(--font-playfair), "Playfair Display", Georgia, serif'
+const sans = '"Geist Sans", "Geist", system-ui, sans-serif'
 
-  // Essential cookies are always required and cannot be disabled
-  React.useEffect(() => {
-    setEssentialCookies(true)
-  }, [])
+const sectionLabel: React.CSSProperties = {
+  fontFamily: sans,
+  fontSize: 9.5,
+  letterSpacing: "0.22em",
+  textTransform: "uppercase",
+  color: "#aaa",
+  fontWeight: 500,
+  marginBottom: 10,
+  marginTop: 28,
+}
+
+const sectionHeading: React.CSSProperties = {
+  fontFamily: serif,
+  fontSize: 17,
+  fontWeight: 600,
+  color: "#111",
+  marginBottom: 10,
+  marginTop: 0,
+}
+
+const body: React.CSSProperties = {
+  fontFamily: serif,
+  fontSize: 14,
+  color: "#555",
+  lineHeight: 1.75,
+  marginBottom: 10,
+}
+
+const li: React.CSSProperties = {
+  fontFamily: serif,
+  fontSize: 14,
+  color: "#555",
+  lineHeight: 1.75,
+  marginBottom: 6,
+}
+
+export function CookieSettingsDialog({ open, onOpenChange }: CookieSettingsDialogProps) {
+  const [essentialCookies] = React.useState(true)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">Cookie Settings</DialogTitle>
-          <DialogDescription>
+      <DialogContent
+        className="max-w-2xl max-h-[88vh] overflow-y-auto"
+        style={{ background: "#fff", borderRadius: 16, border: "1px solid #e8e8e8", padding: "40px 44px" }}
+      >
+        <DialogHeader style={{ marginBottom: 28, borderBottom: "1px solid #efefef", paddingBottom: 24 }}>
+          <div style={{ fontFamily: sans, fontSize: 9.5, letterSpacing: "0.22em", textTransform: "uppercase", color: "#aaa", fontWeight: 500, marginBottom: 10 }}>
+            Preferences
+          </div>
+          <DialogTitle style={{ fontFamily: serif, fontSize: 30, fontWeight: 700, color: "#111", lineHeight: 1.15, margin: 0 }}>
+            Cookie Settings
+          </DialogTitle>
+          <DialogDescription style={{ fontFamily: sans, fontSize: 12, color: "#bbb", letterSpacing: "0.04em", marginTop: 8 }}>
             Learn about how PaperBoxd uses cookies and local storage.
           </DialogDescription>
         </DialogHeader>
-        
-        <div className="space-y-6 text-sm leading-relaxed">
+
+        <div style={{ paddingBottom: 8 }}>
           <section>
-            <h2 className="text-lg font-semibold mb-3">About Cookies</h2>
-            <p className="text-muted-foreground mb-4">
-              Cookies are small text files that are placed on your device when you visit a website. They are widely used to make websites work more efficiently and provide information to website owners.
+            <p style={sectionLabel}>About</p>
+            <h2 style={sectionHeading}>What Are Cookies?</h2>
+            <p style={body}>
+              Cookies are small text files placed on your device when you visit a website. They help websites work efficiently and remember your preferences.
             </p>
-            <p className="text-muted-foreground">
-              PaperBoxd uses cookies primarily for essential functionality such as user authentication. We do not use analytics, advertising, or marketing cookies. We also use browser local storage to store your preferences locally on your device.
+            <p style={body}>
+              PaperBoxd uses cookies only for essential functionality — primarily user authentication. We do not use analytics, advertising, or marketing cookies.
             </p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold mb-4">Cookie Preferences</h2>
-            
-            <div className="space-y-6">
-              {/* Essential Cookies */}
-              <div className="flex items-start justify-between gap-4 p-4 border rounded-lg">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Label htmlFor="essential-cookies" className="text-base font-semibold cursor-pointer">
-                      Essential Cookies
-                    </Label>
-                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">Required</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    These cookies are necessary for the website to function properly. They enable core functionality such as authentication and session management. You cannot opt out of these cookies as they are essential for the service to work.
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    <strong>Examples:</strong> NextAuth session cookies for user authentication
-                  </p>
+            <p style={sectionLabel}>Preferences</p>
+            <h2 style={sectionHeading}>Cookie Preferences</h2>
+
+            {/* Essential Cookies */}
+            <div style={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 20,
+              border: "1px solid #efefef",
+              borderRadius: 12,
+              padding: "18px 20px",
+              marginBottom: 12,
+            }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <span style={{ fontFamily: serif, fontSize: 15, fontWeight: 600, color: "#111" }}>Essential Cookies</span>
+                  <span style={{
+                    fontFamily: sans,
+                    fontSize: 9,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    color: "#aaa",
+                    border: "1px solid #e0e0e0",
+                    borderRadius: 999,
+                    padding: "2px 8px",
+                  }}>Required</span>
                 </div>
-                <Switch
-                  id="essential-cookies"
-                  checked={essentialCookies}
-                  onCheckedChange={setEssentialCookies}
-                  disabled={true}
-                  className="mt-1"
-                />
-              </div>
-
-              {/* Local Storage Information */}
-              <div className="p-4 border rounded-lg bg-muted/30">
-                <h3 className="text-base font-semibold mb-2">Local Storage</h3>
-                <p className="text-sm text-muted-foreground">
-                  We use browser local storage (not cookies) to store your preferences such as theme settings and cookie preferences. This data is stored locally on your device and is not sent to our servers automatically.
+                <p style={{ ...body, marginBottom: 6 }}>
+                  Necessary for the website to function. They enable core functionality such as authentication and session management. These cannot be disabled.
                 </p>
-                <p className="text-xs text-muted-foreground mt-2">
-                  <strong>Examples:</strong> Theme preferences (dark/light mode), cookie preference settings
+                <p style={{ fontFamily: sans, fontSize: 11, color: "#bbb", letterSpacing: "0.02em" }}>
+                  Examples: NextAuth session cookies for user authentication
                 </p>
               </div>
+              <Switch
+                id="essential-cookies"
+                checked={essentialCookies}
+                disabled={true}
+                className="mt-1 shrink-0"
+              />
             </div>
-          </section>
 
-          <section>
-            <h2 className="text-lg font-semibold mb-3">Managing Cookies</h2>
-            <p className="text-muted-foreground mb-4">
-              In addition to the controls above, you can manage cookies through your browser settings. Most browsers allow you to:
-            </p>
-            <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
-              <li>View what cookies are stored on your device</li>
-              <li>Delete cookies that are already stored</li>
-              <li>Block cookies from being set in the future</li>
-              <li>Set preferences for specific websites</li>
-            </ul>
-            <p className="text-muted-foreground mt-4">
-              Please note that blocking or deleting cookies may impact your experience on PaperBoxd, as some features may not function properly without them.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold mb-3">Third-Party Services</h2>
-            <p className="text-muted-foreground mb-4">
-              We use third-party services that may set cookies or use similar technologies:
-            </p>
-            <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
-              <li><strong>Google OAuth:</strong> For authentication when you sign in with Google. Google may set cookies as part of their authentication process.</li>
-              <li><strong>Book Data APIs:</strong> We fetch book information from ISBNdb and Open Library APIs. These services may set cookies when you interact with their content.</li>
-            </ul>
-            <p className="text-muted-foreground mt-4">
-              We do not use third-party analytics, advertising, or marketing services that would set tracking cookies. Any cookies set by third-party services are subject to their respective privacy policies.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold mb-3">Updates to Cookie Policy</h2>
-            <p className="text-muted-foreground">
-              We may update our cookie usage from time to time. When we make changes, we will update this page and notify you of any material changes. We encourage you to review this page periodically to stay informed about how we use cookies.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold mb-3">Contact Us</h2>
-            <p className="text-muted-foreground mb-4">
-              If you have any questions about our use of cookies, please contact us at:
-            </p>
-            <div className="bg-muted p-4 rounded-lg">
-              <p className="text-muted-foreground">
-                <strong>Email:</strong> hridyesh2309@gmail.com<br />
-                paperboxd@gmail.com
+            {/* Local Storage */}
+            <div style={{
+              border: "1px solid #efefef",
+              borderRadius: 12,
+              padding: "18px 20px",
+              background: "#fafafa",
+            }}>
+              <p style={{ fontFamily: serif, fontSize: 15, fontWeight: 600, color: "#111", marginBottom: 6 }}>Local Storage</p>
+              <p style={{ ...body, marginBottom: 6 }}>
+                We use browser local storage — not cookies — to store your preferences such as theme settings. This data stays on your device and is not sent to our servers.
+              </p>
+              <p style={{ fontFamily: sans, fontSize: 11, color: "#bbb", letterSpacing: "0.02em" }}>
+                Examples: Dark/light mode preference, cookie settings
               </p>
             </div>
           </section>
 
-          {/* Close Button */}
-          <div className="flex justify-end gap-3 pt-4 border-t">
+          <section>
+            <p style={sectionLabel}>Control</p>
+            <h2 style={sectionHeading}>Managing Cookies</h2>
+            <p style={body}>You can also manage cookies directly through your browser settings. Most browsers allow you to:</p>
+            <ul style={{ paddingLeft: 20, margin: 0 }}>
+              <li style={li}>View cookies stored on your device</li>
+              <li style={li}>Delete existing cookies</li>
+              <li style={li}>Block cookies from being set in the future</li>
+              <li style={li}>Set preferences for specific websites</li>
+            </ul>
+            <p style={{ ...body, marginTop: 12 }}>
+              Blocking or deleting cookies may impact your PaperBoxd experience, as some features rely on them.
+            </p>
+          </section>
+
+          <section>
+            <p style={sectionLabel}>Third-party</p>
+            <h2 style={sectionHeading}>Third-Party Services</h2>
+            <ul style={{ paddingLeft: 20, margin: 0 }}>
+              <li style={li}><strong>Google OAuth:</strong> Google may set cookies as part of their authentication flow when you sign in with Google.</li>
+              <li style={li}><strong>Book Data APIs:</strong> ISBNdb and Open Library are used to fetch book data. Their cookies are subject to their own privacy policies.</li>
+            </ul>
+            <p style={{ ...body, marginTop: 12 }}>
+              We do not use third-party analytics or advertising services that set tracking cookies.
+            </p>
+          </section>
+
+          <section>
+            <p style={sectionLabel}>Contact</p>
+            <h2 style={sectionHeading}>Questions?</h2>
+            <div style={{ border: "1px solid #efefef", borderRadius: 10, padding: "16px 20px", background: "#fafafa" }}>
+              <p style={{ ...body, marginBottom: 0 }}>
+                <a href="mailto:paperboxd@gmail.com" style={{ color: "#111", textDecoration: "underline", textUnderlineOffset: 3, fontFamily: serif }}>
+                  paperboxd@gmail.com
+                </a>
+              </p>
+            </div>
+          </section>
+
+          <div style={{ marginTop: 36, paddingTop: 24, borderTop: "1px solid #efefef", display: "flex", justifyContent: "flex-end" }}>
             <button
               onClick={() => onOpenChange(false)}
-              className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+              style={{
+                fontFamily: sans,
+                fontSize: 12,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                fontWeight: 500,
+                background: "#111",
+                color: "#fff",
+                border: "none",
+                borderRadius: 999,
+                padding: "10px 28px",
+                cursor: "pointer",
+              }}
             >
               Close
             </button>
@@ -154,4 +212,3 @@ export function CookieSettingsDialog({
     </Dialog>
   )
 }
-
