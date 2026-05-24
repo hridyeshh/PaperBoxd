@@ -4233,16 +4233,17 @@ export default function UserProfilePage() {
     });
   }, [isAuthenticated, currentUsername, activeUsername, isOwnProfile]);
 
-  // Fetch leaderboard stats for own profile
+  // Fetch leaderboard stats for any profile being viewed
   React.useEffect(() => {
-    if (!isOwnProfile) return;
-    fetch('/api/leaderboard/me')
+    if (!activeUsername) return;
+    const url = isOwnProfile ? '/api/leaderboard/me' : `/api/users/${encodeURIComponent(activeUsername)}/stats`;
+    fetch(url)
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setLeaderboardStats(data); })
       .catch(() => {});
-  }, [isOwnProfile]);
+  }, [isOwnProfile, activeUsername]);
 
-  // Fetch cookie-based streak (accurate, server-tracked)
+  // Fetch cookie-based streak (accurate, server-tracked) — own profile only
   React.useEffect(() => {
     if (!isOwnProfile || !activeUsername) return;
     fetch(`/api/users/${encodeURIComponent(activeUsername)}/streak`)
@@ -4519,12 +4520,14 @@ export default function UserProfilePage() {
     prevIsEditOpenRef.current = isEditOpen;
   }, [isEditOpen, profileData]);
 
-  // Derived XP data for the ring / level card
-  const totalXp = leaderboardStats?.total_xp ?? 0;
-  const level = leaderboardStats?.level ?? 1;
-  const levelName = leaderboardStats?.level_name ?? "Newcomer";
+  // Derived XP data for the ring / level card.
+  // Prefer leaderboard stats (richer), fall back to fields baked into profileData.
+  const pdAny = profileData as { totalXp?: number; level?: number; levelName?: string; currentStreak?: number } | null;
+  const totalXp   = leaderboardStats?.total_xp    ?? pdAny?.totalXp   ?? 0;
+  const level     = leaderboardStats?.level        ?? pdAny?.level     ?? 1;
+  const levelName = leaderboardStats?.level_name   ?? pdAny?.levelName ?? getLevelName(level);
   // Prefer cookie-based streak (accurate server-tracked) over Go backend streak (may lag)
-  const currentStreak = cookieStreak ?? leaderboardStats?.current_streak ?? 0;
+  const currentStreak = cookieStreak ?? leaderboardStats?.current_streak ?? pdAny?.currentStreak ?? 0;
   const booksReadStat = leaderboardStats?.books_read ?? bookshelfBooks.length;
   const diaryEntriesStat = leaderboardStats?.diary_entries ?? diaryEntries.length;
   // XP-within-level using backend's variable thresholds
@@ -4740,17 +4743,21 @@ export default function UserProfilePage() {
                     <XPRingAvatar
                       avatar={profileData.avatar || DEFAULT_AVATAR}
                       displayName={profileData.name || profileData.username}
-                      xpPct={isOwnProfile ? xpPct : 0}
-                      level={isOwnProfile ? level : 1}
-                      levelName={isOwnProfile ? levelName : "Reader"}
+                      xpPct={xpPct}
+                      level={level}
+                      levelName={levelName}
                     />
-                    {isOwnProfile && (
+                    {totalXp > 0 && (
                       <div className="text-center text-[11px] text-muted-foreground max-w-[160px] leading-snug">
                         <strong className="text-foreground font-semibold block mb-0.5">
                           {totalXp.toLocaleString()} XP
                         </strong>
-                        {xpToNext.toLocaleString()} XP to{" "}
-                        <span className="text-foreground font-semibold">{nextLevelName}</span>
+                        {isOwnProfile && (
+                          <>
+                            {xpToNext.toLocaleString()} XP to{" "}
+                            <span className="text-foreground font-semibold">{nextLevelName}</span>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
@@ -4886,22 +4893,22 @@ export default function UserProfilePage() {
                 <div className="grid grid-cols-5 border border-border rounded-2xl bg-card overflow-hidden shadow-sm">
                   <StatCell
                     label="Total XP"
-                    value={isOwnProfile ? totalXp.toLocaleString() : "—"}
-                    sub={isOwnProfile ? `Level ${level} · ${levelName}` : undefined}
+                    value={totalXp.toLocaleString()}
+                    sub={`Level ${level} · ${levelName}`}
                   />
                   <StatCell
                     label="Streak"
-                    value={isOwnProfile ? currentStreak : "—"}
+                    value={currentStreak}
                     streak
                   />
                   <StatCell
                     label="Books read"
-                    value={isOwnProfile ? booksReadStat : bookshelfBooks.length}
+                    value={booksReadStat}
                     sub={bookshelfBooks.length > 0 ? `${bookshelfBooks.length} on shelf` : undefined}
                   />
                   <StatCell
                     label="Diary entries"
-                    value={isOwnProfile ? diaryEntriesStat : diaryEntries.length}
+                    value={diaryEntriesStat}
                   />
                   <StatCell
                     label="Following"
@@ -4931,20 +4938,18 @@ export default function UserProfilePage() {
                   {label}
                 </button>
               ))}
-              {/* DNF tab for own profile (in-progress + TBR + did-not-finish books) */}
-              {isAuthenticated && isOwnProfile && (
-                <button
-                  key="Activity"
-                  type="button"
-                  onClick={() => setActiveTab("Activity" as DockLabel)}
-                  className={cn(
-                    "px-4 py-3 text-sm font-medium text-muted-foreground border-b-2 border-transparent whitespace-nowrap transition-colors hover:text-foreground",
-                    activeTab === "Activity" && "border-foreground text-foreground font-semibold"
-                  )}
-                >
-                  DNF
-                </button>
-              )}
+              {/* DNF tab — visible on all profiles */}
+              <button
+                key="Activity"
+                type="button"
+                onClick={() => setActiveTab("Activity" as DockLabel)}
+                className={cn(
+                  "px-4 py-3 text-sm font-medium text-muted-foreground border-b-2 border-transparent whitespace-nowrap transition-colors hover:text-foreground",
+                  activeTab === "Activity" && "border-foreground text-foreground font-semibold"
+                )}
+              >
+                DNF
+              </button>
             </div>
 
             {/* Tab content */}
@@ -5100,7 +5105,7 @@ export default function UserProfilePage() {
 
                 {/* Right rail (desktop only) */}
                 <aside className="hidden md:flex flex-col gap-4">
-                  {isOwnProfile && totalXp > 0 && (
+                  {totalXp > 0 && (
                     <LevelProgressCard
                       level={level}
                       levelName={levelName}

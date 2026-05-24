@@ -10,6 +10,7 @@ import { HomeSidebar } from "@/components/ui/layout/home-sidebar";
 import { LandingPage } from "@/components/ui/landing/landing-page";
 import { AuthenticatedHome } from "@/components/ui/home/authenticated-home";
 import { AuthenticatedHomeMobile } from "@/components/ui/home/authenticated-home-mobile";
+import BookLoader from "@/components/ui/features/book-loader";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 
@@ -63,9 +64,27 @@ export default function Home() {
     }
   }, [isLoading, isAuthenticated, user, router, oauthSyncPending]);
 
-  // While auth is resolving or onboarding check is in flight, show the landing
-  // page — its own splash overlay covers everything until it's ready.
-  if (isLoading || oauthSyncPending || checkingOnboarding) {
+  // OAuth in flight (NextAuth session exists but pb_access_token not yet minted):
+  // show a spinner rather than the landing page to avoid a jarring flash.
+  if (oauthSyncPending || (isLoading && sessionStatus === "authenticated")) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <BookLoader size="md" speed="fast" loadingText="Signing you in..." />
+      </div>
+    );
+  }
+
+  // Onboarding check in flight for authenticated users: keep spinner.
+  if (checkingOnboarding && isAuthenticated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <BookLoader size="md" speed="fast" />
+      </div>
+    );
+  }
+
+  // Initial auth load (unauthenticated): show landing page.
+  if (isLoading) {
     return <LandingPage />;
   }
 

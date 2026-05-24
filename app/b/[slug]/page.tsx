@@ -959,14 +959,6 @@ export default function BookDetailPage() {
       ? descriptionRaw.split(/[.!?]/)[0]?.trim().slice(0, 120)
       : null;
 
-  // Friends chip (decorative)
-  const friendColors = [
-    "linear-gradient(135deg,#3a7bd5,#1a1a5e)",
-    "linear-gradient(135deg,#b85c38,#6e2f1f)",
-    "linear-gradient(135deg,#a8893f,#5a4520)",
-  ];
-  const friendInitials = ["M", "T", "S"];
-
   // Primary action button label
   const primaryActionLabel = isInBookshelf
     ? "✓ Finished"
@@ -1043,24 +1035,6 @@ export default function BookDetailPage() {
                   )}
                 </div>
 
-                {/* Friends chip */}
-                <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap flex items-center gap-2 bg-card border border-border rounded-full px-3 py-1.5 text-xs text-muted-foreground shadow-sm">
-                  <div className="flex">
-                    {friendInitials.map((ini, i) => (
-                      <div
-                        key={i}
-                        className="w-5 h-5 rounded-full flex items-center justify-center text-white font-bold text-[0.5rem] border-[1.5px] border-card"
-                        style={{
-                          background: friendColors[i],
-                          marginLeft: i === 0 ? 0 : -6,
-                        }}
-                      >
-                        {ini}
-                      </div>
-                    ))}
-                  </div>
-                  <span>Reading now</span>
-                </div>
               </div>
 
               {/* Col 2 — Metadata */}
@@ -1472,27 +1446,6 @@ export default function BookDetailPage() {
                   Pages
                 </div>
               </div>
-            </div>
-
-            {/* Friends row (decorative) */}
-            <div className="flex items-center justify-center gap-2 mt-3 text-xs text-muted-foreground">
-              <div className="flex">
-                {friendInitials.map((ini, i) => (
-                  <div
-                    key={i}
-                    className="w-5 h-5 rounded-full flex items-center justify-center text-white font-bold text-[0.5rem] border-[1.5px] border-background"
-                    style={{
-                      background: friendColors[i],
-                      marginLeft: i === 0 ? 0 : -6,
-                    }}
-                  >
-                    {ini}
-                  </div>
-                ))}
-              </div>
-              <span>
-                <strong className="text-foreground font-semibold">3 friends</strong> reading now
-              </span>
             </div>
 
             {/* Progress (mobile inline) */}

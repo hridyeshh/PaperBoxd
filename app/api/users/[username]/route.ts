@@ -408,6 +408,12 @@ export async function GET(
       favoritesCount: goUser.favorites_count ?? 0,
       diaryEntriesCount: goUser.diary_entries_count ?? 0,
 
+      // XP / gamification — passed through if Go returns them
+      totalXp: goUser.total_xp ?? 0,
+      level: goUser.level ?? 1,
+      levelName: goUser.level_name ?? null,
+      currentStreak: goUser.current_streak ?? 0,
+
       // Collections
       bookshelf,
       favoriteBooks,

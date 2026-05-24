@@ -8,6 +8,7 @@ import BookLoader from "@/components/ui/features/book-loader";
 import { createBookSlug } from "@/lib/utils/book-slug";
 import { cn } from "@/lib/utils";
 import { Playfair_Display } from "next/font/google";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/primitives/dialog";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -420,60 +421,93 @@ function FriendsRail({ activities }: { activities: FriendActivity[] }) {
 
 // ── Horizontal carousel ───────────────────────────────────────────────────────
 
+function BookCard({ book, onClick, width = "w-[130px]" }: { book: BookItem; onClick: () => void; width?: string }) {
+  return (
+    <div className={cn(width, "shrink-0 cursor-pointer group")} onClick={onClick}>
+      <div className="rounded-xl overflow-hidden border border-border/50 bg-background shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
+        <div className="relative overflow-hidden bg-muted" style={{ aspectRatio: "2/3" }}>
+          {book.cover ? (
+            <Image
+              src={book.cover}
+              alt={book.title}
+              fill
+              className="object-cover transition-transform duration-300 group-hover:scale-105"
+              sizes="130px"
+              unoptimized
+            />
+          ) : (
+            <div
+              className="absolute inset-0 flex items-end p-2"
+              style={{ background: `hsl(${(book.title.charCodeAt(0) * 7) % 360}, 35%, 45%)` }}
+            >
+              <span className={cn(playfair.className, "text-xs text-white/80 font-semibold leading-tight")}>
+                {book.title}
+              </span>
+            </div>
+          )}
+        </div>
+        <div className="p-2.5 pb-3">
+          <div className="text-xs font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</div>
+          <div className="text-[10.5px] text-muted-foreground truncate mt-0.5">{book.authors?.[0] || ""}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HomeCarousel({ title, subtitle, books }: { title: string; subtitle?: string; books: BookItem[] }) {
   const router = useRouter();
+  const [showAll, setShowAll] = useState(false);
   if (books.length === 0) return null;
 
   return (
-    <section className="bg-background border border-border rounded-2xl p-[18px]">
-      <div className="flex justify-between items-baseline mb-3">
-        <div>
-          <h3 className={cn(playfair.className, "text-lg font-semibold text-foreground")}>{title}</h3>
-          {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
-        </div>
-        <button className="text-[11.5px] text-muted-foreground hover:text-foreground transition-colors bg-transparent border-none cursor-pointer tracking-wide">
-          See all →
-        </button>
-      </div>
-
-      <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-        {books.map((book) => (
-          <div
-            key={book.id}
-            className="w-[130px] shrink-0 cursor-pointer group"
-            onClick={() => goToBook(router, book)}
+    <>
+      <section className="bg-background border border-border rounded-2xl p-[18px]">
+        <div className="flex justify-between items-baseline mb-3">
+          <div>
+            <h3 className={cn(playfair.className, "text-lg font-semibold text-foreground")}>{title}</h3>
+            {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+          </div>
+          <button
+            onClick={() => setShowAll(true)}
+            className="text-[11.5px] text-muted-foreground hover:text-foreground transition-colors bg-transparent border-none cursor-pointer tracking-wide"
           >
-            <div className="rounded-xl overflow-hidden border border-border/50 bg-background shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-              <div className="relative overflow-hidden bg-muted" style={{ aspectRatio: "2/3" }}>
-                {book.cover ? (
-                  <Image
-                    src={book.cover}
-                    alt={book.title}
-                    fill
-                    className="object-cover transition-transform duration-300 group-hover:scale-105"
-                    sizes="130px"
-                    unoptimized
-                  />
-                ) : (
-                  <div
-                    className="absolute inset-0 flex items-end p-2"
-                    style={{ background: `hsl(${(book.title.charCodeAt(0) * 7) % 360}, 35%, 45%)` }}
-                  >
-                    <span className={cn(playfair.className, "text-xs text-white/80 font-semibold leading-tight")}>
-                      {book.title}
-                    </span>
-                  </div>
-                )}
-              </div>
-              <div className="p-2.5 pb-3">
-                <div className="text-xs font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</div>
-                <div className="text-[10.5px] text-muted-foreground truncate mt-0.5">{book.authors?.[0] || ""}</div>
-              </div>
+            See all →
+          </button>
+        </div>
+
+        <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+          {books.map((book) => (
+            <BookCard
+              key={book.id}
+              book={book}
+              onClick={() => goToBook(router, book)}
+            />
+          ))}
+        </div>
+      </section>
+
+      <Dialog open={showAll} onOpenChange={setShowAll}>
+        <DialogContent className="max-w-5xl max-h-[85vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/40">
+            <DialogTitle className={cn(playfair.className, "text-2xl font-semibold")}>{title}</DialogTitle>
+            {subtitle && <DialogDescription className="text-sm">{subtitle}</DialogDescription>}
+          </DialogHeader>
+          <div className="overflow-y-auto px-6 py-5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {books.map((book) => (
+                <BookCard
+                  key={book.id}
+                  book={book}
+                  width="w-full"
+                  onClick={() => { setShowAll(false); goToBook(router, book); }}
+                />
+              ))}
             </div>
           </div>
-        ))}
-      </div>
-    </section>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -692,9 +726,28 @@ export function AuthenticatedHome() {
         updatedAt: null,
       }
     : (currentlyReading[0] ?? null);
-  const friendBooks = carouselData["friends"] ?? [];
-  const recBooks    = carouselData["recommended"] ?? [];
-  const favBooks    = carouselData["favorites"] ?? [];
+  // Go returns one recommendation pool — "recommended" is the full pool,
+  // "friends"/"favorites" are subsets filtered by reason. Dedupe so each book
+  // appears in at most one carousel. Priority: friends > favorites > recommended.
+  const rawFriends    = carouselData["friends"] ?? [];
+  const rawRecommend  = carouselData["recommended"] ?? [];
+  const rawFavorites  = carouselData["favorites"] ?? [];
+
+  const used = new Set<string>();
+  const dedupe = (list: BookItem[]) => {
+    const out: BookItem[] = [];
+    for (const b of list) {
+      const key = b.id || b._id;
+      if (!key || used.has(key)) continue;
+      used.add(key);
+      out.push(b);
+    }
+    return out;
+  };
+
+  const friendBooks = dedupe(rawFriends);
+  const favBooks    = dedupe(rawFavorites);
+  const recBooks    = dedupe(rawRecommend);
   const username    = user?.username || (user?.name ? user.name.split(" ")[0] : "") || "there";
 
   return (
@@ -732,11 +785,12 @@ export function AuthenticatedHome() {
             books={favBooks}
           />
         )}
-        {friendBooks.length === 0 && recBooks.length === 0 && favBooks.length === 0 && discoverBooks.length > 0 && (
+        {/* Discover surface: always show if personalized data is thin */}
+        {discoverBooks.length > 0 && (friendBooks.length + recBooks.length + favBooks.length) < 8 && (
           <HomeCarousel
             title="Discover"
             subtitle="New arrivals and reader favourites."
-            books={discoverBooks}
+            books={discoverBooks.filter((b) => !used.has(b.id || b._id || ""))}
           />
         )}
       </div>
