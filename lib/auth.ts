@@ -215,49 +215,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "google") {
-        await connectDB();
-
-        // Check if user exists
-        let existingUser = await User.findOne({ email: user.email });
-
-        if (!existingUser) {
-          // Create new user from Google profile (without username - user will set it after sign-up)
-          existingUser = await User.create({
-            email: user.email,
-            password: await bcrypt.hash(Math.random().toString(36), 10), // Random password for OAuth users
-            // username will be set later by user
-            name: user.name || user.email?.split("@")[0] || "User",
-            // Don't use Google profile image - user can set their own avatar later
-            avatar: undefined,
-            pronouns: [],
-            isPublic: true,
-            topBooks: [],
-            favoriteBooks: [],
-            bookshelf: [],
-            likedBooks: [],
-            tbrBooks: [],
-            currentlyReading: [],
-            readingLists: [],
-            activities: [],
-            authorsRead: [],
-            followers: [],
-            following: [],
-            totalBooksRead: 0,
-            totalPagesRead: 0,
-          });
-        }
-
-        // Update user info
-        user.id = existingUser.id.toString();
-        user.username = existingUser.username;
-
-        // Update last active
-        // Use validateBeforeSave: false to avoid validating existing activities
-        // that might have been created before schema updates
-        existingUser.lastActive = new Date();
-        await existingUser.save({ validateBeforeSave: false });
+        // User creation/lookup for Google OAuth is handled by the Go backend (PostgreSQL)
+        // via /api/backend-auth → /api/v1/auth/google after the NextAuth session is established.
+        // MongoDB is not needed here — the OAuthBridge does the real sync.
+        return !!user.email;
       }
 
+      // Credentials provider: still uses MongoDB for legacy email/password auth.
       return true;
     },
     async jwt({ token, user }) {
@@ -276,7 +240,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                              typeof process.versions === "object" && 
                              process.versions?.node;
         
-        if (isNodeRuntime) {
+        if (isNodeRuntime && process.env.MONGODB_URI) {
         try {
           await connectDB();
           const dbUser = await User.findOne({ email: token.email }).select("username name avatar");
