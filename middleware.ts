@@ -13,24 +13,30 @@ const publicAuthRoutes = ["/auth/forgot-password", "/auth/reset-password"];
 // Setup routes that should be accessible even when logged in (e.g., choose username, setup profile, onboarding)
 const setupRoutes = ["/choose-username", "/setup-profile", "/onboarding"];
 
+// Match a route prefix on a path boundary so "/authors/..." doesn't collide
+// with "/auth" and "/profile-x" doesn't collide with "/profile".
+function matchesPrefix(pathname: string, route: string): boolean {
+  return pathname === route || pathname.startsWith(route + "/");
+}
+
 export function middleware(request: NextRequest) {
   const { nextUrl } = request;
   const isLoggedIn = !!request.cookies.get("pb_access_token")?.value;
 
   const isProtectedRoute = protectedRoutes.some((route) =>
-    nextUrl.pathname.startsWith(route)
+    matchesPrefix(nextUrl.pathname, route)
   );
 
   const isSetupRoute = setupRoutes.some((route) =>
-    nextUrl.pathname.startsWith(route)
+    matchesPrefix(nextUrl.pathname, route)
   );
 
   const isPublicAuthRoute = publicAuthRoutes.some((route) =>
-    nextUrl.pathname.startsWith(route)
+    matchesPrefix(nextUrl.pathname, route)
   );
 
   const isAuthRoute = authRoutes.some((route) =>
-    nextUrl.pathname.startsWith(route)
+    matchesPrefix(nextUrl.pathname, route)
   );
 
   // Redirect to auth if trying to access protected route without being logged in

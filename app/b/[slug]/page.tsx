@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { Playfair_Display } from "next/font/google";
 import { BookOpen, Star, Heart, Share2, NotebookPen, Link2, Search, Send, BookMarked, BookmarkPlus } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -23,6 +24,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/primitives/input";
 import { BookShareButton } from "@/components/ui/features/book-share-button";
 import { ReadingProgress } from "@/components/ui/features/reading-progress";
+import { StarRating } from "@/components/ui/star-rating";
+import { ReviewsList } from "@/components/ui/reviews-list";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -87,6 +90,15 @@ interface BookDetails {
   _id?: string;
   bookId?: string;
 }
+
+type AuthorBio = {
+  found: boolean;
+  name: string;
+  description?: string;
+  extract: string;
+  photo_url: string;
+  wikipedia_url: string;
+};
 
 type CollectionEntry = {
   bookId?: string;
@@ -276,8 +288,6 @@ export default function BookDetailPage() {
   // Diary editor dialog state
   const [showDiaryEditor, setShowDiaryEditor] = React.useState(false);
 
-  // Description dialog state (mobile only)
-  const [showDescriptionDialog, setShowDescriptionDialog] = React.useState(false);
   const [existingDiaryContent, setExistingDiaryContent] = React.useState<string>("");
 
   // Add to list dialog state
@@ -300,6 +310,8 @@ export default function BookDetailPage() {
   // Carousel data
   const [similarBooks, setSimilarBooks] = React.useState<BookCarouselBook[]>([]);
   const [authorBooks, setAuthorBooks] = React.useState<BookCarouselBook[]>([]);
+  const [authorBios, setAuthorBios] = React.useState<Record<string, AuthorBio>>({});
+  const [expandedBios, setExpandedBios] = React.useState<Set<string>>(new Set());
 
   // Tab state
   const [activeTab, setActiveTab] = React.useState("description");
@@ -668,6 +680,30 @@ export default function BookDetailPage() {
               .catch(() => {
                 setAuthorBooks([]);
               })
+          );
+        }
+
+        const uniqueAuthors = Array.from(
+          new Set((book.volumeInfo?.authors ?? []).filter(Boolean))
+        );
+        if (uniqueAuthors.length > 0) {
+          promises.push(
+            Promise.all(
+              uniqueAuthors.map(async (a) => {
+                try {
+                  const res = await fetch(`/api/authors/info?name=${encodeURIComponent(a)}`);
+                  if (!res.ok) return null;
+                  const data = (await res.json()) as AuthorBio;
+                  return [a, data] as const;
+                } catch {
+                  return null;
+                }
+              })
+            ).then((entries) => {
+              const map: Record<string, AuthorBio> = {};
+              for (const e of entries) if (e) map[e[0]] = e[1];
+              setAuthorBios(map);
+            })
           );
         }
 
@@ -1081,9 +1117,10 @@ export default function BookDetailPage() {
                     Written by
                   </span>
                   {Array.from(new Set((volumeInfo.authors ?? [primaryAuthor]).filter(Boolean))).map((author) => (
-                    <span
+                    <Link
                       key={author}
-                      className="inline-flex items-center gap-2 px-3 py-1.5 border border-border rounded-full text-sm font-semibold"
+                      href={`/authors/${encodeURIComponent(author)}`}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 border border-border rounded-full text-sm font-semibold hover:bg-muted hover:border-border/80 transition-colors"
                     >
                       <div
                         className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[0.625rem] font-bold flex-shrink-0"
@@ -1092,7 +1129,7 @@ export default function BookDetailPage() {
                         {getInitials(author)}
                       </div>
                       {author}
-                    </span>
+                    </Link>
                   ))}
                 </div>
 
@@ -1174,18 +1211,16 @@ export default function BookDetailPage() {
                   </div>
 
                   {/* Rating row */}
-                  <div className="flex items-center justify-between pt-3 border-t border-border mt-3">
-                    <span className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">
+                  <div className="pt-3 border-t border-border mt-3">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide font-semibold block mb-2">
                       Your rating
                     </span>
-                    <div className="flex gap-0.5">
-                      {[1, 2, 3, 4, 5].map((s) => (
-                        <Star
-                          key={s}
-                          className="h-4 w-4 text-[#a8893f]"
+                    <StarRating
+                      bookId={String(book?._id || book?.bookId || book?.id || "")}
+                      username={isAuthenticated ? (user?.username ?? null) : null}
+                      currentUserId={user?.id}
+                      readOnly={!isAuthenticated}
                         />
-                      ))}
-                    </div>
                   </div>
 
                   {/* Like / List / Share row */}
@@ -1408,7 +1443,16 @@ export default function BookDetailPage() {
             {/* Author */}
             {primaryAuthor && (
               <p className="text-center text-sm text-muted-foreground mt-2">
-                by <strong className="text-foreground font-semibold">{primaryAuthor}</strong>
+                by{" "}
+                <Link
+                  href={`/authors/${encodeURIComponent(primaryAuthor)}`}
+                  className="text-foreground font-semibold hover:underline underline-offset-2"
+                >
+                  {primaryAuthor}
+                </Link>
+                {(volumeInfo.authors?.length ?? 0) > 1 && (
+                  <span> et al.</span>
+                )}
               </p>
             )}
 
@@ -1615,31 +1659,97 @@ export default function BookDetailPage() {
               {activeTab === "author" && (
                 <div className="mb-8">
                   {(volumeInfo.authors?.length ?? 0) > 0 ? (
-                    <div className="space-y-6">
-                      {volumeInfo.authors!.map((author) => (
+                    <div className="space-y-8">
+                      {volumeInfo.authors!.map((author) => {
+                        const bio = authorBios[author];
+                        const bookCount = author === primaryAuthor ? authorBooks.length : 0;
+                        const extract = bio?.extract ?? "";
+                        const EXTRACT_LIMIT = 500;
+                        const isExpanded = expandedBios.has(author);
+                        const canToggle = extract.length > EXTRACT_LIMIT;
+                        const shownExtract = isExpanded || !canToggle
+                          ? extract
+                          : extract.slice(0, EXTRACT_LIMIT).trimEnd() + "…";
+                        const toggleExtract = () => {
+                          setExpandedBios((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(author)) next.delete(author);
+                            else next.add(author);
+                            return next;
+                          });
+                        };
+                        return (
                         <div key={author} className="flex items-start gap-4">
-                          <div
-                            className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
-                            style={{ background: authorGradient(author) }}
-                          >
-                            {getInitials(author)}
-                          </div>
-                          <div>
+                          {bio?.found && bio.photo_url ? (
+                            <div className="relative w-20 h-20 rounded-full overflow-hidden bg-muted flex-shrink-0">
+                              <Image
+                                src={bio.photo_url}
+                                alt={author}
+                                fill
+                                sizes="80px"
+                                className="object-cover"
+                                unoptimized
+                              />
+                            </div>
+                          ) : (
+                            <div
+                              className="w-20 h-20 rounded-full flex items-center justify-center text-white font-bold text-xl flex-shrink-0"
+                              style={{ background: authorGradient(author) }}
+                            >
+                              {getInitials(author)}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
                             <h3 className={cn(playfair.className, "text-xl font-bold mb-1")}>
                               {author}
                             </h3>
-                            <p className="text-sm text-muted-foreground mb-2">
-                              Book by {author}
-                            </p>
-                            <a
-                              href={`/authors/${encodeURIComponent(author)}`}
-                              className="text-sm text-[#b85c38] font-semibold"
-                            >
-                              View all books →
-                            </a>
+                            {bio?.description && (
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+                                {bio.description}
+                              </p>
+                            )}
+                            {extract ? (
+                              <p className="text-sm text-foreground/90 leading-relaxed mb-3 whitespace-pre-line">
+                                {shownExtract}
+                                {canToggle && (
+                                  <button
+                                    type="button"
+                                    onClick={toggleExtract}
+                                    className="ml-2 text-[#b85c38] font-semibold hover:underline"
+                                  >
+                                    {isExpanded ? "Show less" : "Read more"}
+                                  </button>
+                                )}
+                              </p>
+                            ) : (
+                              <p className="text-sm text-muted-foreground mb-3">
+                                {bookCount > 0
+                                  ? `${bookCount} book${bookCount !== 1 ? "s" : ""} in PaperBoxd.`
+                                  : `No bio available yet.`}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-4 text-sm">
+                              <a
+                                href={`/authors/${encodeURIComponent(author)}`}
+                                className="text-[#b85c38] font-semibold hover:underline"
+                              >
+                                View all books →
+                              </a>
+                              {bio?.wikipedia_url && (
+                                <a
+                                  href={bio.wikipedia_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-muted-foreground hover:text-foreground hover:underline"
+                                >
+                                  Wikipedia ↗
+                                </a>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground italic">No author information available.</p>
@@ -1647,8 +1757,17 @@ export default function BookDetailPage() {
                 </div>
               )}
 
+              {/* Reviews tab */}
+              {activeTab === "reviews" && (
+                <ReviewsList
+                  bookId={String(book?._id || book?.bookId || book?.id || "")}
+                  currentUserId={user?.id}
+                  currentUsername={user?.username}
+                />
+              )}
+
               {/* Placeholder tabs */}
-              {(activeTab === "reviews" || activeTab === "highlights" || activeTab === "lists") && (
+              {(activeTab === "highlights" || activeTab === "lists") && (
                 <div className="mb-8 flex items-center justify-center py-16">
                   <div className="text-center">
                     <p
@@ -1658,7 +1777,6 @@ export default function BookDetailPage() {
                       Coming soon
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {activeTab === "reviews" && "Reviews from friends will appear here."}
                       {activeTab === "highlights" && "Highlighted passages will appear here."}
                       {activeTab === "lists" && "Lists containing this book will appear here."}
                     </p>
@@ -1680,6 +1798,19 @@ export default function BookDetailPage() {
                   />
                 </div>
               )}
+
+              {/* Mobile: rating card */}
+              <div className="md:hidden bg-card border border-border rounded-2xl p-4">
+                <span className="text-xs text-muted-foreground uppercase tracking-wide font-semibold block mb-2">
+                  Your rating
+                </span>
+                <StarRating
+                  bookId={String(book?._id || book?.bookId || book?.id || "")}
+                  username={isAuthenticated ? (user?.username ?? null) : null}
+                  currentUserId={user?.id}
+                  readOnly={!isAuthenticated}
+                />
+              </div>
 
               {/* Similar books */}
               {similarBooks.length > 0 && (

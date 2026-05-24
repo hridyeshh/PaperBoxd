@@ -43,6 +43,11 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "res.cloudinary.com",
       },
+      {
+        protocol: "https",
+        hostname: "upload.wikimedia.org",
+        pathname: "/wikipedia/**",
+      },
     ],
     // Disable image optimization for external book covers to prevent blur
     // Book cover images from APIs are already optimized and small
