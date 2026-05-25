@@ -16,7 +16,7 @@ import {
 	CommandList,
 } from '@/components/ui/primitives/command';
 
-import { LucideIcon, SearchIcon, BookOpen } from 'lucide-react';
+import { LucideIcon, SearchIcon, BookOpen, Sparkles, Wand2 } from 'lucide-react';
 import { cn, DEFAULT_AVATAR } from '@/lib/utils';
 import { createBookSlug } from '@/lib/utils/book-slug';
 
@@ -47,7 +47,12 @@ type UserSearchResult = {
 	avatar?: string;
 };
 
-type SearchType = 'Books' | 'User';
+type SearchType = 'Books' | 'User' | 'Vibe';
+
+type VibeSearchItem = BookSearchResult & {
+  matchReason?: string;
+  similarityScore?: number;
+};
 
 type SearchModalProps = {
 	children: React.ReactNode;
@@ -107,6 +112,13 @@ type BookSearchResultWithRaw = BookSearchResult & {
 };
 
 
+const VIBE_PROMPTS = [
+	"Something dark and claustrophobic",
+	"A slow summer read with romance",
+	"Mind-bending sci-fi that questions reality",
+	"Books that feel like a long train journey",
+] as const;
+
 export function SearchModal({ children }: SearchModalProps) {
 	const router = useRouter();
 	const [open, setOpen] = React.useState(false);
@@ -114,6 +126,8 @@ export function SearchModal({ children }: SearchModalProps) {
 	const [searchType, setSearchType] = React.useState<SearchType>('Books');
 	const [bookResults, setBookResults] = React.useState<BookSearchResult[]>([]);
 	const [userResults, setUserResults] = React.useState<UserSearchResult[]>([]);
+	const [vibeResults, setVibeResults] = React.useState<VibeSearchItem[]>([]);
+	const [vibePersonalised, setVibePersonalised] = React.useState(false);
 	const [isSearching, setIsSearching] = React.useState(false);
 	const [searchError, setSearchError] = React.useState<string | null>(null);
 	const [favoriteMode, setFavoriteMode] = React.useState<{ mode: string; maxBooks: number; currentBooks: string[] } | null>(null);
@@ -149,6 +163,8 @@ export function SearchModal({ children }: SearchModalProps) {
 	React.useEffect(() => {
 		if (!open) {
 			setFavoriteMode(null);
+			setVibeResults([]);
+			setVibePersonalised(false);
 		}
 	}, [open]);
 
@@ -157,10 +173,20 @@ export function SearchModal({ children }: SearchModalProps) {
 		if (!query.trim()) {
 			setBookResults([]);
 			setUserResults([]);
+			setVibeResults([]);
+			setVibePersonalised(false);
 			setSearchError(null);
 			return;
 		}
 
+		// Vibe search requires at least 10 characters
+		if (searchType === 'Vibe' && query.trim().length < 10) {
+			setVibeResults([]);
+			setSearchError(null);
+			return;
+		}
+
+		const debounceMs = searchType === 'Vibe' ? 600 : 300;
 		const timeoutId = setTimeout(async () => {
 			setIsSearching(true);
 			setSearchError(null);
@@ -255,6 +281,49 @@ export function SearchModal({ children }: SearchModalProps) {
 							setUserResults([]);
 						}
 						break;
+
+					case 'Vibe': {
+						let vibeResponse: Response;
+						try {
+							vibeResponse = await fetch('/api/books/vibe-search', {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json' },
+								body: JSON.stringify({ query: query.trim(), limit: 10 }),
+							});
+						} catch {
+							throw new Error('Network error: Unable to connect to vibe search.');
+						}
+
+						if (!vibeResponse.ok) {
+							throw new Error(`Vibe search unavailable (${vibeResponse.status})`);
+						}
+
+						const vibeData = await vibeResponse.json();
+						if (vibeData?.items && Array.isArray(vibeData.items)) {
+							const books: VibeSearchItem[] = vibeData.items.map((item: {
+								id: string;
+								volumeInfo?: { title?: string; authors?: string[]; description?: string; imageLinks?: { thumbnail?: string; smallThumbnail?: string } };
+								matchReason?: string;
+								similarityScore?: number;
+								slug?: string;
+							}) => ({
+								id: item.id,
+								title: item.volumeInfo?.title || 'Unknown Title',
+								authors: item.volumeInfo?.authors || [],
+								description: item.volumeInfo?.description || '',
+								imageLinks: item.volumeInfo?.imageLinks || {},
+								matchReason: item.matchReason,
+								similarityScore: item.similarityScore,
+							}));
+							setVibeResults(books);
+							setVibePersonalised(!!vibeData.personalised);
+							setBookResults([]);
+							setUserResults([]);
+						} else {
+							setVibeResults([]);
+						}
+						break;
+					}
 				}
 			} catch (error) {
 				console.error('Search error:', error);
@@ -269,13 +338,14 @@ export function SearchModal({ children }: SearchModalProps) {
 			} finally {
 				setIsSearching(false);
 			}
-		}, 300); // 300ms debounce for better real-time feel
+		}, debounceMs);
 
 		return () => clearTimeout(timeoutId);
 	}, [query, searchType]);
 
-	const currentResults = 
+	const currentResults =
 		searchType === 'Books' ? bookResults :
+		searchType === 'Vibe' ? vibeResults :
 		userResults;
 
 	return (
@@ -294,12 +364,19 @@ export function SearchModal({ children }: SearchModalProps) {
 					)}
 					shouldFilter={false}
 				>
-					<div className="px-4 pt-4 pb-3.5">
+					<div className={cn("px-4 pt-4 pb-3.5 transition-colors duration-200", searchType === 'Vibe' && "bg-amber-500/[0.025] dark:bg-amber-500/[0.04]")}>
 						<div className="flex items-center gap-2.5">
-							<SearchIcon className="size-4 shrink-0 text-muted-foreground/60" />
+							{searchType === 'Vibe'
+								? <Wand2 className="size-4 shrink-0 text-amber-500/60" />
+								: <SearchIcon className="size-4 shrink-0 text-muted-foreground/60" />
+							}
 							<CommandInput
 								className="h-9 w-full bg-transparent text-sm placeholder:text-muted-foreground/60"
-								placeholder={searchType === 'User' ? 'Search readers...' : 'Search books & authors...'}
+								placeholder={
+									searchType === 'User' ? 'Search readers...' :
+									searchType === 'Vibe' ? 'Describe a mood, theme, or feeling...' :
+									'Search books & authors...'
+								}
 								value={query}
 								onValueChange={(value) => {
 									setQuery(value);
@@ -313,19 +390,31 @@ export function SearchModal({ children }: SearchModalProps) {
 							)}
 						</div>
 						<div className="mt-3 flex items-center gap-1">
-							{(['Books', 'User'] as SearchType[]).map((type) => (
+							{(['Books', 'User', ...(favoriteMode ? [] : ['Vibe'])] as SearchType[]).map((type) => (
 								<button
 									key={type}
 									type="button"
-									onClick={() => setSearchType(type)}
+									onClick={() => {
+										setSearchType(type);
+										setQuery('');
+										setVibeResults([]);
+										setVibePersonalised(false);
+									}}
 									className={cn(
 										'cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150',
 										searchType === type
-											? 'bg-foreground text-background'
+											? type === 'Vibe'
+												? 'bg-amber-500/12 text-amber-600 dark:text-amber-400 ring-1 ring-inset ring-amber-500/20'
+												: 'bg-foreground text-background'
 											: 'text-muted-foreground hover:bg-muted hover:text-foreground'
 									)}
 								>
-									{type === 'User' ? 'Readers' : 'Books'}
+									{type === 'User' ? 'Readers' : type === 'Vibe' ? (
+										<span className="flex items-center gap-1">
+											<Sparkles className="size-3" />
+											Vibe
+										</span>
+									) : 'Books'}
 								</button>
 							))}
 						</div>
@@ -348,7 +437,7 @@ export function SearchModal({ children }: SearchModalProps) {
 											<div className="pbld-bookmark__ribbon" />
 										</div>
 										<p className="text-xs uppercase tracking-widest text-muted-foreground">
-											Searching {searchType === 'User' ? 'readers' : 'books'}
+											{searchType === 'Vibe' ? 'Finding your vibe...' : `Searching ${searchType === 'User' ? 'readers' : 'books'}`}
 										</p>
 									</div>
 								) : searchError ? (
@@ -364,6 +453,23 @@ export function SearchModal({ children }: SearchModalProps) {
 											Clear search
 										</button>
 									</CommandEmpty>
+								) : searchType === 'Vibe' && query.trim().length < 10 ? (
+									<div className="flex min-h-[280px] flex-col items-center justify-center gap-3 px-8 text-center">
+										<div className="flex items-center gap-1">
+											{Array.from({ length: 10 }).map((_, i) => (
+												<div
+													key={i}
+													className={cn(
+														"h-1 w-1 rounded-full transition-colors duration-150",
+														i < query.trim().length
+															? "bg-amber-500/60"
+															: "bg-muted-foreground/20"
+													)}
+												/>
+											))}
+										</div>
+										<p className="text-xs text-muted-foreground/60">A bit more to activate vibe search</p>
+									</div>
 								) : currentResults.length === 0 ? (
 									<CommandEmpty className="flex min-h-[280px] flex-col items-center justify-center px-8 text-center">
 										<p className="mb-1 text-sm font-medium text-foreground/60">
@@ -375,6 +481,62 @@ export function SearchModal({ children }: SearchModalProps) {
 									</CommandEmpty>
 								) : (
 									<CommandGroup className="px-2 py-2">
+										{searchType === 'Vibe' && vibePersonalised && (
+											<div className="mb-2 flex items-center gap-1.5 px-1">
+												<Sparkles className="size-3 text-amber-500/50" />
+												<p className="text-[10px] text-amber-600/50 dark:text-amber-400/40 italic">
+													Tuned to your reading taste
+												</p>
+											</div>
+										)}
+										{searchType === 'Vibe' && vibeResults.map((book, index) => {
+											const cover = book.imageLinks?.thumbnail || book.imageLinks?.smallThumbnail || '';
+											const authors = book.authors?.join(', ') || 'Unknown Author';
+											const handleSelect = () => {
+												if (book.id) {
+													const isISBN = /^(\d{10}|\d{13})$/.test(book.id);
+													const isValidId = /^[a-zA-Z0-9_-]+$/.test(book.id) && !book.id.includes(' ') && !book.id.includes('+');
+													if (isISBN || isValidId) {
+														router.push(`/b/${book.id}`);
+													} else {
+														router.push(`/b/${createBookSlug(book.title, book.id, book.id)}`);
+													}
+												} else {
+													router.push(`/b/${createBookSlug(book.title)}`);
+												}
+												setOpen(false);
+											};
+											return (
+												<CommandItem
+													key={`vibe-${book.id}-${index}`}
+													className="flex cursor-pointer flex-col items-start gap-0 rounded-lg px-3 py-2.5"
+													value={`vibe-${book.id}-${book.title}`}
+													onSelect={handleSelect}
+													onClick={(e) => { e.stopPropagation(); handleSelect(); }}
+												>
+													<div className="flex w-full items-center gap-3">
+														{cover ? (
+															<div className="pointer-events-none relative h-[60px] w-10 flex-shrink-0 overflow-hidden rounded-[3px] bg-muted shadow-sm">
+																<Image src={cover} alt={book.title} fill className="pointer-events-none object-cover" sizes="40px" quality={100} unoptimized={cover.includes('isbndb.com')} priority={false} />
+															</div>
+														) : (
+															<div className="pointer-events-none flex h-[60px] w-10 flex-shrink-0 items-center justify-center rounded-[3px] bg-muted">
+																<BookOpen className="size-4 text-muted-foreground/50" />
+															</div>
+														)}
+														<div className="flex min-w-0 flex-1 flex-col">
+															<p className="truncate text-sm font-medium leading-snug">{book.title}</p>
+															<p className="mt-0.5 truncate text-xs text-muted-foreground">{authors}</p>
+														</div>
+													</div>
+													{book.matchReason && (
+														<p className="mt-1.5 px-[52px] text-[11px] leading-snug text-amber-600/70 dark:text-amber-400/60">
+															{book.matchReason}
+														</p>
+													)}
+												</CommandItem>
+											);
+										})}
 										{searchType === 'Books' && bookResults.map((book, index) => {
 											const cover = book.imageLinks?.thumbnail || book.imageLinks?.smallThumbnail || '';
 											const authors = book.authors?.join(', ') || 'Unknown Author';
@@ -492,6 +654,22 @@ export function SearchModal({ children }: SearchModalProps) {
 									</CommandGroup>
 								)}
 							</>
+						) : searchType === 'Vibe' ? (
+							<div className="px-4 py-5">
+								<p className="mb-3 text-[10px] uppercase tracking-wider text-muted-foreground/40">Try a feeling</p>
+								<div className="grid grid-cols-2 gap-2">
+									{VIBE_PROMPTS.map((prompt) => (
+										<button
+											key={prompt}
+											type="button"
+											onClick={() => setQuery(prompt)}
+											className="rounded-lg bg-muted/50 px-3 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+										>
+											{prompt}
+										</button>
+									))}
+								</div>
+							</div>
 						) : (
 							<div className="flex min-h-[280px] flex-col items-center justify-center gap-3 px-4 text-center">
 								<div

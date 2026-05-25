@@ -26,7 +26,45 @@ type Book = {
   categories?: string[];
   publisher?: string;
   reason?: string;
+  reasonType?: string;
 };
+
+function fallbackReasonType(reason: string): string {
+  if (reason.includes("read this")) return "social";
+  if (reason.startsWith("You read")) return "author";
+  if (reason.startsWith("Matches your")) return "genre";
+  if (reason === "Picked for you") return "favorites";
+  if (reason === "Something different") return "explore";
+  if (reason === "Popular right now") return "cold";
+  return "cold";
+}
+
+function getChipStyle(reasonType?: string, reason?: string): string {
+  const type = reasonType || fallbackReasonType(reason || "");
+  switch (type) {
+    case "social":    return "bg-indigo-500/80 text-white";
+    case "velocity":  return "bg-orange-500/80 text-white";
+    case "diary":     return "bg-purple-500/80 text-white";
+    case "author":    return "bg-blue-500/80 text-white";
+    case "genre":     return "bg-emerald-500/80 text-white";
+    case "favorites": return "bg-rose-500/80 text-white";
+    case "cold":      return "bg-amber-500/80 text-white";
+    case "vibe":      return "bg-violet-500/80 text-white";
+    default:          return "bg-neutral-800/80 text-white";
+  }
+}
+
+function getChipIcon(reasonType?: string, reason?: string): string {
+  const type = reasonType || fallbackReasonType(reason || "");
+  switch (type) {
+    case "social":    return "👤";
+    case "velocity":  return "⚡";
+    case "diary":     return "✦";
+    case "author":    return "✍";
+    case "vibe":      return "✦";
+    default:          return "✦";
+  }
+}
 
 interface PinterestGridProps {
   books: Book[];
@@ -187,13 +225,9 @@ export function PinterestGrid({ books, onLoadMore, hasMore = false, isLoading = 
                         <div className="absolute bottom-0 left-0 right-0 p-2 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out">
                           <span className={cn(
                             "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-sm shadow-sm",
-                            book.reason.includes("read this")
-                              ? "bg-indigo-500/90 text-white"
-                              : book.reason === "Popular right now"
-                              ? "bg-amber-500/90 text-white"
-                              : "bg-black/60 text-white/90"
+                            getChipStyle(book.reasonType, book.reason),
                           )}>
-                            {book.reason.includes("read this") ? "👤" : book.reason === "Popular right now" ? "🔥" : "✦"}
+                            {getChipIcon(book.reasonType, book.reason)}
                             {" "}{book.reason}
                           </span>
                         </div>

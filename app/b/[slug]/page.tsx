@@ -327,23 +327,8 @@ export default function BookDetailPage() {
         setLoading(true);
         setError(null);
 
-        const hasSpaces = slug.includes(" ");
-        const hasPlus = slug.includes("+");
-        const isISBN = /^(\d{10}|\d{13})$/.test(slug);
-        const isOpenLibraryId = slug.startsWith("OL") || slug.startsWith("/works/");
-        const looksLikeId = !hasSpaces && !hasPlus && /^[a-zA-Z0-9_-]+$/.test(slug);
-
-        let endpoint = looksLikeId || isISBN || isOpenLibraryId
-          ? `/api/books/${encodeURIComponent(slug)}`
-          : `/api/books/by-slug/${encodeURIComponent(slug)}`;
-
-        let response = await fetch(endpoint);
-
-        if (!response.ok && response.status === 404 && (isISBN || isOpenLibraryId || looksLikeId) && !hasPlus) {
-          console.log(`[Book Detail] ID endpoint failed, trying slug endpoint for: "${slug}"`);
-          endpoint = `/api/books/by-slug/${encodeURIComponent(slug)}`;
-          response = await fetch(endpoint);
-        }
+        const endpoint = `/api/books/${encodeURIComponent(slug)}`;
+        const response = await fetch(endpoint);
 
         if (!response.ok) {
           if (response.status === 404) {

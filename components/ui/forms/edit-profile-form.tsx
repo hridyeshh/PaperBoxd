@@ -49,8 +49,8 @@ const genderOptions = ["Female", "Male", "Non-binary", "Transgender", "Intersex"
 
 type EditProfileFormProps = {
   profile: EditableProfile;
-  onProfileChange: (profile: EditableProfile) => void;
-  onSubmitProfile?: () => Promise<void> | void;
+  onProfileChange?: (profile: EditableProfile) => void;
+  onSubmitProfile?: (profile: EditableProfile) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   submitError?: string | null;
@@ -69,12 +69,13 @@ export function EditProfileForm({
   submitButtonText = "Save changes",
 }: EditProfileFormProps) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [localProfile, setLocalProfile] = React.useState<EditableProfile>(profile);
   const [avatarError, setAvatarError] = React.useState<string | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = React.useState(false);
   const [editorOpen, setEditorOpen] = React.useState(false);
   const [selectedImage, setSelectedImage] = React.useState<string | null>(null);
   const [useCustomGender, setUseCustomGender] = React.useState(
-    () => profile.gender.length > 0 && !genderOptions.includes(profile.gender),
+    () => localProfile.gender.length > 0 && !genderOptions.includes(localProfile.gender),
   );
   const [genderDropdownOpen, setGenderDropdownOpen] = React.useState(false);
   const [pronounDropdownOpen, setPronounDropdownOpen] = React.useState(false);
@@ -84,38 +85,38 @@ export function EditProfileForm({
   }>({ available: null, checking: false });
   const originalUsername = React.useRef(profile.username);
   // Use state for selections to ensure they update immediately
-  const [pronounSelection, setPronounSelection] = React.useState<Selection>(() => new Set(profile.pronouns));
+  const [pronounSelection, setPronounSelection] = React.useState<Selection>(() => new Set(localProfile.pronouns));
   const [genderSelection, setGenderSelection] = React.useState<Selection>(() => {
     if (useCustomGender) {
       return new Set(["Custom"]);
     }
-    return profile.gender ? new Set([profile.gender]) : new Set();
+    return localProfile.gender ? new Set([localProfile.gender]) : new Set();
   });
-  
-  // Sync selections when profile changes
+
+  // Sync selections when localProfile changes
   React.useEffect(() => {
-    setPronounSelection(new Set(profile.pronouns));
-  }, [profile.pronouns]);
-  
+    setPronounSelection(new Set(localProfile.pronouns));
+  }, [localProfile.pronouns]);
+
   React.useEffect(() => {
     if (useCustomGender) {
       setGenderSelection(new Set(["Custom"]));
     } else {
-      setGenderSelection(profile.gender ? new Set([profile.gender]) : new Set());
+      setGenderSelection(localProfile.gender ? new Set([localProfile.gender]) : new Set());
     }
-  }, [profile.gender, useCustomGender]);
+  }, [localProfile.gender, useCustomGender]);
   const birthdayDate = React.useMemo(
-    () => (profile.birthday ? new Date(profile.birthday) : undefined),
-    [profile.birthday],
+    () => (localProfile.birthday ? new Date(localProfile.birthday) : undefined),
+    [localProfile.birthday],
   );
 
   React.useEffect(() => {
-    setUseCustomGender(profile.gender.length > 0 && !genderOptions.includes(profile.gender));
-  }, [profile.gender]);
+    setUseCustomGender(localProfile.gender.length > 0 && !genderOptions.includes(localProfile.gender));
+  }, [localProfile.gender]);
 
   // Check username availability when it changes (and it's different from original)
   React.useEffect(() => {
-    const currentUsername = profile.username?.trim();
+    const currentUsername = localProfile.username?.trim();
     const original = originalUsername.current?.trim();
 
     // Only check if username changed and is valid
@@ -154,13 +155,13 @@ export function EditProfileForm({
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [profile.username]);
+  }, [localProfile.username]);
 
   const updateProfile = React.useCallback(
     (patch: Partial<EditableProfile>) => {
-      onProfileChange({ ...profile, ...patch });
+      setLocalProfile(prev => ({ ...prev, ...patch }));
     },
-    [profile, onProfileChange],
+    [],
   );
 
   function handleChange(event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
@@ -252,7 +253,7 @@ export function EditProfileForm({
       // Dispatch custom event to notify other components (like mobile dock) that avatar was updated
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("profileAvatarUpdated", {
-          detail: { avatar: data.avatar, username: profile.username }
+          detail: { avatar: data.avatar, username: localProfile.username }
         }));
       }
     } catch (error) {
@@ -271,7 +272,7 @@ export function EditProfileForm({
 
     try {
       // Only call delete endpoint if avatar is from Cloudinary
-      if (profile.avatar && profile.avatar.includes('cloudinary.com')) {
+      if (localProfile.avatar && localProfile.avatar.includes('cloudinary.com')) {
         const response = await fetch('/api/upload/avatar', {
           method: 'DELETE',
         });
@@ -288,7 +289,7 @@ export function EditProfileForm({
       // Dispatch custom event to notify other components (like mobile dock) that avatar was removed
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("profileAvatarUpdated", {
-          detail: { avatar: '', username: profile.username }
+          detail: { avatar: '', username: localProfile.username }
         }));
       }
     } catch (error) {
@@ -299,7 +300,7 @@ export function EditProfileForm({
     } finally {
       setIsUploadingAvatar(false);
     }
-  }, [profile.avatar, updateProfile, profile.username]);
+  }, [localProfile.avatar, updateProfile, localProfile.username]);
 
   const handlePronounSelection = React.useCallback(
     (selection: Selection) => {
@@ -325,7 +326,7 @@ export function EditProfileForm({
       if (value === "Custom") {
         setUseCustomGender(true);
         updateProfile({
-          gender: !genderOptions.includes(profile.gender) ? profile.gender : "",
+          gender: !genderOptions.includes(localProfile.gender) ? localProfile.gender : "",
         });
       } else {
         setUseCustomGender(false);
@@ -337,11 +338,11 @@ export function EditProfileForm({
         setGenderDropdownOpen(false);
       }, 150);
     },
-    [profile.gender, updateProfile],
+    [localProfile.gender, updateProfile],
   );
 
-  const pronounDisplay = profile.pronouns.length ? profile.pronouns.join(" / ") : "Select pronouns";
-  const genderDisplay = useCustomGender ? profile.gender || "Custom" : profile.gender || "Select gender";
+  const pronounDisplay = localProfile.pronouns.length ? localProfile.pronouns.join(" / ") : "Select pronouns";
+  const genderDisplay = useCustomGender ? localProfile.gender || "Custom" : localProfile.gender || "Select gender";
   const handleBirthdayChange = React.useCallback((date?: Date) => {
     updateProfile({
       birthday: date ? formatDate(date, "yyyy-MM-dd") : "",
@@ -351,349 +352,290 @@ export function EditProfileForm({
   const handleSubmit = React.useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      await onSubmitProfile?.();
+      await onSubmitProfile?.(localProfile);
     },
-    [onSubmitProfile],
+    [onSubmitProfile, localProfile],
   );
 
   return (
-    <form className="flex flex-col gap-8" onSubmit={handleSubmit}>
-      <section className="flex flex-col gap-6 rounded-3xl border border-border/60 bg-muted/20 p-6 shadow-sm mx-4">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Profile photo</h2>
-          <p className="text-sm text-muted-foreground">I bet this nerd looks cool :p.</p>
-        </div>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="relative h-24 w-24 overflow-hidden rounded-2xl border border-border/70 bg-background">
-            <Image src={profile.avatar || DEFAULT_AVATAR} alt={profile.name} fill className="object-cover" sizes="96px" />
+    <form className="flex flex-col" onSubmit={handleSubmit}>
+
+      {/* Avatar */}
+      <div className="flex flex-col items-center gap-3 px-6 py-6">
+        <div className="relative">
+          <div className="relative h-24 w-24 overflow-hidden rounded-full ring-2 ring-border/60 bg-muted">
+            <Image src={localProfile.avatar || DEFAULT_AVATAR} alt={localProfile.name} fill className="object-cover" sizes="96px" />
             {isUploadingAvatar && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                <Loader2 className="h-6 w-6 animate-spin text-white" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                <Loader2 className="h-5 w-5 animate-spin text-white" />
               </div>
             )}
           </div>
-          <div className="flex flex-col gap-3 text-sm text-muted-foreground">
-            <p>Upload the photo you love :P. PNG or JPG works best.</p>
-            <div className="flex flex-wrap gap-3">
-              <Button
-                type="button"
-                variant="default"
-                onClick={() => fileInputRef.current?.click()}
-                className="rounded-full px-6"
-                disabled={isUploadingAvatar}
-              >
-                {isUploadingAvatar ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <UploadCloud className="mr-2 h-4 w-4" />
-                    Change photo
-                  </>
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                onClick={handleRemoveAvatar}
-                disabled={isUploadingAvatar || !profile.avatar}
-              >
-                Remove
-              </Button>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleAvatarChange}
-            />
-            {avatarError ? <p className="text-xs text-destructive">{avatarError}</p> : null}
-          </div>
         </div>
-      </section>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            className="h-8 rounded-full px-4 text-xs"
+            disabled={isUploadingAvatar}
+          >
+            {isUploadingAvatar ? (
+              <><Loader2 className="mr-1.5 h-3 w-3 animate-spin" />Uploading</>
+            ) : (
+              <><UploadCloud className="mr-1.5 h-3 w-3" />Change photo</>
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 rounded-full px-4 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            onClick={handleRemoveAvatar}
+            disabled={isUploadingAvatar || !localProfile.avatar}
+          >
+            Remove
+          </Button>
+        </div>
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+        {avatarError && <p className="text-xs text-destructive">{avatarError}</p>}
+      </div>
 
-      <section className="grid gap-6 rounded-3xl border border-border/60 bg-background/90 p-6 shadow-sm lg:grid-cols-2 mx-4">
-        <div className="space-y-4">
-          <div className={fieldGroupClass}>
-            <Label className={fieldLabelClass} htmlFor="username">
-              Username
-            </Label>
-            <div className="relative">
-              <Input
-                id="username"
-                name="username"
-                value={profile.username}
-                onChange={handleChange}
-                placeholder="Unique handle"
-                className={cn(
-                  "pl-9 pr-10",
-                  profile.username !== originalUsername.current && 
-                    usernameAvailability.available === true && 
-                    "border-green-500",
-                  profile.username !== originalUsername.current && 
-                    usernameAvailability.available === false && 
-                    "border-destructive"
-                )}
-              />
-              <UserIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              {profile.username !== originalUsername.current && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  {usernameAvailability.checking ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                  ) : usernameAvailability.available === true ? (
-                    <Check className="w-4 h-4 text-green-500" />
-                  ) : usernameAvailability.available === false ? (
-                    <X className="w-4 h-4 text-destructive" />
-                  ) : null}
-                </div>
+      <div className="h-px bg-border/30" />
+
+      {/* Identity */}
+      <div className="flex flex-col gap-5 px-6 py-5">
+        <div className={fieldGroupClass}>
+          <Label className={fieldLabelClass} htmlFor="username">Username</Label>
+          <div className="relative">
+            <Input
+              id="username"
+              name="username"
+              value={localProfile.username}
+              onChange={handleChange}
+              placeholder="Unique handle"
+              className={cn(
+                "pl-9 pr-10",
+                localProfile.username !== originalUsername.current &&
+                  usernameAvailability.available === true &&
+                  "border-green-500",
+                localProfile.username !== originalUsername.current &&
+                  usernameAvailability.available === false &&
+                  "border-destructive"
               )}
-            </div>
-            {profile.username !== originalUsername.current && (
-              <>
-                {usernameAvailability.available === true && (
-                  <p className="text-sm text-green-600">Username is available!</p>
-                )}
-                {usernameAvailability.available === false && (
-                  <p className="text-sm text-destructive">Username is already taken</p>
-                )}
-              </>
+            />
+            <UserIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            {localProfile.username !== originalUsername.current && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                {usernameAvailability.checking ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                ) : usernameAvailability.available === true ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : usernameAvailability.available === false ? (
+                  <X className="w-4 h-4 text-destructive" />
+                ) : null}
+              </div>
             )}
           </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className={fieldGroupClass}>
-              <Label className={fieldLabelClass} htmlFor="name">
-                Name
-              </Label>
-              <Input id="name" name="name" value={profile.name} onChange={handleChange} placeholder="Full name" />
-            </div>
-            <div className={fieldGroupClass}>
-              <Label className={fieldLabelClass} htmlFor="birthday">
-                Birthday
-              </Label>
-              <ChronoSelect
-                value={birthdayDate}
-                onChange={handleBirthdayChange}
-                placeholder="Select birthday"
-                yearRange={[1950, new Date().getFullYear() + 1]}
-                className="w-full"
-              />
-            </div>
-          </div>
-
-          <div className={fieldGroupClass}>
-            <Label className={fieldLabelClass} htmlFor="email">
-              Email address
-            </Label>
-            <div className="relative">
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                value={profile.email}
-                disabled
-                placeholder="you@example.com"
-                className="pl-9"
-              />
-              <MailIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            </div>
-            <p className="text-xs text-muted-foreground">Email cannot be changed after sign-up.</p>
-          </div>
-
-          <div className={fieldGroupClass}>
-            <Label className={fieldLabelClass} htmlFor="bio">
-              Bio
-            </Label>
-            <Textarea
-              id="bio"
-              name="bio"
-              value={profile.bio}
-              onChange={handleChange}
-              placeholder="Tell people what kind of stories you like to collect."
-              rows={4}
-            />
-            <p className="text-xs text-muted-foreground">Keep it short and sweet — under 160 characters.</p>
-          </div>
+          {localProfile.username !== originalUsername.current && (
+            <>
+              {usernameAvailability.available === true && (
+                <p className="text-xs text-green-600">Username available</p>
+              )}
+              {usernameAvailability.available === false && (
+                <p className="text-xs text-destructive">Username already taken</p>
+              )}
+            </>
+          )}
         </div>
 
-        <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className={fieldGroupClass}>
-              <Label className={fieldLabelClass} htmlFor="pronouns">
-                Pronouns
-              </Label>
-              <Dropdown.Root 
-                className="w-full"
-                isOpen={pronounDropdownOpen}
-                onOpenChange={setPronounDropdownOpen}
-              >
-                <Dropdown.Trigger className="flex w-full items-center justify-between rounded-2xl border border-input bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                  <span className="truncate">{pronounDisplay}{profile.pronouns.length >= 2 ? " (max)" : ""}</span>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                </Dropdown.Trigger>
-                <Dropdown.Popover align="start" className="w-64 p-2">
-                  <div 
-                    style={{ pointerEvents: 'auto' }}
-                    onPointerDown={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                    }}
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                    }}
-                  >
+        <div className={fieldGroupClass}>
+          <Label className={fieldLabelClass} htmlFor="name">Name</Label>
+          <Input id="name" name="name" value={localProfile.name} onChange={handleChange} placeholder="Your name" />
+        </div>
+
+        <div className={fieldGroupClass}>
+          <Label className={fieldLabelClass} htmlFor="bio">Bio</Label>
+          <Textarea
+            id="bio"
+            name="bio"
+            value={localProfile.bio}
+            onChange={handleChange}
+            placeholder="What kind of stories do you collect?"
+            rows={3}
+          />
+          <p className="text-xs text-muted-foreground/60">Under 160 characters.</p>
+        </div>
+      </div>
+
+      <div className="h-px bg-border/30" />
+
+      {/* Personal */}
+      <div className="flex flex-col gap-5 px-6 py-5">
+        <p className="text-[11px] uppercase tracking-wider text-muted-foreground/40">Personal</p>
+
+        <div className={fieldGroupClass}>
+          <Label className={fieldLabelClass} htmlFor="birthday">Birthday</Label>
+          <ChronoSelect
+            value={birthdayDate}
+            onChange={handleBirthdayChange}
+            placeholder="Select birthday"
+            yearRange={[1950, new Date().getFullYear() + 1]}
+            className="w-full"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className={fieldGroupClass}>
+            <Label className={fieldLabelClass} htmlFor="pronouns">Pronouns</Label>
+            <Dropdown.Root className="w-full" isOpen={pronounDropdownOpen} onOpenChange={setPronounDropdownOpen}>
+              <Dropdown.Trigger className="flex w-full items-center justify-between rounded-2xl border border-input bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                <span className="truncate">{pronounDisplay}</span>
+                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </Dropdown.Trigger>
+              <Dropdown.Popover align="start" className="w-56 p-2">
+                <div
+                  style={{ pointerEvents: 'auto' }}
+                  onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                  onMouseDown={(e) => { e.stopPropagation(); }}
+                  onClick={(e) => { e.stopPropagation(); }}
+                >
                   <GridList
                     aria-label="Pronouns"
                     selectionMode="multiple"
                     selectionBehavior="toggle"
                     selectedKeys={pronounSelection}
-                      onSelectionChange={(selection) => {
-                        // Process selection immediately
-                        handlePronounSelection(selection);
-                      }}
+                    onSelectionChange={handlePronounSelection}
                     className="max-h-60"
                   >
                     {pronounOptions.map((option) => {
-                      const isSelected = profile.pronouns.includes(option);
-                      const atMax = profile.pronouns.length >= 2 && !isSelected;
+                      const isSelected = localProfile.pronouns.includes(option);
+                      const atMax = localProfile.pronouns.length >= 2 && !isSelected;
                       return (
-                        <GridListItem
-                          id={option}
-                          key={option}
-                          isDisabled={atMax}
-                          className={atMax ? "opacity-40 cursor-not-allowed" : ""}
-                        >
+                        <GridListItem id={option} key={option} isDisabled={atMax} className={atMax ? "opacity-40 cursor-not-allowed" : ""}>
                           {option}
                         </GridListItem>
                       );
                     })}
                   </GridList>
-                  </div>
-                </Dropdown.Popover>
-              </Dropdown.Root>
-            </div>
-            <div className={fieldGroupClass}>
-              <Label className={fieldLabelClass} htmlFor="gender">
-                Gender
-              </Label>
-              <Dropdown.Root
-                className="w-full"
-                isOpen={genderDropdownOpen}
-                onOpenChange={setGenderDropdownOpen}
-              >
-                <Dropdown.Trigger className="flex w-full items-center justify-between rounded-2xl border border-input bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                  <span className="truncate">{genderDisplay}</span>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                </Dropdown.Trigger>
-                <Dropdown.Popover align="start" className="w-64 p-2">
-                  <div 
-                    style={{ pointerEvents: 'auto' }}
-                    onPointerDown={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                    }}
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                    }}
-                  >
+                </div>
+              </Dropdown.Popover>
+            </Dropdown.Root>
+          </div>
+
+          <div className={fieldGroupClass}>
+            <Label className={fieldLabelClass} htmlFor="gender">Gender</Label>
+            <Dropdown.Root className="w-full" isOpen={genderDropdownOpen} onOpenChange={setGenderDropdownOpen}>
+              <Dropdown.Trigger className="flex w-full items-center justify-between rounded-2xl border border-input bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                <span className="truncate">{genderDisplay}</span>
+                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </Dropdown.Trigger>
+              <Dropdown.Popover align="start" className="w-56 p-2">
+                <div
+                  style={{ pointerEvents: 'auto' }}
+                  onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                  onMouseDown={(e) => { e.stopPropagation(); }}
+                  onClick={(e) => { e.stopPropagation(); }}
+                >
                   <GridList
                     aria-label="Gender"
                     selectionMode="single"
                     selectedKeys={genderSelection}
-                      onSelectionChange={(selection) => {
-                        // Process selection immediately
-                        handleGenderSelection(selection);
-                      }}
+                    onSelectionChange={handleGenderSelection}
                     className="max-h-60"
                   >
                     {genderOptions.map((option) => (
-                        <GridListItem 
-                          id={option} 
-                          key={option}
-                        >
-                        {option}
-                      </GridListItem>
+                      <GridListItem id={option} key={option}>{option}</GridListItem>
                     ))}
                   </GridList>
-                  </div>
-                </Dropdown.Popover>
-              </Dropdown.Root>
-              {useCustomGender ? (
-                <Input
-                  id="custom-gender"
-                  name="gender"
-                  value={profile.gender}
-                  onChange={handleChange}
-                  placeholder="Enter gender"
-                  className="mt-2"
-                />
-              ) : null}
-            </div>
-          </div>
-
-          <div className={fieldGroupClass}>
-            <Label className={fieldLabelClass} htmlFor="links">
-              Links
-            </Label>
-            <div className="relative">
+                </div>
+              </Dropdown.Popover>
+            </Dropdown.Root>
+            {useCustomGender && (
               <Input
-                id="links"
-                name="links"
-                value={profile.links}
+                id="custom-gender"
+                name="gender"
+                value={localProfile.gender}
                 onChange={handleChange}
-                placeholder="https://…"
-                className="pl-9"
+                placeholder="Enter gender"
+                className="mt-2"
               />
-              <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            </div>
-            <p className="text-xs text-muted-foreground">Add your website, newsletter, or any place you share recommendations.</p>
+            )}
           </div>
-
         </div>
-      </section>
+      </div>
 
-      <div className="flex flex-col gap-4 px-4 py-4">
-        {submitError ? (
-          <p className="text-xs font-semibold text-destructive">{submitError}</p>
-        ) : null}
-        <div className="flex gap-3">
-        <Button type="submit" className="rounded-full px-6" disabled={isSubmitting}>
+      <div className="h-px bg-border/30" />
+
+      {/* Online */}
+      <div className="flex flex-col gap-5 px-6 py-5">
+        <p className="text-[11px] uppercase tracking-wider text-muted-foreground/40">Online</p>
+
+        <div className={fieldGroupClass}>
+          <Label className={fieldLabelClass} htmlFor="links">Link</Label>
+          <div className="relative">
+            <Input
+              id="links"
+              name="links"
+              value={localProfile.links}
+              onChange={handleChange}
+              placeholder="https://…"
+              className="pl-9"
+            />
+            <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          </div>
+          <p className="text-xs text-muted-foreground/60">Your site, newsletter, or anywhere you share recommendations.</p>
+        </div>
+
+        <div className={fieldGroupClass}>
+          <Label className={fieldLabelClass} htmlFor="email">Email address</Label>
+          <div className="relative">
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              value={localProfile.email}
+              disabled
+              placeholder="you@example.com"
+              className="pl-9 opacity-60"
+            />
+            <MailIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          </div>
+          <p className="text-xs text-muted-foreground/60">Cannot be changed after sign-up.</p>
+        </div>
+      </div>
+
+      <div className="h-px bg-border/30" />
+
+      {/* Footer */}
+      <div className="flex flex-col gap-3 px-6 py-5">
+        {submitError && <p className="text-xs text-destructive">{submitError}</p>}
+        <div className="flex items-center gap-3">
+          <Button type="submit" className="rounded-full px-6" disabled={isSubmitting}>
             {isSubmitting ? "Saving..." : submitButtonText}
           </Button>
           {onCancel && (
-          <Button 
-            variant="ghost" 
-            type="button" 
-            className="rounded-full px-6" 
-            disabled={isSubmitting}
-            onClick={onCancel}
-          >
+            <Button
+              variant="ghost"
+              type="button"
+              className="rounded-full px-6 text-muted-foreground"
+              disabled={isSubmitting}
+              onClick={onCancel}
+            >
               {cancelButtonText}
-          </Button>
+            </Button>
           )}
         </div>
       </div>
 
-      {/* Avatar Editor Dialog */}
       {selectedImage && (
         <AvatarEditor
           image={selectedImage}
           open={editorOpen}
           onOpenChange={(open) => {
             setEditorOpen(open);
-            if (!open) {
-              setSelectedImage(null);
-            }
+            if (!open) setSelectedImage(null);
           }}
           onSave={handleEditorSave}
         />

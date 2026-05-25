@@ -98,14 +98,13 @@ export default function SetupProfilePage() {
     }
   }, [authLoading, isAuthenticated, user, router]);
 
-  const handleSave = async () => {
-    if (!profileData || !user?.username) return;
+  const handleSave = async (data: EditableProfile) => {
+    if (!user?.username) return;
 
     try {
       setIsSaving(true);
       setSaveError(null);
 
-      // Prepare payload (same format as edit profile)
       type ProfileUpdatePayload = {
         username: string;
         name: string;
@@ -118,21 +117,21 @@ export default function SetupProfilePage() {
       };
 
       const payload: ProfileUpdatePayload = {
-        username: profileData.username,
-        name: profileData.name,
-        bio: profileData.bio,
-        birthday: profileData.birthday || null,
-        gender: profileData.gender,
-        pronouns: Array.isArray(profileData.pronouns)
-          ? profileData.pronouns.filter((p) => p && typeof p === "string" && p.trim().length > 0)
+        username: data.username,
+        name: data.name,
+        bio: data.bio,
+        birthday: data.birthday || null,
+        gender: data.gender,
+        pronouns: Array.isArray(data.pronouns)
+          ? data.pronouns.filter((p) => p && typeof p === "string" && p.trim().length > 0)
           : [],
-        links: profileData.links
-          ? profileData.links
+        links: data.links
+          ? data.links
               .split(",")
               .map((link) => link.trim())
               .filter(Boolean)
           : [],
-        avatar: profileData.avatar || "",
+        avatar: data.avatar || "",
       };
 
       const response = await fetch(`/api/users/${encodeURIComponent(user?.username)}`, {

@@ -5,6 +5,7 @@ import { goFetchAuthed } from '@/lib/api/endpoints';
 type BookCandidate = {
   id: string;
   reason?: string;
+  reasonType?: string;
   [key: string]: unknown;
 };
 
@@ -23,25 +24,21 @@ const TYPE_TO_SOURCE: Record<string, string> = {
 // Client-side filter applied while Go does not yet discriminate by source.
 // Each filter matches the Reason strings set by buildReason() in
 // internal/service/recommendation_service.go.
+// filterBySource filters the recommendation pool by tab.
+// Checks reasonType first (Phase 5+), falls back to reason string (cached responses).
 function filterBySource(recs: BookCandidate[], source: string): BookCandidate[] {
   switch (source) {
     case 'friends':
-      // "X read this" / "X & Y read this" / "X & N others read this"
-      return recs.filter((r) => r.reason?.includes('read this'));
+      return recs.filter((r) => r.reasonType === 'social' || r.reason?.includes('read this'));
     case 'authors':
-      // "You read <author>"
-      return recs.filter((r) => r.reason?.startsWith('You read'));
+      return recs.filter((r) => r.reasonType === 'author' || r.reason?.startsWith('You read'));
     case 'genres':
-      // "Matches your <genre> taste"
-      return recs.filter((r) => r.reason?.startsWith('Matches your'));
+      return recs.filter((r) => r.reasonType === 'genre' || r.reason?.startsWith('Matches your'));
     case 'favorites':
-      // Pure vector match with no stronger signal
-      return recs.filter((r) => r.reason === 'Picked for you');
+      return recs.filter((r) => r.reasonType === 'favorites' || r.reason === 'Picked for you');
     case 'continue':
-      // Exploration slot — books from genres the user has never read
-      return recs.filter((r) => r.reason === 'Something different');
+      return recs.filter((r) => r.reasonType === 'explore' || r.reason === 'Something different');
     default:
-      // 'recommended' — return the full ranked pool
       return recs;
   }
 }
@@ -86,6 +83,7 @@ export async function GET(req: NextRequest) {
       author: Array.isArray(rec.authors) ? ((rec.authors as string[])[0] ?? '') : '',
       cover: (rec.cover_url as string) || '',
       reason: rec.reason,
+      reasonType: rec.reasonType,
     }));
 
     console.log(

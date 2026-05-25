@@ -352,7 +352,7 @@ const DropdownPopover = React.forwardRef<HTMLDivElement, DropdownPopoverProps>(
               }
             }}
             className={cn(
-              "fixed z-50 overflow-hidden rounded-2xl border border-border/60 bg-background p-1 shadow-xl",
+              "fixed z-[200] overflow-hidden rounded-2xl border border-border/60 bg-background p-1 shadow-xl",
               // Responsive width - ensure it doesn't exceed viewport on mobile
               "min-w-[200px]",
               // On mobile, constrain width to viewport. On desktop, no max-width constraint

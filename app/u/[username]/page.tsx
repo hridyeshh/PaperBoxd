@@ -21,7 +21,6 @@ import { HomeLayoutHeader } from "@/components/ui/layout/home-layout-header";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 import { Dropdown } from "@/components/ui/primitives/dropdown";
 import { EditProfileForm, defaultProfile, type EditableProfile } from "@/components/ui/forms/edit-profile-form";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/primitives/sheet";
 import {
   Dialog,
   DialogContent,
@@ -4345,14 +4344,13 @@ export default function UserProfilePage() {
     return Array.from(map.values()).sort((a, b) => b.read + b.tbr - (a.read + a.tbr));
   }, [bookshelfBooks, tbrBooks]);
 
-  const handleProfileSave = React.useCallback(async () => {
-    if (!profileData || !activeUsername) return;
+  const handleProfileSave = React.useCallback(async (data: EditableProfile) => {
+    if (!activeUsername) return;
 
     try {
       setIsSavingProfile(true);
       setProfileSaveError(null);
 
-      // Avatar is now saved as Cloudinary URL (not base64), which is small enough for cookies
       type ProfileUpdatePayload = {
         username?: string;
         name: string;
@@ -4364,25 +4362,21 @@ export default function UserProfilePage() {
         avatar: string;
       };
       const payload: ProfileUpdatePayload = {
-        // Only include username when it's actually changing — sending unchanged
-        // username causes the Go backend to reject it as "already taken"
-        ...(profileData.username !== activeUsername ? { username: profileData.username } : {}),
-        name: profileData.name,
-        bio: profileData.bio,
-        birthday: profileData.birthday || null,
-        gender: profileData.gender,
-        // Ensure pronouns is always an array, never an empty string
-        pronouns: Array.isArray(profileData.pronouns)
-          ? profileData.pronouns.filter((p) => p && typeof p === "string" && p.trim().length > 0)
+        ...(data.username !== activeUsername ? { username: data.username } : {}),
+        name: data.name,
+        bio: data.bio,
+        birthday: data.birthday || null,
+        gender: data.gender,
+        pronouns: Array.isArray(data.pronouns)
+          ? data.pronouns.filter((p) => p && typeof p === "string" && p.trim().length > 0)
           : [],
-        links: profileData.links
-          ? profileData.links
+        links: data.links
+          ? data.links
             .split(",")
             .map((link) => link.trim())
             .filter(Boolean)
           : [],
-        // isPublic is always set to true on the server (all profiles are public)
-        avatar: profileData.avatar || "",
+        avatar: data.avatar || "",
       };
 
       const response = await fetch(`/api/users/${activeUsername}`, {
@@ -4441,16 +4435,16 @@ export default function UserProfilePage() {
           try {
             // Use the updated profile data from result
             const updatedProfile = {
-              username: result.user.username ?? profileData.username,
-              name: result.user.name ?? profileData.name,
-              birthday: result.user.birthday ?? profileData.birthday,
-              email: result.user.email ?? profileData.email,
-              bio: result.user.bio ?? profileData.bio,
-              pronouns: Array.isArray(result.user.pronouns) ? result.user.pronouns : profileData.pronouns,
-              links: Array.isArray(result.user.links) ? result.user.links.join(", ") : (result.user.links ?? profileData.links),
-              gender: result.user.gender ?? profileData.gender,
-              isPublic: typeof result.user.isPublic === "boolean" ? result.user.isPublic : profileData.isPublic,
-              avatar: result.user.avatar ?? profileData.avatar,
+              username: result.user.username ?? data.username,
+              name: result.user.name ?? data.name,
+              birthday: result.user.birthday ?? data.birthday,
+              email: result.user.email ?? data.email,
+              bio: result.user.bio ?? data.bio,
+              pronouns: Array.isArray(result.user.pronouns) ? result.user.pronouns : data.pronouns,
+              links: Array.isArray(result.user.links) ? result.user.links.join(", ") : (result.user.links ?? data.links),
+              gender: result.user.gender ?? data.gender,
+              isPublic: typeof result.user.isPublic === "boolean" ? result.user.isPublic : data.isPublic,
+              avatar: result.user.avatar ?? data.avatar,
             };
             sessionStorage.setItem(cacheKey, JSON.stringify({
               data: updatedProfile,
@@ -4464,18 +4458,18 @@ export default function UserProfilePage() {
         // Update original profile ref with saved data
         if (result.user) {
           const updatedProfile = {
-            username: result.user.username ?? profileData.username,
-            name: result.user.name ?? profileData.name,
-            birthday: result.user.birthday ?? profileData.birthday,
-            email: result.user.email ?? profileData.email,
-            bio: result.user.bio ?? profileData.bio,
-            pronouns: Array.isArray(result.user.pronouns) ? result.user.pronouns : profileData.pronouns,
+            username: result.user.username ?? data.username,
+            name: result.user.name ?? data.name,
+            birthday: result.user.birthday ?? data.birthday,
+            email: result.user.email ?? data.email,
+            bio: result.user.bio ?? data.bio,
+            pronouns: Array.isArray(result.user.pronouns) ? result.user.pronouns : data.pronouns,
             links: Array.isArray(result.user.links)
               ? result.user.links.join(", ")
-              : result.user.links ?? profileData.links,
-            gender: result.user.gender ?? profileData.gender,
-            isPublic: typeof result.user.isPublic === "boolean" ? result.user.isPublic : profileData.isPublic,
-            avatar: result.user.avatar ?? profileData.avatar,
+              : result.user.links ?? data.links,
+            gender: result.user.gender ?? data.gender,
+            isPublic: typeof result.user.isPublic === "boolean" ? result.user.isPublic : data.isPublic,
+            avatar: result.user.avatar ?? data.avatar,
           };
           originalProfileDataRef.current = JSON.parse(JSON.stringify(updatedProfile));
         }
@@ -4488,7 +4482,7 @@ export default function UserProfilePage() {
     } finally {
       setIsSavingProfile(false);
     }
-  }, [profileData, activeUsername]);
+  }, [profileData, activeUsername, setProfileData]);
 
   const dockItems = React.useMemo(() => {
     return dockLabels.map((label) => ({
@@ -4528,8 +4522,8 @@ export default function UserProfilePage() {
   const levelName = leaderboardStats?.level_name   ?? pdAny?.levelName ?? getLevelName(level);
   // Prefer cookie-based streak (accurate server-tracked) over Go backend streak (may lag)
   const currentStreak = cookieStreak ?? leaderboardStats?.current_streak ?? pdAny?.currentStreak ?? 0;
-  const booksReadStat = leaderboardStats?.books_read ?? bookshelfBooks.length;
-  const diaryEntriesStat = leaderboardStats?.diary_entries ?? diaryEntries.length;
+  const booksReadStat = bookshelfBooks.length || leaderboardStats?.books_read || 0;
+  const diaryEntriesStat = diaryEntries.length || leaderboardStats?.diary_entries || 0;
   // XP-within-level using backend's variable thresholds
   const levelStart   = xpAtLevelStart(level);
   const levelEnd     = xpAtLevelStart(level + 1);
@@ -4904,7 +4898,6 @@ export default function UserProfilePage() {
                   <StatCell
                     label="Books read"
                     value={booksReadStat}
-                    sub={bookshelfBooks.length > 0 ? `${bookshelfBooks.length} on shelf` : undefined}
                   />
                   <StatCell
                     label="Diary entries"
@@ -5442,27 +5435,24 @@ export default function UserProfilePage() {
           </div>
         </div>
 
-        {/* Edit Profile Sheet */}
-        <Sheet open={isEditOpen} onOpenChange={setIsEditOpen}>
-          <SheetContent className="w-full overflow-y-auto sm:max-w-[50vw]">
-            <SheetHeader>
-              <SheetTitle>Edit Profile</SheetTitle>
-            </SheetHeader>
-            <EditProfileForm
-              profile={profileData || defaultProfile}
-              onProfileChange={setProfileData}
-              onSubmitProfile={handleProfileSave}
-              onCancel={() => {
-                if (originalProfileDataRef.current) {
-                  setProfileData(originalProfileDataRef.current);
-                }
-                setIsEditOpen(false);
-              }}
-              isSubmitting={isSavingProfile}
-              submitError={profileSaveError}
-            />
-          </SheetContent>
-        </Sheet>
+        {/* Edit Profile Dialog */}
+        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+          <DialogContent className="max-w-xl p-0 gap-0 flex flex-col max-h-[80vh] overflow-hidden">
+            <DialogHeader className="shrink-0 px-6 py-4 border-b border-border/30">
+              <DialogTitle className="text-base font-semibold">Edit Profile</DialogTitle>
+            </DialogHeader>
+            <div className="overflow-y-auto flex-1 scrollbar-hide">
+              <EditProfileForm
+                key={isEditOpen ? 'open' : 'closed'}
+                profile={profileData || defaultProfile}
+                onSubmitProfile={handleProfileSave}
+                onCancel={() => setIsEditOpen(false)}
+                isSubmitting={isSavingProfile}
+                submitError={profileSaveError}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </main>
   );
