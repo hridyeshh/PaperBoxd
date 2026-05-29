@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listsApi } from "@/lib/api/endpoints";
+import { extractGoError } from "@/lib/api/error";
 
 // POST: grant or revoke access (unified for backwards compat with old action field)
 export async function POST(
@@ -20,7 +21,7 @@ export async function POST(
     if (status >= 400) {
       const err = data as { error?: { message?: string }; message?: string };
       return NextResponse.json(
-        { error: err?.error?.message ?? err?.message ?? "Failed to revoke access" },
+        { error: extractGoError(err, "Failed to revoke access") },
         { status }
       );
     }
@@ -35,7 +36,7 @@ export async function POST(
   if (status >= 400) {
     const err = data as { error?: { message?: string }; message?: string };
     return NextResponse.json(
-      { error: err?.error?.message ?? err?.message ?? "Failed to grant access" },
+      { error: extractGoError(err, "Failed to grant access") },
       { status }
     );
   }
@@ -60,7 +61,7 @@ export async function DELETE(
   if (status >= 400) {
     const err = data as { error?: { message?: string }; message?: string };
     return NextResponse.json(
-      { error: err?.error?.message ?? err?.message ?? "Failed to revoke access" },
+      { error: extractGoError(err, "Failed to revoke access") },
       { status }
     );
   }

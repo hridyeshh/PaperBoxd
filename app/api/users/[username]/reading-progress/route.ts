@@ -3,6 +3,7 @@ import { bookshelfApi } from "@/lib/api/endpoints";
 import { cookies } from "next/headers";
 import { getSession } from "@/lib/auth/jwt-session";
 import { recordActivity, STREAK_COOKIE_OPTIONS } from "@/lib/streak";
+import { extractGoError } from "@/lib/api/error";
 
 /**
  * GET /api/users/[username]/reading-progress?bookId=...
@@ -121,7 +122,7 @@ export async function POST(
     if (status >= 400) {
       const err = data as { error?: { message?: string }; message?: string };
       return NextResponse.json(
-        { error: err?.error?.message ?? err?.message ?? "Failed to update progress" },
+        { error: extractGoError(err, "Failed to update progress") },
         { status }
       );
     }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { bookshelfApi, favoritesApi, goFetchAuthed, userApi } from "@/lib/api/endpoints";
 import { getSession } from "@/lib/auth/jwt-session";
 import { recordActivity, STREAK_COOKIE_OPTIONS } from "@/lib/streak";
+import { extractGoError } from "@/lib/api/error";
 
 function isPostgresBookUUID(s: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s.trim());
@@ -66,7 +67,7 @@ async function resolvePostgresBookIDForLike(params: {
     return {
       ok: false,
       status,
-      message: err?.error?.message ?? err?.message ?? `Book lookup failed (${status})`,
+      message: extractGoError(err, `Book lookup failed (${status})`),
     };
   }
   const row = data as { id?: string };
@@ -144,7 +145,7 @@ export async function POST(
         const { data, status } = await bookshelfApi.add(username, goBody);
         if (status >= 400) {
           const err = data as { error?: { message?: string }; message?: string };
-          return NextResponse.json({ error: err?.error?.message ?? "Failed to add to bookshelf" }, { status });
+          return NextResponse.json({ error: extractGoError(err, "Failed to add to bookshelf") }, { status });
         }
         // Marking a book as read counts as a reading activity
         {
@@ -172,7 +173,7 @@ export async function POST(
         const { data, status } = await bookshelfApi.add(username, goBody);
         if (status >= 400) {
           const err = data as { error?: { message?: string }; message?: string };
-          return NextResponse.json({ error: err?.error?.message ?? "Failed to add to TBR" }, { status });
+          return NextResponse.json({ error: extractGoError(err, "Failed to add to TBR") }, { status });
         }
         return NextResponse.json({ message: "Book added to TBR successfully", ...(data as object) });
       }
@@ -187,7 +188,7 @@ export async function POST(
         const { data, status } = await bookshelfApi.add(username, goBody);
         if (status >= 400) {
           const err = data as { error?: { message?: string }; message?: string };
-          return NextResponse.json({ error: err?.error?.message ?? "Failed to add to currently reading" }, { status });
+          return NextResponse.json({ error: extractGoError(err, "Failed to add to currently reading") }, { status });
         }
         return NextResponse.json({ message: "Book added to currently reading successfully", ...(data as object) });
       }
@@ -201,7 +202,7 @@ export async function POST(
         const { data, status } = await favoritesApi.add(username, goBody);
         if (status >= 400) {
           const err = data as { error?: { message?: string }; message?: string };
-          return NextResponse.json({ error: err?.error?.message ?? "Failed to add to favorites" }, { status });
+          return NextResponse.json({ error: extractGoError(err, "Failed to add to favorites") }, { status });
         }
         return NextResponse.json({ message: "Book added to favorites successfully", ...(data as object) });
       }
@@ -220,7 +221,7 @@ export async function POST(
         });
         if (status >= 400) {
           const err = data as { error?: { message?: string }; message?: string };
-          return NextResponse.json({ error: err?.error?.message ?? "Failed to like book" }, { status });
+          return NextResponse.json({ error: extractGoError(err, "Failed to like book") }, { status });
         }
         return NextResponse.json({ message: "Book liked successfully", id: resolved.uuid, ...(data as object) });
       }
@@ -394,7 +395,7 @@ export async function PUT(
     const { data, status } = await favoritesApi.reorder(username, goBody);
     if (status >= 400) {
       const err = data as { error?: { message?: string }; message?: string };
-      return NextResponse.json({ error: err?.error?.message ?? "Failed to reorder favorites" }, { status });
+      return NextResponse.json({ error: extractGoError(err, "Failed to reorder favorites") }, { status });
     }
     return NextResponse.json({ message: "Favorites reordered successfully" });
   } catch (error) {
@@ -454,7 +455,7 @@ export async function DELETE(
         const { data, status } = await bookshelfApi.remove(username, resolved.uuid);
         if (status >= 400) {
           const err = data as { error?: { message?: string }; message?: string };
-          return NextResponse.json({ error: err?.error?.message ?? "Failed to remove from bookshelf" }, { status });
+          return NextResponse.json({ error: extractGoError(err, "Failed to remove from bookshelf") }, { status });
         }
         return NextResponse.json({ message: "Book removed successfully" });
       }
@@ -467,7 +468,7 @@ export async function DELETE(
         const { data, status } = await favoritesApi.remove(username, resolved.uuid);
         if (status >= 400) {
           const err = data as { error?: { message?: string }; message?: string };
-          return NextResponse.json({ error: err?.error?.message ?? "Failed to remove from favorites" }, { status });
+          return NextResponse.json({ error: extractGoError(err, "Failed to remove from favorites") }, { status });
         }
         return NextResponse.json({ message: "Book removed from favorites" });
       }
@@ -482,7 +483,7 @@ export async function DELETE(
         });
         if (status >= 400) {
           const err = data as { error?: { message?: string }; message?: string };
-          return NextResponse.json({ error: err?.error?.message ?? "Failed to unlike book" }, { status });
+          return NextResponse.json({ error: extractGoError(err, "Failed to unlike book") }, { status });
         }
         return NextResponse.json({ message: "Book unliked" });
       }

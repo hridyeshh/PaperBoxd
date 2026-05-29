@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/primitives/dialog";
-import { Save, X } from "lucide-react";
+import { Save, X, Lock, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { TiptapEditor } from "@/components/ui/features/tiptap-editor";
 
@@ -40,11 +40,13 @@ export function DiaryEditorDialog({
 }: DiaryEditorDialogProps) {
   const [content, setContent] = React.useState(initialContent);
   const [isSaving, setIsSaving] = React.useState(false);
+  const [isPrivate, setIsPrivate] = React.useState(false);
 
   // Reset content when dialog opens/closes
   React.useEffect(() => {
     if (open) {
       setContent(initialContent || "");
+      setIsPrivate(false);
     }
   }, [open, initialContent]);
 
@@ -76,6 +78,7 @@ export function DiaryEditorDialog({
         bookTitle,
         bookAuthor,
         bookCover,
+        isPrivate,
       };
 
       console.log("[DiaryEditor] Request body:", requestBody);
@@ -154,24 +157,41 @@ export function DiaryEditorDialog({
           </div>
         </div>
 
-        <DialogFooter className="flex-shrink-0 border-t pt-4 mt-4">
-          <Button
+        <DialogFooter className="flex-shrink-0 border-t pt-4 mt-4 flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+          <button
             type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={() => setIsPrivate((v) => !v)}
             disabled={isSaving}
+            aria-pressed={isPrivate}
+            aria-label={isPrivate ? "Make this entry public" : "Make this entry private"}
+            className={`inline-flex items-center gap-2 self-start rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+              isPrivate
+                ? "border-foreground/20 bg-foreground/5 text-foreground"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
           >
-            <X className="mr-2 h-4 w-4" />
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving || !content || content.replace(/<[^>]*>/g, "").trim() === ""}
-          >
-            <Save className="mr-2 h-4 w-4" />
-            {isSaving ? "Saving..." : "Save"}
-          </Button>
+            {isPrivate ? <Lock className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />}
+            {isPrivate ? "Private — only you" : "Public"}
+          </button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isSaving}
+            >
+              <X className="mr-2 h-4 w-4" />
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving || !content || content.replace(/<[^>]*>/g, "").trim() === ""}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {isSaving ? "Saving..." : "Save"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

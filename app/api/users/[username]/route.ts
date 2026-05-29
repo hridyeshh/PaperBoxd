@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { goFetch, bookshelfApi, favoritesApi, diaryApi, listsApi, activityApi } from "@/lib/api/endpoints";
+import { extractGoError } from "@/lib/api/error";
 import { cookies } from "next/headers";
 
 export const revalidate = 30;
@@ -471,7 +472,7 @@ export async function PATCH(
     if (status >= 400) {
       const err = data as { error?: { message?: string }; message?: string };
       return NextResponse.json(
-        { error: err?.error?.message ?? err?.message ?? "Failed to update profile" },
+        { error: extractGoError(err, "Failed to update profile") },
         { status }
       );
     }

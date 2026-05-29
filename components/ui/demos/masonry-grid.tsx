@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { Calendar, BookOpen, Star } from "lucide-react";
 import { format } from "date-fns";
-import { stripHtmlTags } from "@/lib/utils";
+import { stripHtmlTags, DEFAULT_COVER } from "@/lib/utils";
 
 type Book = {
   id: string;
@@ -99,7 +99,7 @@ export function MasonryGrid({ books, onCardClick }: MasonryGridProps) {
                   style={{ height: `${height}px` }}
                 >
                   <Image
-                    src={book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80"}
+                    src={book.cover || DEFAULT_COVER}
                     alt={book.title}
                     fill
                     className="object-cover object-center transition-transform duration-500 group-hover:scale-105"

@@ -27,16 +27,24 @@ export default function Home() {
   const oauthSyncPending =
     sessionStatus === "loading" || (sessionStatus === "authenticated" && !user);
 
+  // Depend only on the user id (primitive). The auth-provider re-creates the
+  // user object reference on every focus event / refreshUser call, which would
+  // otherwise refire this effect, re-trigger the onboarding fetch, and flash
+  // the spinner over the page on every interaction that touched auth state.
+  const userId = user?.id ?? null;
+
   useEffect(() => {
     if (isLoading || oauthSyncPending) {
       return;
     }
 
-    if (isAuthenticated && user) {
+    if (isAuthenticated && userId) {
+      let cancelled = false;
       const checkOnboarding = async () => {
         try {
           setCheckingOnboarding(true);
           const response = await fetch("/api/onboarding/status");
+          if (cancelled) return;
           if (response.ok) {
             const data = await response.json();
             if (data.isNewUser) {
@@ -54,15 +62,18 @@ export default function Home() {
             setCheckingOnboarding(false);
           }
         } catch {
-          setCheckingOnboarding(false);
+          if (!cancelled) setCheckingOnboarding(false);
         }
       };
 
       checkOnboarding();
+      return () => {
+        cancelled = true;
+      };
     } else if (!isAuthenticated) {
       setCheckingOnboarding(false);
     }
-  }, [isLoading, isAuthenticated, user, router, oauthSyncPending]);
+  }, [isLoading, isAuthenticated, userId, router, oauthSyncPending]);
 
   // OAuth in flight (NextAuth session exists but pb_access_token not yet minted):
   // show a spinner rather than the landing page to avoid a jarring flash.

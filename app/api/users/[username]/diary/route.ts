@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { diaryApi } from "@/lib/api/endpoints";
+import { extractGoError } from "@/lib/api/error";
 
 export const dynamic = "force-dynamic";
 
@@ -120,7 +121,7 @@ export async function DELETE(
     if (status === 404) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
     if (status >= 400) {
       const err = data as { error?: { message?: string }; message?: string };
-      return NextResponse.json({ error: err?.error?.message ?? "Failed to delete diary entry" }, { status });
+      return NextResponse.json({ error: extractGoError(err, "Failed to delete diary entry") }, { status });
     }
 
     return NextResponse.json({ success: true });
@@ -169,13 +170,18 @@ export async function POST(
     const { data, status } = await diaryApi.createEntry(username, goBody);
     if (status === 401) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (status >= 400) {
-      const err = data as { error?: { message?: string }; message?: string };
-      return NextResponse.json({ error: err?.error?.message ?? "Failed to create diary entry" }, { status });
+      const err = data as { error?: string | { message?: string }; message?: string; code?: string };
+      const msg =
+        (typeof err?.error === "string" ? err.error : err?.error?.message) ??
+        err?.message ??
+        "Failed to create diary entry";
+      console.error("Diary POST backend error:", { status, body: data });
+      return NextResponse.json({ error: msg, code: err?.code }, { status });
     }
 
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     console.error("Diary POST error:", error);
-    return NextResponse.json({ error: "Failed to create diary entry" }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to create diary entry" }, { status: 500 });
   }
 }

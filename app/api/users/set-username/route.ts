@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { userApi } from "@/lib/api/endpoints";
 import { getCurrentUser } from "@/lib/auth/jwt-session";
+import { extractGoError } from "@/lib/api/error";
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
   if (status === 400) {
     const err = data as { error?: { message?: string }; message?: string };
     return NextResponse.json(
-      { error: err?.error?.message ?? err?.message ?? "Invalid username format" },
+      { error: extractGoError(err, "Invalid username format") },
       { status: 400 }
     );
   }

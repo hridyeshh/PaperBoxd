@@ -12,7 +12,7 @@ import { DiaryEntryDialog } from "@/components/ui/dialogs/diary-entry-dialog";
 import { Button } from "@/components/ui/primitives/button";
 import { toast } from "sonner";
 import { createBookSlug } from "@/lib/utils/book-slug";
-import { DEFAULT_AVATAR } from "@/lib/utils";
+import { DEFAULT_AVATAR, DEFAULT_COVER } from "@/lib/utils";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
@@ -423,7 +423,7 @@ export default function ActivityPage() {
                     timeAgo: formatTimeAgo(activity.timestamp),
                     cover: activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access"
                       ? (activity.listCover || "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80")
-                      : (activity.bookCover || (activity.isGeneralEntry ? null : "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80")),
+                      : (activity.bookCover || (activity.isGeneralEntry ? null : DEFAULT_COVER)),
                     type: activity.type,
                   };
                   
@@ -798,7 +798,7 @@ export default function ActivityPage() {
                               timeAgo: formatTimeAgo(activity.timestamp),
                               cover: activity.type === "shared_list" || activity.type === "collaboration_request"
                                 ? (activity.listCover || "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80")
-                                : (activity.bookCover || (activity.isGeneralEntry ? null : "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80")),
+                                : (activity.bookCover || (activity.isGeneralEntry ? null : DEFAULT_COVER)),
                               type: activity.type,
                             };
                             

@@ -15,7 +15,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-media-query";
-import { cn, formatDiaryDate } from "@/lib/utils";
+import { cn, formatDiaryDate, DEFAULT_COVER } from "@/lib/utils";
 
 interface DiaryEntryDialogProps {
   open: boolean;
@@ -33,6 +33,7 @@ interface DiaryEntryDialogProps {
     likes?: string[];
     isLiked?: boolean;
     likesCount?: number;
+    isPrivate?: boolean;
   };
   username: string;
   isOwnProfile?: boolean;
@@ -261,7 +262,7 @@ export function DiaryEntryDialog({
             )}>
               <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-muted">
                 <Image
-                  src={entry.bookCover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80"}
+                  src={entry.bookCover || DEFAULT_COVER}
                   alt={entry.bookTitle ? `${entry.bookTitle} cover` : "Book cover"}
                   fill
                   className="object-cover"
@@ -286,10 +287,18 @@ export function DiaryEntryDialog({
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
               <div className="flex items-center gap-3">
                 <div className="text-xs text-muted-foreground">
-                  {entry.updatedAt !== entry.createdAt 
-                    ? `Updated ${formatDiaryDate(entry.updatedAt)}` 
+                  {entry.updatedAt !== entry.createdAt
+                    ? `Updated ${formatDiaryDate(entry.updatedAt)}`
                     : formatDiaryDate(entry.createdAt)}
                 </div>
+                {entry.isPrivate && (
+                  <span
+                    className="rounded-full border border-foreground/15 bg-foreground/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+                    title="Only you can see this entry"
+                  >
+                    Private
+                  </span>
+                )}
                 {isOwnProfile && (
                   <Button
                     variant="ghost"

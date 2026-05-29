@@ -32,7 +32,7 @@ import {
 import { Edit, MoreVertical, Trash2, Plus, X, Heart, AlertTriangle, Link2, Check, Share2 } from "lucide-react";
 import BookLoader from "@/components/ui/features/book-loader";
 import { createBookSlug } from "@/lib/utils/book-slug";
-import { cn, DEFAULT_AVATAR, formatDiaryDate } from "@/lib/utils";
+import { cn, DEFAULT_AVATAR, DEFAULT_COVER, formatDiaryDate } from "@/lib/utils";
 import {
   type BookshelfBook,
   type LikedBook,
@@ -2666,6 +2666,7 @@ type DiaryEntry = {
   isLiked: boolean;
   likesCount: number;
   likes: string[];
+  isPrivate?: boolean;
 };
 
 function DiarySection({
@@ -2753,10 +2754,20 @@ function DiarySection({
                 key={entry.id}
                 onClick={() => handleEntryClick(entry)}
                 className={cn(
-                  "group rounded-lg border border-border/70 bg-card shadow-sm transition-shadow hover:shadow-md cursor-pointer overflow-hidden",
+                  "group relative rounded-lg border border-border/70 bg-card shadow-sm transition-shadow hover:shadow-md cursor-pointer overflow-hidden",
                   isMobile ? "flex flex-col" : "flex gap-3 p-3"
                 )}
               >
+                {/* Private label — corner chip, visible for both layouts */}
+                {entry.isPrivate && (
+                  <span
+                    className="pointer-events-none absolute right-1.5 top-1.5 z-10 rounded-full border border-foreground/15 bg-background/90 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground shadow-sm backdrop-blur"
+                    title="Only you can see this entry"
+                  >
+                    Private
+                  </span>
+                )}
+
                 {/* Book Cover (if entry is about a book) */}
                 {hasBookCover && (
                   <div className={cn(
@@ -2764,7 +2775,7 @@ function DiarySection({
                     isMobile ? "w-full" : "h-20 w-14 flex-shrink-0 rounded-lg"
                   )}>
                     <Image
-                      src={entry.bookCover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80"}
+                      src={entry.bookCover || DEFAULT_COVER}
                       alt={entry.bookTitle || "Book cover"}
                       fill
                       className="object-cover"
@@ -2909,6 +2920,7 @@ function DiarySection({
             likes: selectedEntry.likes || [],
             isLiked: selectedEntry.isLiked || false,
             likesCount: selectedEntry.likesCount || 0,
+            isPrivate: selectedEntry.isPrivate || false,
           } : {
             id: "",
             content: "",
@@ -3391,6 +3403,7 @@ export default function UserProfilePage() {
     updatedAt?: string;
     isLiked?: boolean;
     likesCount?: number;
+    isPrivate?: boolean;
   };
   const [selectedActivityDiaryEntry, setSelectedActivityDiaryEntry] = React.useState<ActivityDiaryEntry | null>(null);
 
@@ -3466,6 +3479,8 @@ export default function UserProfilePage() {
           isLiked?: boolean;
           likesCount?: number;
           likes?: unknown[];
+          isPrivate?: boolean;
+          is_private?: boolean;
         };
         const transformedEntries: DiaryEntry[] = Array.isArray(data.entries)
           ? data.entries
@@ -3485,6 +3500,7 @@ export default function UserProfilePage() {
                 isLiked: entry.isLiked || false,
                 likesCount: entry.likesCount || 0,
                 likes: entry.likes || [],
+                isPrivate: entry.isPrivate ?? entry.is_private ?? false,
               };
             })
             .sort((a: DiaryEntry, b: DiaryEntry) => {
@@ -3672,7 +3688,7 @@ export default function UserProfilePage() {
                 id: book.bookId?.toString() || book._id?.toString() || `fav-${idx}`,
                 title: book.title || "Unknown Title",
                 author: book.author || "Unknown Author",
-                cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                cover: book.cover || DEFAULT_COVER,
                 mood: book.mood,
                 slug: book.slug,
                 bookId: book.bookId?.toString() || book._id?.toString(),
@@ -3689,7 +3705,7 @@ export default function UserProfilePage() {
                   id: book.bookId?.toString() || book._id?.toString() || `shelf-${idx}`,
                   title: book.title || "Unknown Title",
                   author: book.author || "Unknown Author",
-                  cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                  cover: book.cover || DEFAULT_COVER,
                   mood: book.mood,
                   slug: book.slug,
                   finishedOn: book.finishedOn ? (typeof book.finishedOn === 'string' ? book.finishedOn : new Date(book.finishedOn).toISOString()) : "",
@@ -3712,7 +3728,7 @@ export default function UserProfilePage() {
                 id: book.bookId?.toString() || book._id?.toString() || `liked-${idx}`,
                 title: book.title || "Unknown Title",
                 author: book.author || "Unknown Author",
-                cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                cover: book.cover || DEFAULT_COVER,
                 mood: book.mood,
                 slug: book.slug,
                 reason: book.reason,
@@ -3730,7 +3746,7 @@ export default function UserProfilePage() {
                   openLibraryId: book.openLibraryId,
                   title: book.title || "Unknown Title",
                   author: book.author || "Unknown Author",
-                  cover: book.cover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                  cover: book.cover || DEFAULT_COVER,
                   mood: book.mood,
                   addedOn: book.addedOn
                     ? `Added ${new Date(book.addedOn).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`
@@ -3779,7 +3795,7 @@ export default function UserProfilePage() {
                       (imageLinks.thumbnail as string) ||
                       (imageLinks.medium as string) ||
                       flatCover ||
-                      "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                      DEFAULT_COVER,
                     addedOn: addedAt
                       ? `Added ${new Date(addedAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`
                       : "Added",
@@ -3921,6 +3937,8 @@ export default function UserProfilePage() {
               isLiked?: boolean;
               likesCount?: number;
               likes?: unknown[];
+              isPrivate?: boolean;
+              is_private?: boolean;
             };
             type LikeId = { toString(): string } | string;
             // Diary entries
@@ -3948,6 +3966,7 @@ export default function UserProfilePage() {
                   }) || false,
                   createdAt: entry.createdAt ? new Date(entry.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
                   updatedAt: entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
+                  isPrivate: entry.isPrivate ?? entry.is_private ?? false,
                 };
               })
               : [];
@@ -4027,7 +4046,7 @@ export default function UserProfilePage() {
                   action,
                   detail,
                   timeAgo,
-                  cover: activity.bookCover || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                  cover: activity.bookCover || DEFAULT_COVER,
                   type: activity.type,
                   listId: activity.listId,
                   listName: activity.listName,
@@ -4297,7 +4316,7 @@ export default function UserProfilePage() {
     }
   }, [isAuthenticated, activeUsername, isOwnProfile, isFollowing]);
   const authorStats = React.useMemo<AuthorStat[]>(() => {
-    const placeholderCover = "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
+    const placeholderCover = DEFAULT_COVER;
     const map = new Map<string, AuthorStat>();
     const ensureEntry = (name: string, cover?: string) => {
       if (!map.has(name)) {
@@ -4579,7 +4598,7 @@ export default function UserProfilePage() {
             };
           };
         };
-        const DEFAULT_COVER = "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
+        // DEFAULT_COVER imported from @/lib/utils
         const transformedFavoriteBooks: ProfileBook[] = Array.isArray(data.books)
           ? data.books.map((fav: FavFromAPI, idx: number) => {
               const book = fav.book ?? {};
@@ -5248,6 +5267,7 @@ export default function UserProfilePage() {
                       likes: [],
                       isLiked: selectedActivityDiaryEntry.isLiked || false,
                       likesCount: selectedActivityDiaryEntry.likesCount || 0,
+                      isPrivate: selectedActivityDiaryEntry.isPrivate || false,
                     } : {
                       id: "",
                       content: "",

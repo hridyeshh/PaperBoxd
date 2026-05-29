@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bookApi } from "@/lib/api/endpoints";
 
+const DEFAULT_COVER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='300' viewBox='0 0 200 300'%3E%3Crect width='200' height='300' fill='%23374151'/%3E%3Crect x='0' y='0' width='16' height='300' fill='%231f2937'/%3E%3Crect x='16' y='0' width='2' height='300' fill='%234b5563'/%3E%3Crect x='50' y='110' width='100' height='80' rx='6' fill='none' stroke='%234b5563' stroke-width='2'/%3E%3Cline x1='65' y1='135' x2='135' y2='135' stroke='%234b5563' stroke-width='1.5'/%3E%3Cline x1='65' y1='150' x2='120' y2='150' stroke='%234b5563' stroke-width='1.5'/%3E%3Cline x1='65' y1='165' x2='105' y2='165' stroke='%234b5563' stroke-width='1.5'/%3E%3C/svg%3E";
+
 type GoBook = {
   id: string;
   volumeInfo: {

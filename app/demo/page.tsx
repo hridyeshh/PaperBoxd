@@ -3,7 +3,7 @@
 import * as React from "react";
 import Image from "next/image";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
-import { stripHtmlTags } from "@/lib/utils";
+import { stripHtmlTags, DEFAULT_COVER } from "@/lib/utils";
 import BookLoader from "@/components/ui/features/book-loader";
 import { BookShareButton } from "@/components/ui/features/book-share-button";
 import { BookShareCard } from "@/components/ui/features/book-share-card";
@@ -65,7 +65,7 @@ export default function DemoPage() {
         // Find the first book with a cover image
         let fetchedBook = books.find((b: { cover?: string }) => 
           b.cover && 
-          b.cover !== "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80" &&
+          b.cover !== DEFAULT_COVER &&
           b.cover.trim() !== ""
         );
 

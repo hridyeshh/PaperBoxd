@@ -320,8 +320,11 @@ export const bookApi = {
 // ── Diary ─────────────────────────────────────────────────────────────────────
 
 export const diaryApi = {
+  // Auth is optional on the backend, but when the viewer is logged in we must
+  // forward their Bearer so their own private entries appear in the response.
+  // Same reasoning for getEntry.
   getEntries: (username: string, page = 1, pageSize = 20) =>
-    goFetch(`/api/v1/users/${encodeURIComponent(username)}/diary?page=${page}&page_size=${pageSize}`),
+    goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/diary?page=${page}&page_size=${pageSize}`),
 
   createEntry: (username: string, body: Record<string, unknown>) =>
     goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/diary`, {
@@ -330,7 +333,7 @@ export const diaryApi = {
     }),
 
   getEntry: (username: string, entryId: string) =>
-    goFetch(`/api/v1/users/${encodeURIComponent(username)}/diary/${encodeURIComponent(entryId)}`),
+    goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/diary/${encodeURIComponent(entryId)}`),
 
   updateEntry: (username: string, entryId: string, body: Record<string, unknown>) =>
     goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/diary/${encodeURIComponent(entryId)}`, {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { userApi } from "@/lib/api/endpoints";
+import { extractGoError } from "@/lib/api/error";
 
 export async function POST(
   _request: NextRequest,
@@ -18,7 +19,7 @@ export async function POST(
     }
     if (status >= 400) {
       const err = data as { error?: { message?: string }; message?: string };
-      return NextResponse.json({ error: err?.error?.message ?? err?.message ?? "Failed" }, { status });
+      return NextResponse.json({ error: extractGoError(err, "Failed") }, { status });
     }
 
     return NextResponse.json(data);
@@ -45,7 +46,7 @@ export async function DELETE(
     }
     if (status >= 400) {
       const err = data as { error?: { message?: string }; message?: string };
-      return NextResponse.json({ error: err?.error?.message ?? err?.message ?? "Failed" }, { status });
+      return NextResponse.json({ error: extractGoError(err, "Failed") }, { status });
     }
 
     return NextResponse.json(data);

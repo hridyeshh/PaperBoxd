@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { TiptapEditor } from "@/components/ui/features/tiptap-editor";
 import { cn } from "@/lib/utils";
 import { Playfair_Display } from "next/font/google";
+import { Lock, Globe } from "lucide-react";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -36,11 +37,13 @@ export function GeneralDiaryEditorDialog({
   const [content, setContent] = React.useState(initialContent);
   const [subject, setSubject] = React.useState("");
   const [isSaving, setIsSaving] = React.useState(false);
+  const [isPrivate, setIsPrivate] = React.useState(false);
 
   React.useEffect(() => {
     if (open) {
       setContent(initialContent || "");
       setSubject("");
+      setIsPrivate(false);
     }
   }, [open, initialContent]);
 
@@ -54,7 +57,10 @@ export function GeneralDiaryEditorDialog({
 
     setIsSaving(true);
     try {
-      const body: { content: string; subject?: string } = { content: content.trim() };
+      const body: { content: string; subject?: string; isPrivate: boolean } = {
+        content: content.trim(),
+        isPrivate,
+      };
       if (subject.trim()) body.subject = subject.trim();
 
       const res = await fetch(`/api/users/${encodeURIComponent(username)}/diary`, {
@@ -126,9 +132,22 @@ export function GeneralDiaryEditorDialog({
 
         {/* Footer */}
         <div className="px-7 py-4 border-t border-border bg-muted/20 flex items-center justify-between flex-shrink-0">
-          <div className="font-mono text-[10px] tracking-widest text-muted-foreground">
-            {isEmpty ? "Nothing written yet" : "Ready to save"}
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsPrivate((v) => !v)}
+            disabled={isSaving}
+            aria-pressed={isPrivate}
+            aria-label={isPrivate ? "Make this entry public" : "Make this entry private"}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-50",
+              isPrivate
+                ? "border-foreground/20 bg-foreground/5 text-foreground"
+                : "border-border text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {isPrivate ? <Lock className="h-3 w-3" /> : <Globe className="h-3 w-3" />}
+            {isPrivate ? "Private" : "Public"}
+          </button>
           <div className="flex items-center gap-2.5">
             <button
               type="button"

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listsApi } from "@/lib/api/endpoints";
+import { extractGoError } from "@/lib/api/error";
 
 // UUID pattern (PostgreSQL / Go UUID)
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -91,7 +92,7 @@ export async function PATCH(
     if (status === 401) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (status >= 400) {
       const err = data as { error?: { message?: string }; message?: string };
-      return NextResponse.json({ error: err?.error?.message ?? "Failed to update list" }, { status });
+      return NextResponse.json({ error: extractGoError(err, "Failed to update list") }, { status });
     }
 
     // UpdateList returns ListResponse (no books). Re-fetch the full list so books are preserved.
@@ -155,7 +156,7 @@ export async function PUT(
       if (status === 409) return NextResponse.json({ error: "Book already in list" }, { status: 409 });
       if (status >= 400) {
         const err = data as { error?: { message?: string }; message?: string };
-        return NextResponse.json({ error: err?.error?.message ?? "Failed to add book" }, { status });
+        return NextResponse.json({ error: extractGoError(err, "Failed to add book") }, { status });
       }
 
       // Re-fetch the updated list so the frontend can update its state.
@@ -174,7 +175,7 @@ export async function PUT(
       if (status === 401) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       if (status >= 400) {
         const err = data as { error?: { message?: string }; message?: string };
-        return NextResponse.json({ error: err?.error?.message ?? "Failed to remove book" }, { status });
+        return NextResponse.json({ error: extractGoError(err, "Failed to remove book") }, { status });
       }
 
       const { data: listData, status: listStatus } = await listsApi.getList(username, listId);
@@ -192,7 +193,7 @@ export async function PUT(
     if (status === 401) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (status >= 400) {
       const err = data as { error?: { message?: string }; message?: string };
-      return NextResponse.json({ error: err?.error?.message ?? "Failed to update list" }, { status });
+      return NextResponse.json({ error: extractGoError(err, "Failed to update list") }, { status });
     }
     return NextResponse.json({ list: normalizeListDetail(data as GoList) });
   } catch (error) {
@@ -213,7 +214,7 @@ export async function DELETE(
     if (status === 401) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (status >= 400) {
       const err = data as { error?: { message?: string }; message?: string };
-      return NextResponse.json({ error: err?.error?.message ?? "Failed to delete list" }, { status });
+      return NextResponse.json({ error: extractGoError(err, "Failed to delete list") }, { status });
     }
     return NextResponse.json({ message: "List deleted successfully" });
   } catch (error) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authApi } from "@/lib/api/endpoints";
+import { extractGoError } from "@/lib/api/error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,9 +31,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           message:
-            err?.error?.message ??
-            err?.message ??
-            "Invalid or expired reset link",
+            extractGoError(err, "Invalid or expired reset link"),
         },
         { status }
       );

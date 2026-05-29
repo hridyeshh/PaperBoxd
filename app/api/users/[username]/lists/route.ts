@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { goFetchAuthed, listsApi } from "@/lib/api/endpoints";
+import { extractGoError } from "@/lib/api/error";
 
 // Shape returned by Go for a single list in a list-summary response.
 type GoListSummary = {
@@ -51,12 +52,10 @@ export async function GET(
       `/api/v1/users/${encodeURIComponent(username)}/lists`
     );
     if (status >= 400) {
-      const errBody = data as { error?: { message?: string; code?: string }; message?: string };
-      const msg =
-        errBody?.error?.message ??
-        (typeof errBody?.message === "string" ? errBody.message : undefined) ??
-        "Failed to fetch lists";
-      return NextResponse.json({ error: msg, details: data }, { status });
+      return NextResponse.json(
+        { error: extractGoError(data, "Failed to fetch lists"), details: data },
+        { status }
+      );
     }
 
     const raw = data as { own_lists?: GoListSummary[]; saved_lists?: GoListSummary[] };
@@ -93,7 +92,7 @@ export async function POST(
     if (status === 401) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (status >= 400) {
       const err = data as { error?: { message?: string }; message?: string };
-      return NextResponse.json({ error: err?.error?.message ?? "Failed to create list" }, { status });
+      return NextResponse.json({ error: extractGoError(err, "Failed to create list") }, { status });
     }
 
     return NextResponse.json(normalizeList(data as GoListSummary), { status: 201 });

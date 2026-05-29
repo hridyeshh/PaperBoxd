@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listsApi } from "@/lib/api/endpoints";
+import { extractGoError } from "@/lib/api/error";
 
 export async function POST(
   request: NextRequest,
@@ -18,7 +19,7 @@ export async function POST(
   if (status >= 400) {
     const err = data as { error?: { message?: string }; message?: string };
     return NextResponse.json(
-      { error: err?.error?.message ?? err?.message ?? "Failed to share list" },
+      { error: extractGoError(err, "Failed to share list") },
       { status }
     );
   }

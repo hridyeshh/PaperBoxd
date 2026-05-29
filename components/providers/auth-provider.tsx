@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 export interface JwtUser {
   id: string;
@@ -45,7 +45,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<JwtUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const sync = () => setUser(readJwtUser());
+  // Stable sync identity so consumers using refreshUser in effect deps don't
+  // re-fire on every render. setUser bails on referentially-equal updates via
+  // a structural compare; pb_user cookie is parsed fresh each call so two
+  // sync()s for the same logged-in user no longer churn child effects.
+  const sync = useCallback(() => {
+    const next = readJwtUser();
+    setUser((prev) => {
+      if (prev === next) return prev;
+      if (prev && next && prev.id === next.id && prev.username === next.username && prev.email === next.email && prev.name === next.name && prev.avatar_url === next.avatar_url) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     sync();
@@ -53,22 +66,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Re-sync when the tab regains focus (handles cross-tab login/logout)
     window.addEventListener("focus", sync);
     return () => window.removeEventListener("focus", sync);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sync]);
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        isLoading,
-        refreshUser: sync,
-        setAuthUser: setUser,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo<AuthContextType>(
+    () => ({
+      user,
+      isAuthenticated: !!user,
+      isLoading,
+      refreshUser: sync,
+      setAuthUser: setUser,
+    }),
+    [user, isLoading, sync]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);
