@@ -124,7 +124,7 @@ function HeroStrip({
   });
 
   return (
-    <section className="relative rounded-2xl overflow-hidden border border-border bg-muted/20 p-7">
+    <section className="relative rounded-2xl overflow-hidden border border-border bg-muted/20 p-4 sm:p-7">
       {/* Subtle grid background */}
       <div
         className="absolute inset-0 pointer-events-none"
@@ -138,7 +138,7 @@ function HeroStrip({
         }}
       />
 
-      <div className="relative grid items-center gap-9" style={{ gridTemplateColumns: "3fr 2fr" }}>
+      <div className="relative grid items-center gap-6 md:gap-9 grid-cols-1 md:grid-cols-[3fr_2fr]">
         {/* Left */}
         <div>
           <h1 className={cn(playfair.className, "text-4xl font-semibold tracking-tight leading-[1.05] text-foreground")}>
@@ -368,7 +368,7 @@ function FriendsRail({ activities }: { activities: FriendActivity[] }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-5 gap-3.5 mt-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3.5 mt-2.5">
         {shown.map((a) => (
           <div
             key={a.id}
@@ -745,7 +745,7 @@ export function AuthenticatedHome() {
   const username    = user?.username || (user?.name ? user.name.split(" ")[0] : "") || "there";
 
   return (
-    <div className="w-full px-8 pb-16 pt-6">
+    <div className="w-full px-4 md:px-8 pb-16 pt-6">
       <HeroStrip
         currentBook={currentBook}
         username={username}

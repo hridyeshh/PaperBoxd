@@ -9,7 +9,6 @@ import { HomeLayoutHeader } from "@/components/ui/layout/home-layout-header";
 import { HomeSidebar } from "@/components/ui/layout/home-sidebar";
 import { LandingPage } from "@/components/ui/landing/landing-page";
 import { AuthenticatedHome } from "@/components/ui/home/authenticated-home";
-import { AuthenticatedHomeMobile } from "@/components/ui/home/authenticated-home-mobile";
 import BookLoader from "@/components/ui/features/book-loader";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
@@ -110,7 +109,7 @@ export default function Home() {
         <>
           <Header minimalMobile />
           <div className="mt-16">
-            <AuthenticatedHomeMobile />
+            <AuthenticatedHome />
           </div>
         </>
       ) : (

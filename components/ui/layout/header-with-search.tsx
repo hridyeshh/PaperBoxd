@@ -20,6 +20,13 @@ import { GeneralDiaryEditorDialog } from "@/components/ui/dialogs/general-diary-
 import { ActivityPopover } from "@/components/ui/layout/activity-popover";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-media-query";
+import { Pinyon_Script } from "next/font/google";
+
+const pinyonScript = Pinyon_Script({
+  weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+});
 
 // Links will be dynamic based on authentication status
 // We'll handle Activity link specially in the component
@@ -310,7 +317,12 @@ export function Header({
           className
         )}
       >
-      <nav className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-4 sm:px-6">
+      <nav
+        className={cn(
+          "mx-auto flex w-full max-w-5xl items-center justify-between px-4 sm:px-6",
+          showMinimal ? "h-14" : "h-16"
+        )}
+      >
         <button
           type="button"
           onClick={() => {
@@ -322,9 +334,21 @@ export function Header({
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }
           }}
-          className="flex items-center gap-2 rounded-full px-1 py-1 transition hover:bg-white dark:hover:bg-black cursor-pointer"
+          className={cn(
+            "flex items-center transition hover:opacity-80 cursor-pointer",
+            showMinimal ? "px-0 py-0" : "gap-2 rounded-full px-1 py-1 hover:bg-white dark:hover:bg-black"
+          )}
         >
-          {mounted && (isDark !== undefined) ? (
+          {showMinimal ? (
+            <span
+              className={cn(
+                pinyonScript.className,
+                "text-[1.875rem] leading-none text-foreground select-none"
+              )}
+            >
+              PaperBoxd
+            </span>
+          ) : mounted && isDark !== undefined ? (
             <Image
               src={isDark ? "/logo_black.jpg" : "/logo_white.jpg"}
               alt="PaperBoxd"

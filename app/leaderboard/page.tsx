@@ -160,31 +160,41 @@ function PodiumCard({
   rank,
   tab,
   onClick,
+  compact = false,
 }: {
   entry: LeaderboardEntry;
   rank: 1 | 2 | 3;
   tab: Tab;
   onClick: () => void;
+  compact?: boolean;
 }) {
   const stat = getStatForTab(entry, tab);
   const m = MEDAL[rank];
 
+  // Mobile: shrink everything so it fits inside the narrow 3-up grid cell.
+  const avatarSize = compact ? (rank === 1 ? 46 : 40) : (rank === 1 ? 72 : 60);
+  const numSize = compact ? (rank === 1 ? "1.6rem" : "1.3rem") : m.numSize;
+  const statSize = compact ? (rank === 1 ? "1.05rem" : "0.95rem") : m.statSize;
+
   return (
-    <div className={m.topPad}>
+    <div className={cn(m.topPad, "min-w-0")}>
       <button
         onClick={onClick}
-        className="group relative flex w-full flex-col items-center rounded-2xl border p-5 text-center transition-all duration-200 hover:-translate-y-1.5 hover:shadow-xl"
+        className={cn(
+          "group relative flex w-full min-w-0 flex-col items-center rounded-2xl border text-center transition-all duration-200 hover:-translate-y-1.5 hover:shadow-xl",
+          compact ? "p-2.5" : "p-5",
+        )}
         style={{ borderColor: m.border, background: m.bg }}
       >
         {/* Trophy icon for rank 1 */}
         {rank === 1 && (
-          <Trophy className="mb-1 h-6 w-6" style={{ color: m.color }} />
+          <Trophy className={cn(compact ? "mb-1 h-5 w-5" : "mb-1 h-6 w-6")} style={{ color: m.color }} />
         )}
 
         {/* Large rank number */}
         <div
-          className="mb-3 font-mono font-black leading-none"
-          style={{ fontSize: m.numSize, color: m.color }}
+          className={cn("font-mono font-black leading-none", compact ? "mb-2" : "mb-3")}
+          style={{ fontSize: numSize, color: m.color }}
         >
           {rank}
         </div>
@@ -192,27 +202,27 @@ function PodiumCard({
         {/* Avatar */}
         <AvatarCircle
           username={entry.username}
-          size={rank === 1 ? 72 : 60}
+          size={avatarSize}
           className="mb-2.5"
           style={m.ring ? { boxShadow: m.ring } : undefined}
         />
 
         {/* Username */}
-        <p className="text-sm font-bold leading-tight tracking-tight">{entry.username}</p>
+        <p className="w-full min-w-0 truncate text-xs font-bold leading-tight tracking-tight sm:text-sm">{entry.username}</p>
 
         {/* Primary stat */}
         <p
           className="mt-2.5 font-mono font-black leading-none"
-          style={{ fontSize: m.statSize, color: m.color }}
+          style={{ fontSize: statSize, color: m.color }}
         >
           {tab === "global" ? fmtXP(stat.value) : stat.value.toLocaleString()}
         </p>
-        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-widest text-muted-foreground sm:text-[10px]">
           {stat.label}
         </p>
 
         {/* Level name */}
-        <div className="mt-3 rounded-full border border-border bg-background/60 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+        <div className="mt-3 max-w-full truncate rounded-full border border-border bg-background/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground sm:text-xs">
           {entry.level_name}
         </div>
       </button>
@@ -591,6 +601,7 @@ export default function LeaderboardPage() {
                       rank={rank}
                       tab={tab}
                       onClick={() => handleUserClick(entry.username)}
+                      compact={isMobile}
                     />
                   );
                 })}

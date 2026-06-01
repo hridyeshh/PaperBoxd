@@ -2830,10 +2830,10 @@ function DiarySection({
                       </p>
                     )}
                   </div>
-                  {!isMobile && (
+                  {entry.content && entry.content.trim() && (
                     <div
                       className="prose prose-sm dark:prose-invert max-w-none text-foreground/90 line-clamp-2 overflow-hidden text-xs"
-                      dangerouslySetInnerHTML={{ __html: entry.content || "" }}
+                      dangerouslySetInnerHTML={{ __html: entry.content }}
                       style={{
                         display: '-webkit-box',
                         WebkitLineClamp: 2,
@@ -4985,7 +4985,7 @@ export default function UserProfilePage() {
                           Edit favourites →
                         </button>
                       </div>
-                      <div className="grid grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {favoriteBooks.slice(0, 4).map((book) => (
                           <div
                             key={book.id}
@@ -5022,7 +5022,7 @@ export default function UserProfilePage() {
                           View all →
                         </button>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-4">
                         {currentlyReading.slice(0, 4).map((book) => {
                           const bw = book as TbrBook & { pagesRead?: number; totalPages?: number };
                           const pagesRead = bw.pagesRead ?? 0;
@@ -5031,13 +5031,19 @@ export default function UserProfilePage() {
                           return (
                             <div
                               key={book.id}
-                              className="grid grid-cols-[90px_1fr] gap-4 items-start p-4 bg-card border border-border rounded-xl cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md"
+                              className={cn(
+                                "bg-card border border-border rounded-xl cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md",
+                                isMobile ? "flex flex-col p-3" : "grid grid-cols-[90px_1fr] gap-4 items-start p-4"
+                              )}
                               onClick={() => { try { window.location.href = `/b/${book.id}`; } catch {/**/} }}
                             >
-                              <div className="relative aspect-[2/3] rounded overflow-hidden bg-muted shadow-md w-[90px] flex-shrink-0">
-                                <Image src={book.cover} alt={book.title} fill className="object-cover" sizes="90px" unoptimized />
+                              <div className={cn(
+                                "relative aspect-[2/3] rounded overflow-hidden bg-muted shadow-md flex-shrink-0",
+                                isMobile ? "w-full" : "w-[90px]"
+                              )}>
+                                <Image src={book.cover} alt={book.title} fill className="object-cover" sizes={isMobile ? "45vw" : "90px"} unoptimized />
                               </div>
-                              <div className="min-w-0">
+                              <div className={cn("min-w-0", isMobile && "mt-2.5 w-full")}>
                                 <div className="font-semibold text-sm leading-tight mb-0.5 line-clamp-2">{book.title}</div>
                                 <div className="text-xs text-muted-foreground mb-2.5">{book.author}</div>
                                 <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-2">
@@ -5206,7 +5212,7 @@ export default function UserProfilePage() {
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                     {[...tbrBooks]
                       .sort((a, b) => {
                         const ap = (a as TbrBook & { pagesRead?: number }).pagesRead ?? 0;
@@ -5221,13 +5227,19 @@ export default function UserProfilePage() {
                         return (
                           <div
                             key={book.id}
-                            className="grid grid-cols-[72px_1fr] gap-3 items-start p-3.5 bg-card border border-border rounded-xl cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md"
+                            className={cn(
+                              "bg-card border border-border rounded-xl cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md",
+                              isMobile ? "flex flex-col p-3" : "grid grid-cols-[72px_1fr] gap-3 items-start p-3.5"
+                            )}
                             onClick={() => { try { window.location.href = `/b/${book.id}`; } catch {/**/} }}
                           >
-                            <div className="relative aspect-[2/3] rounded overflow-hidden bg-muted shadow-md w-[72px] flex-shrink-0">
-                              <Image src={book.cover} alt={book.title} fill className="object-cover" sizes="72px" unoptimized />
+                            <div className={cn(
+                              "relative aspect-[2/3] rounded overflow-hidden bg-muted shadow-md flex-shrink-0",
+                              isMobile ? "w-full" : "w-[72px]"
+                            )}>
+                              <Image src={book.cover} alt={book.title} fill className="object-cover" sizes={isMobile ? "45vw" : "72px"} unoptimized />
                             </div>
-                            <div className="min-w-0">
+                            <div className={cn("min-w-0", isMobile && "mt-2.5 w-full")}>
                               <div className="font-semibold text-[13px] leading-tight mb-0.5 line-clamp-2">{book.title}</div>
                               <div className="text-[11px] text-muted-foreground mb-2 truncate">{book.author}</div>
                               <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-1.5">

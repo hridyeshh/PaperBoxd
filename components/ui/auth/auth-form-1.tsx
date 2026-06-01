@@ -29,6 +29,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { PrivacyPolicyDialog } from "@/components/ui/dialogs/privacy-policy-dialog";
 import { TermsOfServiceDialog } from "@/components/ui/dialogs/terms-of-service-dialog";
 import { useIsMobile } from "@/hooks/use-media-query";
+import { AuthBookColumnsStrip } from "@/components/ui/auth/auth-book-columns";
 
 
 const playfair = Playfair_Display({
@@ -242,45 +243,6 @@ interface AuthSignInProps {
   onForgotPassword: () => void;
 }
 
-// Video player component that ensures autoplay on mobile
-function VideoPlayer({ src }: { src: string }) {
-  const videoRef = React.useRef<HTMLVideoElement>(null);
-
-  React.useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    // Force play on mount for mobile browsers
-    const playPromise = video.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(() => {
-        // Auto-play was prevented, try again on user interaction
-        const handleInteraction = () => {
-          video.play().catch(() => {});
-          document.removeEventListener('touchstart', handleInteraction);
-          document.removeEventListener('click', handleInteraction);
-        };
-        document.addEventListener('touchstart', handleInteraction, { once: true });
-        document.addEventListener('click', handleInteraction, { once: true });
-      });
-    }
-  }, []);
-
-  return (
-    <video
-      ref={videoRef}
-      src={src}
-      autoPlay
-      loop
-      muted
-      playsInline
-      className="w-full h-full object-cover"
-    >
-      Your browser does not support the video tag.
-    </video>
-  );
-}
-
 function AuthSignIn({ onSignUp, onForgotPassword }: AuthSignInProps) {
   const isMobile = useIsMobile();
   const router = useRouter();
@@ -384,12 +346,7 @@ function AuthSignIn({ onSignUp, onForgotPassword }: AuthSignInProps) {
           </p>
         </div>
 
-        {/* Video - Only show on mobile */}
-        {isMobile && (
-          <div className="relative w-full overflow-hidden rounded-2xl aspect-[16/10] max-h-[26vh]">
-            <VideoPlayer src="/auth-video.mov" />
-          </div>
-        )}
+        {isMobile && <AuthBookColumnsStrip />}
 
         <AuthError message={formState.error} />
 

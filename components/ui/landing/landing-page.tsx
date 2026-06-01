@@ -339,6 +339,7 @@ function LandingNav({ dialogOpen }: { dialogOpen: boolean }) {
 
   return (
     <nav
+      className="lp-nav"
       style={{
         position: "fixed",
         top: 0,
@@ -361,6 +362,7 @@ function LandingNav({ dialogOpen }: { dialogOpen: boolean }) {
       }}
     >
       <span
+        className="lp-nav-wordmark"
         style={{
           fontFamily: '"brooklyn-heritage-script", "Pinyon Script", cursive',
           fontSize: 30,
@@ -370,9 +372,10 @@ function LandingNav({ dialogOpen }: { dialogOpen: boolean }) {
       >
         PaperBoxd
       </span>
-      <div style={{ display: "flex", gap: 22, alignItems: "center" }}>
+      <div className="lp-nav-actions" style={{ display: "flex", gap: 22, alignItems: "center" }}>
         <a
           href="#explore"
+          className="lp-nav-link"
           style={{
             fontSize: 13.5,
             fontWeight: 500,
@@ -384,6 +387,7 @@ function LandingNav({ dialogOpen }: { dialogOpen: boolean }) {
         </a>
         <a
           href="#friends"
+          className="lp-nav-link"
           style={{
             fontSize: 13.5,
             fontWeight: 500,
@@ -395,6 +399,7 @@ function LandingNav({ dialogOpen }: { dialogOpen: boolean }) {
         </a>
         <Link
           href="/auth"
+          className="lp-nav-link"
           style={{
             fontSize: 13.5,
             fontWeight: 500,
@@ -1663,6 +1668,19 @@ export function LandingPage() {
 
         @media (max-width: 640px) {
           .lp-features-grid { padding: 0; }
+        }
+
+        /* ── Mobile browser: keep hero logo + nav inside the viewport ── */
+        @media (max-width: 768px) {
+          .lp-wordmark {
+            font-size: clamp(40px, 15vw, 92px) !important;
+            max-width: 100%;
+            overflow-wrap: anywhere;
+          }
+          .lp-nav { padding: 0 16px !important; }
+          .lp-nav-wordmark { font-size: 24px !important; }
+          .lp-nav-link { display: none !important; }
+          .lp-nav-actions { gap: 0 !important; }
         }
 
         /* ── Splash loader ── */
