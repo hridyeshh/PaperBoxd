@@ -366,12 +366,6 @@ function FriendsRail({ activities }: { activities: FriendActivity[] }) {
             Between covers.
           </h2>
         </div>
-        <button
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors bg-transparent border-none cursor-pointer"
-          onClick={() => router.push("/activity")}
-        >
-          Open feed →
-        </button>
       </div>
 
       <div className="grid grid-cols-5 gap-3.5 mt-2.5">
