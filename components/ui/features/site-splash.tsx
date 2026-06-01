@@ -60,7 +60,7 @@ export function SiteSplash() {
     const probe = document.createElement("span")
     probe.textContent = "PaperBoxd"
     probe.style.cssText =
-      "position:absolute;left:-9999px;top:-9999px;font-family:var(--font-pinyon),'Pinyon Script',cursive;font-size:90px;opacity:0;pointer-events:none"
+      "position:absolute;left:-9999px;top:-9999px;font-family:var(--font-pinyon),'Pinyon Script',cursive;font-size:clamp(28px,11vw,72px);opacity:0;pointer-events:none"
     document.body.appendChild(probe)
     void probe.offsetWidth
 
@@ -149,7 +149,7 @@ export function SiteSplash() {
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-6"
+      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-4 overflow-hidden px-5 sm:gap-6 sm:px-6"
       style={{
         background: "oklch(0.14 0 0)",
         opacity: fading ? 0 : 1,
@@ -157,35 +157,36 @@ export function SiteSplash() {
         pointerEvents: fading ? "none" : undefined,
       }}
     >
-      {/* Reserve the wordmark slot so layout doesn't shift while the font loads */}
+      {/* Wordmark — fluid size so it stays inside the viewport on mobile */}
       <div
+        className="flex w-full max-w-full items-center justify-center overflow-hidden"
         style={{
-          height: 90,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          minHeight: "clamp(2.5rem, 12vw, 5.625rem)",
           visibility: fontReady ? "visible" : "hidden",
         }}
       >
-        <span className="pbld-scribe" style={{ fontSize: 90, color: "#fff" }}>
+        <span
+          className="pbld-scribe pbld-scribe--responsive max-w-full text-center text-white"
+          style={{ fontSize: "clamp(1.75rem, 11vw, 5.625rem)" }}
+        >
           <span className="pbld-scribe__inner">PaperBoxd</span>
         </span>
       </div>
 
       <p
+        className="max-w-xs px-2 text-center text-sm text-white/45 sm:max-w-md sm:text-base"
         style={{
           fontFamily: '"Playfair Display", serif',
           fontStyle: "italic",
-          fontSize: 16,
-          color: "rgba(255,255,255,0.45)",
-          margin: "-8px 0 0",
           letterSpacing: "-0.01em",
         }}
       >
         Your reading universe, organised.
       </p>
 
-      <div className="pbld-caption" style={{ color: "rgba(255,255,255,0.35)" }}>
+      <div
+        className="pbld-caption max-w-full px-2 text-[10px] tracking-[0.18em] text-white/35 sm:text-[11px] sm:tracking-[0.22em]"
+      >
         <span>Opening your library…</span>
         <span>Pulling your shelves…</span>
         <span>Brewing your taste…</span>

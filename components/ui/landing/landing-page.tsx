@@ -1516,13 +1516,18 @@ function LandingSplash({ visible }: { visible: boolean }) {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 40,
+        gap: 28,
+        padding: "0 1.25rem",
+        overflow: "hidden",
         transition: "opacity .65s cubic-bezier(.4,0,.2,1)",
         opacity: visible ? 1 : 0,
         pointerEvents: visible ? "auto" : "none",
       }}
     >
-      <span className="pbld-scribe" style={{ fontSize: 120 }}>
+      <span
+        className="pbld-scribe pbld-scribe--responsive max-w-full text-center"
+        style={{ fontSize: "clamp(1.75rem, 11vw, 7.5rem)", color: "#fff" }}
+      >
         <span className="pbld-scribe__inner">PaperBoxd</span>
       </span>
       <div className="pbld-pageflip">
@@ -1729,13 +1734,19 @@ export function LandingPage() {
         }
         .pbld-scribe {
           position: relative; display: inline-block;
+          max-width: 100%;
           font-family: "brooklyn-heritage-script","Pinyon Script","Dancing Script",cursive;
           font-weight: 400; letter-spacing: -0.015em; line-height: 1;
           color: #fff;
         }
+        .pbld-scribe--responsive {
+          overflow: hidden;
+          white-space: nowrap;
+        }
         .pbld-scribe__inner {
           display: inline-block;
-          padding-right: 0.18em;
+          max-width: 100%;
+          padding-right: 0.12em;
           clip-path: inset(0 100% 0 0);
           animation: pbld-scribeReveal 3.6s cubic-bezier(.5,.1,.3,1) infinite;
         }
