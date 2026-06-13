@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { goFetchAuthed } from "@/lib/api/endpoints";
 
 export interface JwtUser {
   id: string;
@@ -73,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Keyed on user.id so a fresh login for a different account re-fires correctly.
   useEffect(() => {
     if (!user?.id) return;
-    goFetchAuthed("/api/v1/users/me/daily-open", { method: "POST" }).catch(() => {});
+    fetch("/api/daily-open", { method: "POST" }).catch(() => {});
   }, [user?.id]);
 
   const value = useMemo<AuthContextType>(
