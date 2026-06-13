@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { goFetchAuthed } from "@/lib/api/endpoints";
 
 export interface JwtUser {
   id: string;
@@ -67,6 +68,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener("focus", sync);
     return () => window.removeEventListener("focus", sync);
   }, [sync]);
+
+  // Fire once per authenticated user per tab session to update last_activity_date.
+  // Keyed on user.id so a fresh login for a different account re-fires correctly.
+  useEffect(() => {
+    if (!user?.id) return;
+    goFetchAuthed("/api/v1/users/me/daily-open", { method: "POST" }).catch(() => {});
+  }, [user?.id]);
 
   const value = useMemo<AuthContextType>(
     () => ({
