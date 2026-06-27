@@ -596,5 +596,3 @@ Full mobile API contract: [`MOBILE_API.md`](MOBILE_API.md)
 **Website:** [paperboxd.in](https://paperboxd.in)
 
 ---
-
-*Powered by Go, PostgreSQL, Next.js, SwiftUI, and a lot of coffee ☕*
