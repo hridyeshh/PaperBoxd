@@ -214,8 +214,8 @@ Full reference: [`docs/API.md`](docs/API.md)
 
 | Variable | Required | Description |
 |---|---|---|
-| `DATABASE_URL` | ✅ | PostgreSQL connection string |
-| `JWT_SECRET` | ✅ | ≥32 character secret for signing JWTs |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `JWT_SECRET` | ≥32 character secret for signing JWTs |
 | `REDIS_URL` | recommended | Redis address (default: `localhost:6379`) |
 | `PORT` | — | HTTP listen port (default: `8080`) |
 | `ENVIRONMENT` | — | `development` or `production` |
@@ -297,7 +297,7 @@ app/
 
 ### Key Features
 
-#### 📚 Book Management
+#### Book Management
 - **Bookshelf** — read books in 3-column grid with pagination, sorted by most-recently finished
 - **TBR (To-Be-Read)** — "the procrastination wall", with notes and priority
 - **Currently Reading** — track page progress in real time
@@ -305,34 +305,34 @@ app/
 - **Favorites** — curated top-4 favorites
 - **Hybrid Search** — DB-first (10–50ms), falls back to Google Books API; debounced at 300ms
 
-#### 👤 User Profiles
+#### User Profiles
 - Dynamic `/u/[username]` routes (SEO-friendly, server-rendered)
 - Profile sections: Bookshelf, Diary, Authors, Lists, TBR, Likes
 - Owner-aware copy (e.g., "Your Library, organised" vs "{username}'s library")
 - Edit Profile side-sheet modal — username, bio, gender, pronouns, birthday, links
 - Profile link sharing via clipboard
 
-#### 🤝 Social Features
+#### Social Features
 - Asymmetric follow system (like Twitter/Letterboxd)
 - Activity feed tracking 8+ event types (book added, list created, list shared, book shared, diary liked, access granted, etc.)
 - "Updates" header indicator — real-time poll for new friend activity
 - Share books and lists directly with specific followers
 - Author discovery — author cards with 3-book cover grids, per-author dialog
 
-#### 📝 Reading Lists
+#### Reading Lists
 - Create public or private ("secret") lists
 - Private lists with username-based access management (grant/revoke)
 - 3-column card grid showing 3-book cover thumbnails
 - Full CRUD: edit, add/remove books, delete, save other users' lists
 
-#### 🧠 Recommendation Engine
+#### Recommendation Engine
 - Multi-signal rule-based engine with Maximal Marginal Relevance (MMR) diversity injection
 - Signals: ratings, likes, reads, searches, friend activity, time-of-day, reading velocity
 - A/B testing framework for algorithm variants, caching with TTL
 - Explainable recommendations ("Because you read X")
 - Personalized home-page carousels + dedicated `/recommendations` page
 
-#### 🔐 Authentication
+#### Authentication
 
 | Method | Details |
 |---|---|
@@ -341,10 +341,10 @@ app/
 | OTP Login | 6-digit code via email (Resend), 10-min expiry, rate-limited (3/hour) |
 | Password Reset | SHA-256 hashed token, 1-hour expiry, email enumeration protection |
 
-#### ✍️ Tiptap Rich Text Editor
+#### Tiptap Rich Text Editor
 Full-featured diary editor: Bold, Italic, Underline, Strikethrough, Code, Headings H1–H3, Blockquotes, lists, text alignment, highlighting (multicolor), Subscript, Superscript, custom link dialog, Undo/Redo.
 
-#### 🎯 SEO
+#### SEO
 - Dynamic `sitemap.xml`, configured `robots.txt`, JSON-LD Schema.org structured data
 - Open Graph + Twitter Card meta tags, canonical URLs
 - Performance targets: FCP < 1.5s, LCP < 2.5s, CLS < 0.1
@@ -562,8 +562,6 @@ Full mobile API contract: [`MOBILE_API.md`](MOBILE_API.md)
 
 ---
 
-## Deployment
-
 ### Production Infrastructure
 
 | Service | Provider | Spec | Cost |
@@ -573,104 +571,10 @@ Full mobile API contract: [`MOBILE_API.md`](MOBILE_API.md)
 | Redis 7 | Railway | 256MB memory | included |
 | Next.js Frontend | Vercel | Pro-tier CDN | separate |
 
-### URLs
-
 | Surface | URL |
 |---|---|
 | Website | https://paperboxd.in |
 | Backend API | https://paperboxd-backend-production-d9e0.up.railway.app |
-
----
-
-## Development Setup
-
-### Prerequisites
-
-- **Go 1.21+** (see `go.mod`)
-- **PostgreSQL** and **Redis** (local or via Docker)
-- **Node.js 20+** and **npm** (for frontend)
-- **Xcode 15+** (for iOS)
-- Optional: [`migrate`](https://github.com/golang-migrate/migrate), [`sqlc`](https://docs.sqlc.dev/overview/install.html)
-
-### Backend
-
-```bash
-# 1. Start local Postgres + Redis
-make docker-up
-
-# 2. Set environment variables
-export DATABASE_URL="postgres://paperboxd:dev_password_change_in_prod@localhost:5432/paperboxd_dev?sslmode=disable"
-export JWT_SECRET="your-development-secret-at-least-32-chars-long"
-export REDIS_URL="localhost:6379"
-
-# 3. Run migrations
-make migrate-up
-
-# 4. Start the server
-make dev
-# → Health check: GET http://localhost:8080/health
-# → API base:     http://localhost:8080/api/v1
-```
-
-### Frontend
-
-```bash
-cd paperboxd
-cp .env.example .env.local
-# Fill in DATABASE_URL, NEXTAUTH_SECRET, GOOGLE_CLIENT_ID/SECRET, RESEND_API_KEY, etc.
-npm install
-npm run dev
-# → http://localhost:3000
-```
-
-### sqlc Workflow
-
-```bash
-# 1. Edit migrations/ (schema) or queries/ (named queries)
-make sqlc
-# → Regenerates internal/db/
-
-# 2. Verify compilation
-go build ./...
-
-# 3. Commit internal/db/ alongside your changes
-```
-
----
-
-### Completed ✅
-
-- [x] Next.js MVP with MongoDB (December 2025)
-- [x] Go + PostgreSQL backend rewrite (March–April 2026)
-- [x] Zero-loss data migration (39 users, 4,129 books)
-- [x] 60+ REST API endpoints with full documentation
-- [x] Redis caching layer
-- [x] JWT auth (web + mobile)
-- [x] Leaderboard system (global, friends, 6 dimensions)
-- [x] XP & gamification
-- [x] Referral system
-- [x] pgvector embeddings (recommendations v2 foundation)
-- [x] Mobile API contract (`MOBILE_API.md`)
-- [x] iOS app (SwiftUI) — Phase 1
-
-### In Progress 🔄
-
-- [ ] Frontend integration: Next.js → Go backend (~50%, blocked by auth bug)
-- [ ] Auth bug fix: login creating new user instead of authenticating existing
-- [ ] End-to-end testing
-
-### Planned 📅
-
-| Timeline | Milestone |
-|---|---|
-| Q3 2026 | iOS App Store submission, Android (Kotlin/Jetpack Compose) |
-| Q3 2026 | Recommendation engine v2 (embedding-based semantic search) |
-| Q4 2026 | Performance optimization, Redis hot-path caching |
-| Q4 2026 | Abuse protection + advanced rate limiting |
-| Q4 2026 | Social features v2 (book clubs, reading challenges) |
-| 2027+ | Multi-region deployment, premium features, external API |
-
----
 
 ## Documentation
 
