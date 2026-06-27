@@ -1,877 +1,696 @@
 # PaperBoxd
 
-> Your reading universe, organized.
+> *Your reading universe, organized.*
 
-A modern social book tracking platform that empowers readers to discover, track, and share their literary journey. PaperBoxd transforms reading into a connected, discoverable experience—inspired by the simplicity and community spirit of Letterboxd, but built exclusively for books.
+PaperBoxd is a modern social book-tracking platform that transforms reading into a connected, discoverable experience — inspired by the simplicity and community spirit of Letterboxd, but built exclusively for books.
+
+**Website:** [paperboxd.in](https://paperboxd.in) · **API:** [api.paperboxd.com](https://api.paperboxd.com) · **Contact:** paperboxd@gmail.com
 
 ---
 
-## Purpose & Mission
+## Table of Contents
 
-### Vision
+- [What is PaperBoxd?](#what-is-paperboxd)
+- [Repository Map](#repository-map)
+- [System Architecture](#system-architecture)
+- [Backend (Go + PostgreSQL)](#backend-go--postgresql)
+- [Frontend (Next.js)](#frontend-nextjs)
+- [iOS App (SwiftUI)](#ios-app-swiftui)
+- [Design System](#design-system)
+- [Mobile API Contract](#mobile-api-contract)
+- [Deployment](#deployment)
+- [Development Setup](#development-setup)
+- [Roadmap](#roadmap)
 
-PaperBoxd was conceived to solve a fundamental problem: reading is a deeply personal yet inherently social activity, but existing platforms fragment the experience. My mission is to create a unified space where readers can:
+---
 
-- **Track their journey**: From "to-be-read" aspirations to completed masterpieces
-- **Discover meaningfully**: Through community curation and authentic recommendations
-- **Express authentically**: With rich profiles, custom lists, and thoughtful reviews
-- **Connect organically**: By following fellow readers and exploring their literary landscapes
+## What is PaperBoxd?
+
+PaperBoxd solves a fundamental problem: reading is deeply personal yet inherently social, but existing platforms fragment the experience. PaperBoxd is a unified space where readers can:
+
+- **Track their journey** — from "to-be-read" aspirations to finished masterpieces
+- **Discover meaningfully** — through community curation and authentic recommendations
+- **Express authentically** — with rich profiles, custom lists, and a full-featured reading diary
+- **Connect organically** — by following fellow readers and exploring their literary landscapes
 
 ### Core Philosophy
 
-I believe that the best book recommendations come from people, not algorithms. PaperBoxd is designed around the principle that reading communities thrive when readers can express themselves, discover through trusted networks, and maintain control over their personal data and privacy.
+> "The best book recommendations come from people, not algorithms."
+
+PaperBoxd is designed around the principle that reading communities thrive when readers can express themselves, discover through trusted networks, and maintain control over their own data and privacy.
+
+### Anti-references
+
+| Platform | What we avoid |
+|----------|---------------|
+| **Goodreads** | Cluttered UI, information overload, dated form controls, no visual hierarchy |
+| **Generic SaaS** | Inter everywhere, blue primary, rounded card grids, zero editorial character |
+| **Letterboxd clone** | Dark film-festival aesthetic — PaperBoxd is for books and has its own visual identity |
+| **Amazon / retail** | Commerce-forward energy, rating everywhere, no editorial personality |
+
+---
+
+## Repository Map
+
+| Repository | Description | Stack |
+|---|---|---|
+| `paperboxd-backend` | REST API server | Go 1.25, PostgreSQL 16, Redis 7 |
+| `paperboxd` | Web frontend | Next.js 15, React 19, TypeScript 5 |
+| `paperboxd-ios` | Native iOS app | SwiftUI, Swift 5.9+ |
+| `Paperboxd design elements` | Design system & UI specs | CSS tokens, HTML prototypes, JSX frames |
+| `analytics-paperboxd` | Internal analytics dashboard | Next.js, Tailwind |
 
 ---
 
 ## System Architecture
 
-### High-Level Design
-
-PaperBoxd follows a **modern full-stack architecture** optimized for performance, scalability, and developer experience:
-
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Client Layer                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
-│  │   Next.js    │  │  React 19    │  │   Tailwind   │ │
-│  │ App Router   │  │  Components  │  │      CSS     │ │
-│  └──────────────┘  └──────────────┘  └──────────────┘ │
-└─────────────────────────────────────────────────────────┘
-                         ↕ RPC/HTTP
-┌─────────────────────────────────────────────────────────┐
-│                    Server Layer                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
-│  │   Next.js    │  │  NextAuth    │  │   API Routes │ │
-│  │   Server     │  │   Auth v5    │  │   Handlers   │ │
-│  └──────────────┘  └──────────────┘  └──────────────┘ │
-└─────────────────────────────────────────────────────────┘
-                         ↕ ODM/Queries
-┌─────────────────────────────────────────────────────────┐
-│                    Data Layer                            │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
-│  │   MongoDB    │  │   Mongoose   │  │  Google Books│ │
-│  │   Atlas      │  │   Models     │  │     API      │ │
-│  └──────────────┘  └──────────────┘  └──────────────┘ │
-└─────────────────────────────────────────────────────────┘
-```
-
-### Architectural Principles
-
-#### 1. **Server-First Rendering with Progressive Enhancement**
-
-I leverage Next.js 15's App Router to prioritize server-side rendering for initial page loads, ensuring fast Time to First Byte (TTFB) and excellent SEO. Client-side interactivity is added progressively, creating a resilient experience that works even with JavaScript disabled for core navigation.
-
-**Implementation**:
-- Server Components by default for static content and data fetching
-- Client Components (`"use client"`) only where interactivity is required
-- Strategic use of `useState`, `useEffect` for dynamic features
-- Server Actions for mutations (where applicable)
-
-#### 2. **API-First Design Pattern**
-
-All data operations flow through well-defined RESTful API routes (`/app/api/*`), creating a clear separation between presentation and business logic. This enables:
-
-- **Type safety**: Shared TypeScript interfaces between client and server
-- **Testability**: API routes can be tested independently
-- **Future flexibility**: Easy migration to microservices if needed
-
-**API Structure**:
-```
-/api/
-├── users/
-│   ├── [username]/         # User CRUD operations
-│   ├── [username]/books    # User's book collections
-│   ├── [username]/follow   # Follow/unfollow actions
-│   ├── [username]/followers # Follower list
-│   ├── [username]/following # Following list
-│   ├── [username]/lists    # Custom reading lists (create, fetch)
-│   ├── [username]/lists/[listId]/ # List operations (update, delete)
-│   ├── [username]/lists/[listId]/share # Share list with followers
-│   ├── [username]/lists/[listId]/save # Save/remove list
-│   ├── [username]/lists/[listId]/access # Grant/revoke access to private lists
-│   ├── [username]/activities/check-new # Check for new friend activities
-│   ├── [username]/activities/following # Get activities from followed users
-│   ├── [username]/diary/[entryId]/like # Like/unlike diary entries
-│   ├── register            # User registration
-│   ├── search              # User search
-│   └── check-username      # Username availability check
-├── books/
-│   ├── [id]/               # Book details (with caching)
-│   ├── [id]/share          # Share book with followers
-│   ├── search              # Book search (hybrid: DB + Google Books)
-│   ├── public              # Public home page carousels (newly published, popular, trending)
-│   ├── personalized        # Personalized carousels for authenticated users
-│   └── by-author           # Books by a specific author
-├── authors/
-│   └── search              # Author search from book database
-├── onboarding/
-│   ├── status              # Check onboarding completion status
-│   └── genres              # Get available genres for onboarding
-├── recommendations/
-│   ├── home                # Home page recommendations
-│   ├── similar/[bookId]    # Books similar to a specific book
-│   └── feedback            # Track recommendation interactions
-├── events/
-│   └── track               # Track user interaction events
-├── newsletter/
-│   └── subscribe           # Newsletter email subscription
-└── auth/
-    ├── [...nextauth]/      # NextAuth authentication routes
-    ├── forgot-password/    # Password reset request endpoint
-    ├── reset-password/     # Password reset submission endpoint
-    └── otp-login/          # OTP login endpoints
-        ├── send-code/      # Send OTP code to email
-        └── verify-code/    # Verify OTP code and create session
+┌──────────────────────────────────────────────────────────────────┐
+│                         Clients                                  │
+│   ┌──────────────────┐   ┌──────────────────┐                    │
+│   │   Next.js Web    │   │    iOS (SwiftUI)  │                    │
+│   │  (Vercel · CDN)  │   │   (App Store)    │                    │
+│   └────────┬─────────┘   └────────┬─────────┘                    │
+└────────────│────────────────────────│────────────────────────────┘
+             │  HTTPS / REST JSON     │  HTTPS / REST JSON
+             ▼                        ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                  Go Backend  (Railway · Singapore)               │
+│  ┌────────────┐  ┌───────────────┐  ┌──────────────────────────┐ │
+│  │ Chi Router │  │  JWT Auth     │  │  Redis 7 Cache           │ │
+│  │ 60+ routes │  │  bcrypt hash  │  │  15-day book TTL         │ │
+│  └────────────┘  └───────────────┘  └──────────────────────────┘ │
+│  ┌────────────┐  ┌───────────────┐  ┌──────────────────────────┐ │
+│  │ sqlc-gen'd │  │ Rate limiting │  │  pgvector embeddings     │ │
+│  │ DB queries │  │ 100 req/min   │  │  (recommendations)       │ │
+│  └────────────┘  └───────────────┘  └──────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────┘
+                              │ SQL / pgx
+                              ▼
+┌──────────────────────────────────────────────────────────────────┐
+│              Data & External Services                            │
+│  ┌──────────────┐  ┌────────────┐  ┌───────────┐  ┌──────────┐  │
+│  │ PostgreSQL 16│  │  Redis 7   │  │  ISBNdb   │  │  Google  │  │
+│  │  (Railway)   │  │ (Railway)  │  │    API    │  │  Books   │  │
+│  └──────────────┘  └────────────┘  └───────────┘  └──────────┘  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-#### 3. **Data Normalization with Strategic Caching**
-
-I use a **hybrid caching strategy** to optimize performance and minimize external API calls:
-
-- **Database-First for Book Search**: Search queries first check MongoDB for previously fetched books, reducing Google Books API calls by ~70-80%
-- **Google Books as Fallback**: Only fetch from Google Books API when books aren't in my database
-- **Automatic Caching**: Newly fetched books are immediately stored in MongoDB for future queries
-- **Time-Based Invalidation**: Books not accessed in 15+ days are automatically cleaned up to manage storage within free tier limits
-
-**Benefits**:
-- Faster search results (database queries are ~10-50ms vs API calls at ~200-500ms)
-- Reduced external API dependency
-- Cost efficiency (staying within Google Books API quotas)
-- Better user experience (consistent, instant results)
-
-#### 4. **Authentication & Session Management**
-
-I implement **NextAuth.js v5** with a dual authentication strategy:
-
-**Credentials Provider**:
-- Email/password authentication with bcrypt hashing
-- Secure session management via JWT tokens
-- Session cookies with size optimization (excluding large base64 images)
-
-**Google OAuth Provider**:
-- Optional OAuth 2.0 authentication for convenience
-- Seamless account linking
-- Maintains consistent user experience
-
-**Session Strategy**:
-- JWT-based sessions stored in HTTP-only cookies
-- Session data includes minimal user info (username, email, avatar URL, not base64)
-- Avatar images are stored separately in MongoDB to prevent cookie size issues
-- Theme preferences stored in localStorage (client-side only)
-
-#### 5. **Component Composition & Reusability**
-
-I follow a **layered component architecture** that promotes reusability and maintainability:
-
-**Layer 1: Primitives** (`components/ui/`)
-- Unstyled, accessible components built on Radix UI primitives
-- Examples: `Button`, `Dialog`, `Select`, `Checkbox`, `Avatar`
-- Follow Shadcn UI patterns for consistency
-
-**Layer 2: Composite Components** (`components/ui/`)
-- Composed from primitives, but still domain-agnostic
-- Examples: `SearchModal`, `ThemeToggle`, `DockToggle`, `Pagination`
-- Handle complex interactions and state management
-
-**Layer 3: Domain-Specific Components** (`components/ui/`)
-- Built for specific features (auth, profile, books)
-- Examples: `EditProfileForm`, `BookCarousel`, `FollowersFollowingDialog`
-- Encapsulate business logic and data fetching
-
-**Layer 4: Page Components** (`app/*`)
-- Top-level page components that orchestrate feature components
-- Handle routing, URL state, and page-level data fetching
-
-**Design Patterns Used**:
-- **Compound Components**: For complex UI like `DockToggle` with `GlassToggleButton`
-- **Render Props**: For flexible composition (e.g., `GridList` with `GridListItem`)
-- **Custom Hooks**: Extract reusable logic (e.g., `useIsMobile`, `useMediaQuery`)
-- **Context API**: For theme and authentication state (via NextAuth)
-
-#### 6. **Responsive Design & Accessibility**
-
-**Mobile-First Approach**:
-- All layouts designed for mobile screens first, enhanced for desktop
-- Breakpoint system using Tailwind CSS (`sm:`, `md:`, `lg:`, `xl:`)
-- Touch-friendly interactions (minimum 44x44px touch targets)
-- Adaptive navigation (mobile: Sheet drawer, desktop: horizontal nav)
-
-**Accessibility Standards**:
-- ARIA labels and roles on all interactive elements
-- Keyboard navigation support throughout
-- Screen reader optimizations
-- Semantic HTML structure
-- Focus management in modals and dialogs
-- Color contrast compliance (WCAG AA minimum)
-
-**Implementation**:
-- Radix UI primitives provide accessibility out-of-the-box
-- Custom components follow ARIA patterns
-- `react-aria-components` for advanced accessibility (e.g., `GridList`, `CheckboxGroup`)
+**Deployment:**
+- **Backend:** Railway Hobby ($5/month) — Go binary, PostgreSQL 16, Redis 7
+- **Frontend:** Vercel — Next.js 15 on global CDN
+- **Region:** Singapore (optimal latency for Indian users)
 
 ---
 
-## Design Principles
-
-### 1. **Performance-First Development**
-
-Every feature is evaluated against performance metrics:
-
-- **Lazy Loading**: Components and images load only when needed
-- **Code Splitting**: Automatic route-based code splitting via Next.js App Router
-- **Image Optimization**: Next.js `Image` component with automatic WebP conversion
-- **Debounced Search**: API calls debounced to prevent excessive requests
-- **Session Storage Caching**: Client-side caching for profile data (30s TTL)
-- **Database Indexing**: Strategic indexes on frequently queried fields (`username`, `email`, `bookshelf.bookId`, etc.)
-
-**Performance Targets**:
-- First Contentful Paint (FCP): < 1.5s
-- Largest Contentful Paint (LCP): < 2.5s
-- Time to Interactive (TTI): < 3.5s
-- Cumulative Layout Shift (CLS): < 0.1
-
-### 2. **Type Safety Throughout**
-
-TypeScript is used end-to-end with strict mode enabled:
-
-- **Shared Types**: Common interfaces defined in `lib/db/models/` for database schemas
-- **API Route Types**: Request/response types for API endpoints
-- **Component Props**: All props explicitly typed
-- **Form Validation**: Zod schemas for runtime type checking and validation
-
-**Benefits**:
-- Catch errors at compile time, not runtime
-- Better IDE autocomplete and refactoring
-- Self-documenting code through types
-- Confidence in refactoring
-
-### 3. **State Management Philosophy**
-
-I use a **hybrid state management approach**:
-
-**Server State**:
-- Managed by Next.js server components and API routes
-- Fetched fresh on each request (or cached at CDN level)
-- Session state via NextAuth
-
-**Client State**:
-- React `useState` for component-local state (UI toggles, form inputs)
-- React `useEffect` for side effects (data fetching, subscriptions)
-- `useMemo` and `useCallback` for performance optimization
-- `sessionStorage` for temporary caching (profile data)
-
-**No Global State Library Needed**:
-- Next.js App Router handles most server state
-- React Context (via NextAuth) handles auth state
-- Prop drilling kept minimal through component composition
-- Avoided complexity of Redux/Zustand for current scale
-
-### 4. **Error Handling & Resilience**
-
-**Graceful Degradation**:
-- API errors display user-friendly messages (via toast notifications)
-- Fallback UI for failed data fetches
-- Network errors retry with exponential backoff (where applicable)
-
-**Error Boundaries**:
-- Next.js error boundaries catch rendering errors
-- Custom error pages (`app/not-found.tsx`, `app/error.tsx`)
-- API routes return structured error responses
-
-**Validation**:
-- Client-side validation (react-hook-form + Zod)
-- Server-side validation (API route handlers)
-- Database schema validation (Mongoose validators)
-
-### 5. **Security Best Practices**
-
-**Authentication & Authorization**:
-- Password hashing with bcryptjs (10 rounds)
-- JWT tokens signed with secure secret (32+ bytes)
-- HTTP-only cookies for session storage
-- CSRF protection via NextAuth
-- OTP codes hashed with SHA-256 before storage
-- Password reset tokens hashed with SHA-256 (one-time use, 1-hour expiry)
-- Rate limiting on OTP requests (max 3 per hour per email)
-- Email enumeration protection (consistent success messages)
-- Enhanced authorization checks (ID and email matching for account recreation scenarios)
-
-**Data Protection**:
-- Input sanitization on all user inputs
-- SQL injection prevention (using parameterized queries via Mongoose)
-- XSS prevention (React automatically escapes)
-- Rate limiting consideration (future: API rate limiting middleware)
-
-**Privacy**:
-- User data stored securely in MongoDB Atlas (encrypted at rest)
-- Avatar images stored separately (not in session cookies)
-- **Private Lists**: Users can create private lists that are only visible to:
-  - The list owner
-  - Users explicitly granted access by the owner
-  - Access is managed through username-based access control
-- Public/private profile toggle (currently all public, architecture supports private)
-- GDPR-ready architecture (users can request data deletion)
-
-### 6. **Scalability Considerations**
-
-**Database Design**:
-- Normalized schemas for efficient queries
-- Indexed fields for fast lookups
-- Embedded documents for frequently accessed data (e.g., `bookshelf` array in User)
-- Automatic cleanup of stale data to manage storage
-
-**API Design**:
-- RESTful endpoints for predictable patterns
-- Pagination support (3x4 grid = 12 items per page)
-- Efficient queries (`.lean()` for read-only operations)
-- Caching strategies to reduce database load
-
-**Frontend Scalability**:
-- Component composition enables easy feature additions
-- Modular API structure supports feature expansion
-- Code splitting ensures bundle size stays manageable
-- Future: Consider GraphQL if API complexity grows
-
----
-
-## Technical Stack
-
-### Core Framework & Runtime
-- **Next.js 15** (App Router) - Server-side rendering, API routes, file-based routing
-- **React 19** - UI library with concurrent features
-- **TypeScript 5** - Type-safe development
-
-### Styling & UI
-- **Tailwind CSS 4** - Utility-first CSS framework
-- **Radix UI** - Accessible, unstyled component primitives
-- **Framer Motion** - Animation library for smooth transitions
-- **Lucide React** - Icon library
-- **class-variance-authority** - Variant management for components
-- **Adobe Fonts** - Custom typography (CoFo Glassier, Helvetica, El Paso, Brooklyn Heritage Script)
-
-### Data & Authentication
-- **MongoDB Atlas** - Cloud database (free tier: 512MB)
-- **Mongoose 8** - MongoDB ODM with TypeScript support
-- **NextAuth.js v5** - Authentication framework
-- **bcryptjs** - Password hashing
-
-### Forms & Validation
-- **react-hook-form** - Form state management
-- **Zod** - Schema validation and type inference
-- **@hookform/resolvers** - Zod integration for react-hook-form
-
-### Utilities
-- **date-fns** - Date formatting and manipulation
-- **sonner** - Toast notifications
-- **cmdk** - Command palette component
-- **react-aria-components** - Advanced accessibility components
-- **react-day-picker** - Date picker component
-- **@tiptap/react** - Rich text editor with full formatting capabilities
-- **@tiptap/starter-kit** - Essential Tiptap extensions
-- **@tiptap/extension-*** - Additional Tiptap extensions (underline, link, text-align, highlight, subscript, superscript)
-
-### External APIs
-- **Google Books API** - Book metadata and search
-- **ISBNdb API** - Additional book metadata and search
-- **Open Library API** - Book metadata fallback
-- **Resend API** - Email delivery service for OTP codes and password reset links
-
----
-
-## Key Features & Implementation
-
-### User Profiles
-
-**Dynamic Routing**: `/u/[username]` enables unique user profile URLs. The route fetches user data server-side for SEO and initial load performance.
-
-**Profile Sections**:
-- **Profile Summary**: Avatar, username, name, bio, pronouns, follower/following counts
-- **Dock Navigation**: Tabs for Bookshelf, Diary, Authors, Lists, To-Be-Read, Likes
-- **Owner-Specific Content**: 
-  - "Your Library, organised" (owner) vs "{username}'s library" (others) with custom CoFo Glassier font
-  - Bio placeholder "Add a bio to share your vibe" only visible to profile owner
-  - Lists section: "Your curated collections" (owner) vs "{username}'s curated collection" (visitors)
-  - Favorite books: "Books that I love" (owner) vs "Books that {username} loves" (visitors, with username in italics)
-- **Edit Profile**: Side sheet modal with comprehensive form (username, bio, gender, pronouns, birthday, links)
-- **Profile Link Sharing**: Copy profile link to clipboard from header dropdown menu
-
-**Consistent Grid Layouts & Pagination**:
-- **Bookshelf**: 3-column grid with pagination, clickable books that navigate to book detail pages
-- **Diary**: 3x5 grid (15 entries per page) with pagination, no cover images, clean entry display
-- **Authors**: 3-column grid with pagination, each card displays a 3-book cover grid (with gray placeholders for missing books), clickable to open author dialog
-- **Lists**: 3-column grid with pagination, each list card shows a 3-book cover grid (with gray placeholders), clickable to navigate to list detail page
-- **To-Be-Read**: Same 3-column grid design as Bookshelf, clickable books
-- **Likes**: Same 3-column grid design as Bookshelf, clickable books
-
-**Data Fetching**:
-- Server-side fetch for initial load (SEO-friendly)
-- Client-side caching via `sessionStorage` (30s TTL) for instant navigation
-- Real-time updates after profile edits
-
-### Book Management
-
-**Collections**:
-- **Bookshelf**: Books marked as "read" (3-column grid with pagination, sorted by most recently finished, clickable to navigate to book detail pages)
-- **Likes**: Books marked as "liked" (3-column grid with pagination, clickable to navigate to book detail pages)
-- **To-Be-Read**: Books marked as "pending" (3-column grid with pagination, labeled "The procrastination wall", clickable to navigate to book detail pages)
-- **Diary**: Reading diary entries (3x5 grid, 15 entries per page, clean display without cover images)
-
-**Search Integration**:
-- Hybrid search: MongoDB database first, Google Books API fallback
-- Debounced input (300ms delay) to reduce API calls
-- Category filtering: Books, Users (author search removed)
-- Cached results for instant subsequent searches
-
-**Book Data Model**:
-- Normalized storage: Books stored once, referenced by `ObjectId` in user collections
-- Google Books API data cached in MongoDB
-- Automatic cleanup of unused books (15+ days inactive)
-- Deduplication: Carousels ensure unique books (no duplicate editions)
-
-**Book Discovery**:
-- **Home Page Carousels**: 
-  - Public users: "Newly Published This Week", "People Love These", "Trending Now"
-  - Authenticated users: Personalized carousels based on preferences, favorites, authors, genres, and friend activity
-- **Book Detail Page** (`/b/[slug]`): 
-  - Enhanced description with timeline card styling and Helvetica font
-  - "Similar to [book]" and "More from [author]" carousels
-  - "Write about it" button with rich text editor for book-specific diary entries
-  - Share book functionality with followers
-  - Clean button styling (no borders) for Bookshelf, Like, and TBR actions
-- **Recommendations Page** (`/recommendations`): Dedicated page for personalized recommendation carousels
-- **Recommendation System**: Sophisticated rule-based engine with multi-signal learning, friend-based recommendations, and diversity injection
-
-### Social Features
-
-**Follow System**:
-- One-way following (asymmetric, like Twitter)
-- Follower/following counts displayed on profiles
-- Clickable counts open dialog showing user lists
-- Follow/unfollow button on other users' profiles
-- Share lists directly with followers via share modal
-
-**Author Discovery**:
-- **Author Section**: Displays all authors from user's bookshelf in a 3-column grid
-- **Author Cards**: Show 3-book cover grid (with gray placeholders), author name, and read/TBR counts
-- **Author Dialog**: Clicking an author opens a dialog (not a separate page) showing:
-  - Author name as header
-  - All books read by that author from the user's bookshelf
-  - Responsive grid layout (2-6 columns based on screen size)
-  - Clickable book covers that navigate to book detail pages
-
-**Activity Feed**:
-- Dedicated `/activity` page for logged-in user's activity
-- Tracks book additions, list creations, profile updates, list shares, book shares, granted access notifications, and diary entry likes
-- Filterable by "Friends" and "Me"
-- Real-time activity indicator in header ("Updates" button) when new friend activities are available
-- Activity format: `[username] [action] [bookname]` for clear readability
-- Clickable activities that navigate to relevant content (e.g., shared lists, shared books, granted access lists, diary entries)
-- **Activity Types**:
-  - `shared_list`: When a follower shares a list with you
-  - `shared_book`: When a follower shares a book with you
-  - `granted_access`: When someone grants you access to their private list
-  - `liked_diary_entry`: When someone likes your diary entry (format: "[username] liked your note on [diary_entry_name]")
-
-**Reading Lists**:
-- **List Creation**: Pinterest-style modal for creating new lists with title, description, and privacy options
-  - **Private Lists**: "Make this list secret" toggle - only people with the shared link can see it
-  - **Access Management**: For private lists, owners can grant access to specific users by username
-- **List Detail Pages**: Full-featured list pages (`/u/[username]/lists/[listId]`) with:
-  - Book search modal for adding books to lists
-  - Book removal functionality (cross button on hover over book covers)
-  - **Public Lists**: Share functionality with followers and social media options
-  - **Private Lists**: "Manage Access" dialog to grant/revoke access to specific users
-  - Save/Remove list functionality for other users (toggles between "Save list" and "Remove" buttons)
-  - Edit details and delete list options (for list owners only)
-  - Private list access control: Non-owners see "This list is private" message if not granted access
-- **List Cards**: 3-column grid layout in profile dock, each card displays:
-  - 3-book cover grid (with gray placeholders if fewer than 3 books)
-  - List title, description, book count, and last updated timestamp
-  - Clickable to navigate to list detail page
-- **List Sharing & Access**:
-  - **Public Lists**: Share lists with specific followers via share modal
-  - **Private Lists**: Grant access to specific users by username (not traditional sharing)
-  - Shared lists and granted access appear as notifications in recipient's "Updates" section
-  - Recipients can save shared lists to their own profile
-  - Saved lists retain original creator's username (displayed as clickable `@username`)
-- **List Management**:
-  - Edit list details (title, description, privacy settings) via dropdown menu
-  - Delete lists with confirmation (removes from owner and all saved instances)
-  - View-only access for saved lists (no editing permissions)
-  - Access management for private lists (grant/revoke access to specific users)
-
-### Recommendation System
-
-**Sophisticated Rule-Based Engine**:
-- Multi-signal learning from user interactions (ratings, likes, reads, searches)
-- Friend-based recommendations ("Your friends are liking these")
-- Genre and author matching based on user preferences
-- Diversity injection using Maximal Marginal Relevance (MMR)
-- Context-aware recommendations (time of day, reading velocity)
-- Explainable reasons for each recommendation
-- Caching with TTL for performance
-- A/B testing framework for algorithm variants
-
-**User Profile Building**:
-- Automatic preference computation from reading history
-- Genre weights and author weights
-- Reading velocity tracking
-- Diversity score calculation
-- Profile recomputation on significant actions
-
-**Recommendation Types**:
-- Personalized home page carousels
-- Similar books (based on genre and author)
-- Books by same author
-- Friend activity-based recommendations
-- Trending books in user's preferred genres
-
-### Home Page Experience
-
-**Public Home Page**:
-- Hero section with PaperBoxd branding
-- Diverse book carousels showcasing different genres
-- "Newly Published This Week" carousel
-- "People Love These" carousel
-- "Trending Now" carousel
-- Footer with newsletter subscription, quick links, and legal information
-
-**Authenticated Home Page**:
-- **Pinterest-Style Endless Feed**: Responsive masonry grid layout (6 columns on desktop, responsive on mobile)
-  - Infinite scroll with Intersection Observer API
-  - Combines all recommendation types into a unified endless feed
-  - Cached with localStorage (30-minute TTL) for instant loading
-  - Pull-to-refresh on mobile devices
-  - MorphingSquare loader for loading states
-  - Responsive column layout (2-6 columns based on screen size)
-- Footer with newsletter subscription and legal information
-
-**Recommendations Page** (`/recommendations`):
-- Dedicated page for personalized recommendation carousels
-- All recommendation types displayed as horizontal carousels:
-  - "Recommended for You"
-  - "Your Friends Are Liking These" (only shown if 5+ books available)
-  - "Based on Your Favorites"
-  - "From Your Favorite Authors"
-  - "Trending in Your Genres"
-  - "Continue Reading"
-- Same animated grid background as home page
-
-**Loading States**:
-- **Tetris Loader**: Consistent loading animation with fixed block size (independent of text length)
-- MorphingSquare loader for infinite scroll loading
-- Single load per page visit (prevents re-fetching on re-renders)
-- Optimized data fetching with parallel API calls
-- Client-side caching for improved performance
-
-### SEO & Discoverability
-
-**Search Engine Optimization**:
-- **Sitemap**: Dynamic sitemap (`/sitemap.xml`) with all public pages
-- **Robots.txt**: Properly configured to allow search engine crawling while blocking private routes
-- **Meta Tags**: Comprehensive metadata including title, description, keywords, Open Graph, and Twitter Cards
-- **Structured Data**: JSON-LD Schema.org markup for book pages (enables rich snippets in search results)
-- **Canonical URLs**: Proper canonical tags to prevent duplicate content issues
-- **Performance**: Optimized for Core Web Vitals (LCP, FID, CLS)
-
-**Google Search Console Ready**:
-- Sitemap submission ready
-- URL inspection ready
-- Indexing requests supported
-- See `docs/SEO_SETUP.md` for detailed setup instructions
-
-### Legal & Compliance
-
-**Footer Components**:
-- Newsletter subscription (email saved to database)
-- Quick links (Home, About Us, Discover Books, Contact)
-- Social media links (Twitter, Instagram, LinkedIn)
-- Legal links with dialog modals:
-  - **Privacy Policy**: Comprehensive privacy policy dialog
-  - **Terms of Service**: Terms of service dialog
-  - **Cookie Settings**: Cookie preferences dialog (only essential cookies used)
-  - **About Us**: About PaperBoxd dialog with mission and features
-
-**Privacy Features**:
-- Server-side tracking (no third-party analytics cookies)
-- Local storage for preferences (theme, cookie settings)
-- Essential cookies only (NextAuth session cookies)
-- GDPR-ready architecture
-
-### Rich Text Editor (Tiptap)
-
-**Full-Featured Text Editor**:
-- Comprehensive rich text editing powered by Tiptap
-- **Toolbar Features**:
-  - Text formatting: Bold, Italic, Underline, Strikethrough
-  - Headings: H1, H2, H3
-  - Lists: Bulleted and numbered lists
-  - Text alignment: Left, Center, Right
-  - Code blocks and inline code
-  - Blockquotes
-  - Text highlighting (multicolor)
-  - Subscript and superscript
-  - Undo/Redo functionality
-  - Custom link dialog (replaces browser prompt) - accepts any URL, auto-prepends `https://` if needed
-- **Usage**:
-  - **General Diary Entries**: "Write" button in header opens full-featured editor
-  - **Book-Specific Entries**: "Write about it" button on book detail pages opens editor with book context
-- **Accessibility**: Proper ARIA labels, keyboard navigation, and screen reader support
-- **Responsive**: Dropdown menus escape container boundaries for better UX
-
-### Book Sharing
-
-**Share Books with Followers**:
-- Share button on book detail pages opens share modal
-- Search and select followers to share with
-- Shared books appear as notifications in recipient's "Updates" section
-- Clickable notifications navigate to the shared book page
-- Activity format: `[username] shared [bookname]`
-
-### Authentication Flow
-
-**Registration**:
-- Email/password with validation (Zod schemas)
-- Username uniqueness check (database validation)
-- Automatic sign-in after registration
-- Redirect to username selection page
-
-**Onboarding**:
-- **Username Selection**: Required step after registration
-- **Questionnaire**: Multi-step onboarding to understand user preferences
-  - Genre selection (multiple genres)
-  - Reading habits and preferences
-  - Used to personalize recommendations
-- Smooth redirect flow: Registration → Username → Onboarding → Profile
-
-**Sign-In**:
-- Email/password with error handling (toast notifications)
-- Google OAuth option (optional)
-- **OTP Login**: Passwordless authentication via email verification code
-  - 6-digit code sent to user's email
-  - 10-minute expiry with rate limiting (max 3 requests per hour)
-  - Secure one-time session token generation
-  - Integrated directly into auth card (no separate page)
-- Session persistence via NextAuth
-- Redirect to intended page or profile
-
-**Password Reset**:
-- **Forgot Password**: Request password reset link via email
-  - Cryptographically secure token generation (SHA-256 hashed)
-  - 1-hour token expiry
-  - Email enumeration protection (always returns success message)
-  - Integrated directly into auth card (no separate page)
-- **Reset Password**: Set new password using reset token
-  - Password strength validation (min 8 chars, 1 number, 1 lowercase, 1 uppercase, 1 special character)
-  - Password strength meter and checklist
-  - Token verification and one-time use enforcement
-  - Animated grid background with centered card design
-
-**Email Service**:
-- **Resend Integration**: Professional email delivery service
-  - OTP login codes via email
-  - Password reset links via email
-  - Customizable from address (supports verified domains)
-  - Development mode fallback (console logging when API key not configured)
-  - HTML email templates matching project design aesthetics
-  - Support email: paperboxd@gmail.com
-
-**Session Management**:
-- JWT tokens in HTTP-only cookies
-- Theme preferences in localStorage (client-side)
-- Avatar images excluded from JWT to prevent cookie size issues
-- Automatic session refresh
-- Enhanced authorization checks (ID and email matching for account recreation scenarios)
-
----
-
-## Project Structure
+## Backend (Go + PostgreSQL)
+
+**Repository:** `paperboxd-backend`
+
+The backend is a production-grade Go API server that was fully migrated from the original Next.js/MongoDB stack in March–April 2026, with zero data loss.
+
+### Tech Stack
+
+| Layer | Technology |
+|---|---|
+| HTTP Router | [chi v5](https://github.com/go-chi/chi) |
+| Database | PostgreSQL 16 via [pgx/v5](https://github.com/jackc/pgx) |
+| ORM / SQL | [sqlc](https://docs.sqlc.dev/) — type-safe, compile-time SQL |
+| Cache | Redis 7 via [go-redis/v9](https://github.com/redis/go-redis) |
+| Auth | JWT access tokens ([golang-jwt/jwt v5](https://github.com/golang-jwt/jwt)) + bcrypt |
+| Migrations | [golang-migrate](https://github.com/golang-migrate/migrate) (28 migration files) |
+| Vector search | [pgvector-go](https://github.com/pgvector/pgvector-go) for embedding-based recommendations |
+| Rate limiting | [go-chi/httprate](https://github.com/go-chi/httprate) — 100 req/min per IP |
+| Config | [godotenv](https://github.com/joho/godotenv) |
+
+### Project Layout
 
 ```
-paperboxd/
-├── app/                          # Next.js App Router
-│   ├── api/                      # API Routes (Server-side)
-│   │   ├── auth/                 # NextAuth routes
-│   │   │   ├── forgot-password/  # Password reset request
-│   │   │   ├── reset-password/   # Password reset submission
-│   │   │   └── otp-login/        # OTP login (send-code, verify-code)
-│   │   ├── users/                # User CRUD & social features
-│   │   │   ├── [username]/lists/ # List CRUD, sharing, saving
-│   │   │   ├── [username]/activities/ # Activity feed & following activities
-│   │   │   └── [username]/following # Following list management
-│   │   ├── books/                # Book search, details, carousels
-│   │   ├── authors/              # Author search
-│   │   ├── onboarding/           # Onboarding questionnaire
-│   │   ├── recommendations/      # Recommendation engine
-│   │   ├── events/               # Event tracking
-│   │   ├── newsletter/           # Newsletter subscription
-│   │   └── cleanup/              # Data cleanup endpoints
-│   ├── u/[username]/             # Dynamic user profile pages
-│   │   └── lists/[listId]/       # List detail pages
-│   ├── b/[slug]/                 # Book detail pages with carousels
-│   ├── profile/                  # Profile redirect (auth check)
-│   ├── choose-username/          # Username selection page
-│   ├── onboarding/               # Onboarding questionnaire page
-│   ├── activity/                 # User activity feed
-│   ├── recommendations/          # Recommendations page with carousels
-│   ├── auth/                     # Authentication pages
-│   ├── layout.tsx                # Root layout (theme script, providers)
-│   ├── page.tsx                  # Homepage (public/authenticated with Pinterest grid)
-│   ├── sitemap.ts                # Dynamic sitemap generation
-│   ├── not-found.tsx             # 404 page
-│   └── globals.css               # Global styles
-│
-├── components/                   # React Components
-│   └── ui/                       # UI Component Library
-│       ├── buttons/              # Button variants
-│       ├── dock/                 # Tab navigation components
-│       ├── forms/                # Form components
-│       ├── layout/               # Layout components (Header - fixed positioning)
-│       ├── home/                 # Homepage components (PublicHome, AuthenticatedHome, PinterestGrid, BookCarousel, Hero)
-│       ├── shared/               # Shared utilities (animations)
-│       ├── demos/                # Component demos
-│       ├── onboarding-questionnaire.tsx  # Onboarding questionnaire component
-│       ├── username-selection.tsx        # Username selection component
-│       ├── footer-section.tsx            # Footer with newsletter and legal dialogs
-│       ├── privacy-policy-dialog.tsx     # Privacy policy dialog
-│       ├── terms-of-service-dialog.tsx   # Terms of service dialog
-│       ├── cookie-settings-dialog.tsx    # Cookie settings dialog
-│       ├── about-us-dialog.tsx           # About us dialog
-│       ├── signup-prompt-dialog.tsx      # Sign-up prompt for non-authenticated users
-│       ├── tetris-loader.tsx             # Tetris loading animation
-│       ├── morphing-square.tsx           # Morphing square loader for infinite scroll
-│       ├── tiptap-editor.tsx             # Rich text editor component
-│       ├── diary-editor-dialog.tsx       # Book-specific diary entry editor
-│       ├── general-diary-editor-dialog.tsx # General diary entry editor
-│       └── [primitives]/         # Base UI components
-│
-├── lib/                          # Utilities & Configurations
-│   ├── db/                       # Database
-│   │   ├── mongodb.ts            # Connection management
-│   │   └── models/               # Mongoose schemas
-│   │       ├── User.ts           # User model
-│   │       ├── Book.ts           # Book model
-│   │       ├── Newsletter.ts     # Newsletter subscription model
-│   │       ├── UserPreference.ts # User preference model (for recommendations)
-│   │       ├── Event.ts          # Event tracking model
-│   │       ├── RecommendationCache.ts    # Recommendation cache model
-│   │       ├── RecommendationLog.ts      # Recommendation performance tracking
-│   │       ├── AccountDeletion.ts        # Account deletion requests
-│   │       └── OTP.ts            # One-time password model (for OTP login)
-│   ├── services/                 # Business logic services
-│   │   ├── UserProfileBuilder.ts # Builds user preference profiles
-│   │   ├── EventTracker.ts       # Tracks user interactions
-│   │   ├── RecommendationService.ts      # Core recommendation engine
-│   │   ├── FriendRecommendations.ts      # Friend-based recommendations
-│   │   └── OTPService.ts         # OTP generation, hashing, and verification
-│   ├── email/                    # Email service integrations
-│   │   ├── otp-login.ts          # OTP login email templates
-│   │   └── password-reset.ts     # Password reset email templates
-│   ├── config/                   # Configuration files
-│   │   └── recommendation.config.ts      # Recommendation algorithm config
-│   ├── auth.ts                   # NextAuth configuration
-│   ├── auth-client.ts            # Client-side auth helpers
-│   └── utils.ts                  # Utility functions (cn, etc.)
-│
-├── hooks/                        # Custom React Hooks
-│   └── use-media-query.tsx       # Responsive breakpoint hooks
-│
-├── public/                       # Static assets
-│   └── robots.txt               # Search engine crawler directives
-└── docs/                        # Documentation
-    └── SEO_SETUP.md             # SEO setup and configuration guide
+paperboxd-backend/
+├── cmd/api/             # HTTP server entrypoint (main.go)
+├── internal/
+│   ├── auth/            # Register, login, OTP, refresh, logout
+│   ├── cache/           # Redis helpers
+│   ├── config/          # Env config loader
+│   ├── cron/            # Scheduled jobs (book TTL cleanup, leaderboard refresh)
+│   ├── db/              # sqlc-generated models & queries (do not edit by hand)
+│   ├── external/        # ISBNdb, Google Books API clients
+│   ├── handler/         # Route handlers: users, books, lists, diary, leaderboard, ...
+│   ├── middleware/       # JWT authentication middleware
+│   ├── reqctx/          # Request context helpers
+│   ├── service/         # Business logic services (mailer, recommendations, ...)
+│   ├── token/           # JWT creation & validation
+│   ├── types/           # Shared request/response types & error helpers
+│   └── util/            # Common utilities
+├── migrations/          # 28 SQL migration files (source of truth for schema)
+├── queries/             # sqlc query files (.sql)
+├── docs/
+│   ├── API.md           # Full REST API reference
+│   ├── MIGRATION_REPORT.md
+│   └── LESSONS_LEARNED.md
+├── docker-compose.yml   # Local Postgres + Redis
+├── sqlc.yaml            # sqlc configuration
+├── Makefile             # Developer commands
+├── MOBILE_API.md        # Mobile-specific API contract
+├── CHANGELOG.md         # Version history
+└── ROADMAP.md           # Development roadmap
+```
+
+### Database Schema (28 Migrations)
+
+The PostgreSQL schema has evolved across 28 migrations, tracking every feature addition:
+
+| Migration | Description |
+|---|---|
+| 000001 | Initial schema — users, books, bookshelf |
+| 000002 | Social features — follows, likes |
+| 000003 | Frontend compatibility layer |
+| 000004 | Reading status and top-4 favorites |
+| 000005 | Reading lists |
+| 000006 | Diary entries and activity feed |
+| 000007–008 | Migration support & remaining MongoDB data |
+| 000009 | Password reset tokens |
+| 000010–012 | Account deletions, OTP codes, registration metadata |
+| 000013–016 | Leaderboard columns, stats, XP transactions, referral system |
+| 000017 | pgvector extension for embedding-based recommendations |
+| 000018–020 | Temporal signals, newsletter, reading log |
+| 000021–022 | Bookshelf review system |
+| 000023–026 | Embedding audit columns, recommendation signals, book last-accessed |
+| 000027 | Mobile onboarding flag |
+| 000028 | Analytics event columns |
+
+### API Endpoints (60+)
+
+The API is versioned under `/api/v1`. Mobile-specific auth lives under `/api/mobile/auth/*`.
+
+| Group | Coverage |
+|---|---|
+| `/api/health` | Connectivity probe (no DB round-trip) |
+| `/api/mobile/auth/*` | Mobile login, register, OTP, Google OAuth, token refresh |
+| `/api/v1/users/me` | Current user CRUD, onboarding, XP, referrals |
+| `/api/v1/users/{username}` | Public profiles, follow/unfollow, bookshelf, diary, lists, favorites, TBR, streak |
+| `/api/v1/books/*` | Search, detail, like/unlike, share, currently-reading, reviews |
+| `/api/v1/leaderboard/*` | Global, friends, and dimension-based leaderboards |
+| `/api/v1/recommendations/*` | Home feed, similar books, feedback signals |
+| `/api/v1/activities/*` | Personal and following activity feeds |
+| `/api/v1/search/vibe` | Semantic (embedding-based) vibe search |
+| `/api/v1/newsletter` | Email subscription |
+
+Full reference: [`docs/API.md`](docs/API.md)
+
+### Makefile Commands
+
+| Command | Description |
+|---|---|
+| `make dev` | `go run cmd/api/main.go` (hot-reload friendly) |
+| `make build` | Compile to `bin/api` |
+| `make docker-up` / `make docker-down` | Start/stop local Postgres + Redis via Docker Compose |
+| `make migrate-up` / `make migrate-down` | Apply/roll back migrations |
+| `make sqlc` | Regenerate `internal/db/` from `queries/*.sql` |
+| `make fmt` | `go fmt ./...` |
+| `make tidy` | `go mod tidy` |
+
+### Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | ✅ | PostgreSQL connection string |
+| `JWT_SECRET` | ✅ | ≥32 character secret for signing JWTs |
+| `REDIS_URL` | recommended | Redis address (default: `localhost:6379`) |
+| `PORT` | — | HTTP listen port (default: `8080`) |
+| `ENVIRONMENT` | — | `development` or `production` |
+| `GOOGLE_BOOKS_API_KEY` | — | Book search fallback |
+| `ISBNDB_API_KEY` | — | Primary book metadata source |
+| `RATE_LIMIT_PER_MINUTE` | — | Default `100` prod, `5000` dev |
+| `CORS_ALLOWED_ORIGINS` | — | Browser allowlist for CORS |
+| `TOKEN_EXPIRY_MOBILE` | — | Mobile JWT lifetime (default: 30 days) |
+
+### Migration Achievements (March 2026)
+
+Successfully migrated from MongoDB to PostgreSQL with **zero data loss**:
+
+| Data | Count |
+|---|---|
+| Users | 39 |
+| Books | 4,129 |
+| Bookshelf entries | 39 |
+| Likes | 23 |
+| Reading lists | 4 (9 books) |
+| Diary entries | 5 |
+| Follows | 3 |
+| Activity entries | 37 |
+
+**Performance gains:**
+- Book search: **10–50 ms** (PostgreSQL) vs 200–500 ms (MongoDB + Google Books API)
+- Auto-caching reduces external API calls by **~70–80%**
+- Type-safe sqlc queries prevent entire class of runtime SQL errors
+
+---
+
+## Frontend (Next.js)
+
+**Repository:** `paperboxd`
+
+The web frontend is a Next.js 15 application deployed on Vercel.
+
+### Tech Stack
+
+| Category | Technology |
+|---|---|
+| Framework | Next.js 15 (App Router), React 19, TypeScript 5 |
+| Styling | Tailwind CSS 4, Framer Motion |
+| UI Components | Radix UI primitives (Shadcn pattern), react-aria-components |
+| Auth | NextAuth.js v5 (Credentials + Google OAuth) |
+| Database (legacy) | MongoDB Atlas + Mongoose 8 (being migrated to Go backend) |
+| Forms | react-hook-form + Zod |
+| Rich Text | Tiptap v3 (full editor with 10+ extensions) |
+| Email | Resend API (OTP codes, password resets) |
+| 3D / Visuals | Three.js, @react-three/fiber, @shadergradient/react |
+| Notifications | Sonner (toasts) |
+| Book APIs | Google Books, ISBNdb, Open Library |
+| Typography | Adobe Fonts (CoFo Glassier, Helvetica, El Paso, Brooklyn Heritage Script) |
+
+### Page & Route Structure
+
+```
+app/
+├── page.tsx                     # Home (Pinterest masonry grid when authed, carousels when public)
+├── b/[slug]/                    # Book detail pages
+├── u/[username]/                # User profile pages
+│   └── lists/[listId]/          # Reading list detail pages
+├── activity/                    # Activity feed
+├── recommendations/             # Personalized recommendations page
+├── auth/                        # Sign in / sign up pages
+├── choose-username/             # Post-registration username selection
+├── onboarding/                  # Preference questionnaire
+├── profile/                     # Auth-gated profile redirect
+├── sitemap.ts                   # Dynamic sitemap (SEO)
+└── api/
+    ├── auth/                    # NextAuth + OTP login + password reset
+    ├── users/[username]/        # User CRUD, books, lists, diary, follows, activities
+    ├── books/                   # Search, public carousels, personalized, by-author
+    ├── recommendations/         # Recommendation engine endpoints
+    ├── onboarding/              # Genre list, status check
+    ├── events/                  # Client-side event tracking
+    └── newsletter/              # Email subscription
+```
+
+### Key Features
+
+#### 📚 Book Management
+- **Bookshelf** — read books in 3-column grid with pagination, sorted by most-recently finished
+- **TBR (To-Be-Read)** — "the procrastination wall", with notes and priority
+- **Currently Reading** — track page progress in real time
+- **Likes** — liked books in paginated grid
+- **Favorites** — curated top-4 favorites
+- **Hybrid Search** — DB-first (10–50ms), falls back to Google Books API; debounced at 300ms
+
+#### 👤 User Profiles
+- Dynamic `/u/[username]` routes (SEO-friendly, server-rendered)
+- Profile sections: Bookshelf, Diary, Authors, Lists, TBR, Likes
+- Owner-aware copy (e.g., "Your Library, organised" vs "{username}'s library")
+- Edit Profile side-sheet modal — username, bio, gender, pronouns, birthday, links
+- Profile link sharing via clipboard
+
+#### 🤝 Social Features
+- Asymmetric follow system (like Twitter/Letterboxd)
+- Activity feed tracking 8+ event types (book added, list created, list shared, book shared, diary liked, access granted, etc.)
+- "Updates" header indicator — real-time poll for new friend activity
+- Share books and lists directly with specific followers
+- Author discovery — author cards with 3-book cover grids, per-author dialog
+
+#### 📝 Reading Lists
+- Create public or private ("secret") lists
+- Private lists with username-based access management (grant/revoke)
+- 3-column card grid showing 3-book cover thumbnails
+- Full CRUD: edit, add/remove books, delete, save other users' lists
+
+#### 🧠 Recommendation Engine
+- Multi-signal rule-based engine with Maximal Marginal Relevance (MMR) diversity injection
+- Signals: ratings, likes, reads, searches, friend activity, time-of-day, reading velocity
+- A/B testing framework for algorithm variants, caching with TTL
+- Explainable recommendations ("Because you read X")
+- Personalized home-page carousels + dedicated `/recommendations` page
+
+#### 🔐 Authentication
+
+| Method | Details |
+|---|---|
+| Email + Password | bcrypt hashing, Zod validation, username uniqueness check |
+| Google OAuth | Optional, seamless account linking |
+| OTP Login | 6-digit code via email (Resend), 10-min expiry, rate-limited (3/hour) |
+| Password Reset | SHA-256 hashed token, 1-hour expiry, email enumeration protection |
+
+#### ✍️ Tiptap Rich Text Editor
+Full-featured diary editor: Bold, Italic, Underline, Strikethrough, Code, Headings H1–H3, Blockquotes, lists, text alignment, highlighting (multicolor), Subscript, Superscript, custom link dialog, Undo/Redo.
+
+#### 🎯 SEO
+- Dynamic `sitemap.xml`, configured `robots.txt`, JSON-LD Schema.org structured data
+- Open Graph + Twitter Card meta tags, canonical URLs
+- Performance targets: FCP < 1.5s, LCP < 2.5s, CLS < 0.1
+
+---
+
+## iOS App (SwiftUI)
+
+**Repository:** `paperboxd-ios`
+
+A native SwiftUI app consuming the Go backend's mobile API. Built with MVVM architecture and a custom bottom dock navigation system.
+
+### Tech Stack
+
+| Layer | Technology |
+|---|---|
+| UI Framework | SwiftUI |
+| State Management | `@ObservableObject` + `@EnvironmentObject` (AppState) |
+| Networking | `URLSession` + async/await (`APIClient.swift`) |
+| Auth Storage | Keychain (`KeychainManager`) |
+| Auth | JWT Bearer tokens — 30-day lifetime, background refresh |
+| Google Auth | Google Sign-In SDK (`GoogleOAuth.swift`) |
+
+### App Screens & Navigation
+
+Navigation is a custom bottom dock (`CustomDock`) with 6 tabs:
+
+| Tab | Icon | Feature |
+|---|---|---|
+| Home | `house` | `HomeView` — masonry book grid + activity feed |
+| Search | `magnifyingglass` | `SearchView` — books + users |
+| Leaders | `trophy` | `LeaderboardView` — global, friends, dimension-based |
+| Write | `pencil.circle.fill` | `WriteView` — diary entry composer (full-screen cover) |
+| Diary | `book.closed` | `DiaryView` — personal reading diary |
+| You | `person.crop.circle` | `ProfileView` — own profile |
+
+### Feature Directory
+
+```
+Features/
+├── Auth/         # LoginView, RegisterView, OTPView, AuthViewModel
+├── BookDetail/   # Book detail with similar books, friends reading, reviews
+├── Diary/        # Diary list + entry detail
+├── Home/         # HomeView (masonry grid), HomeViewModel, NotificationsView
+├── Leaderboard/  # Global + friends leaderboard with dimension filters
+├── Onboarding/   # Genre selection, username pick, avatar upload
+├── Profile/      # ProfileView, ProfileHeaderView, ProfileGridView, FollowListView
+├── Search/       # SearchView (books + users), SearchViewModel
+├── Share/        # Share sheet integration
+├── Splash/       # SplashView (2.5s minimum display)
+└── Write/        # Diary entry composer
+```
+
+### App State Machine
+
+```
+AppScreen:
+  .splash          →  bootstrap(): keychain → health check → token refresh
+  .auth            →  LoginView / RegisterView / OTPView
+  .onboarding(User)  →  Username selection → genre picks → avatar upload
+  .main(User)        →  MainTabView (6-tab dock)
+```
+
+**Bootstrap flow:**
+1. Read JWT from Keychain
+2. Ping `/api/health` (unauthed) — if unreachable, fall back to cached user
+3. Call `/api/mobile/auth/refresh` — re-mint token; on failure, route to `.auth`
+4. Hold splash screen for at least 2.5s to prevent flicker on hot starts
+
+### Models
+
+```
+Models/
+├── User.swift             # Auth user (id, username, email, avatarURL, level, xp)
+├── UserProfile.swift      # Full profile (bio, stats, pronouns, links)
+├── Book.swift             # Book metadata (title, author, cover, isbn, genres)
+├── BookDetailExtras.swift # Friends reading, reviews
+├── BookshelfAction.swift  # Add/remove/update bookshelf status
+├── CurrentlyReading.swift # Reading progress (page, percentage)
+├── DiaryEntry.swift       # Diary entry (content, book ref, date)
+├── ReadingList.swift      # List (id, title, books, privacy)
+├── Activity.swift         # Activity feed event
+├── Leaderboard.swift      # Leaderboard entry (rank, user, score)
+├── Onboarding.swift       # Genre selection, preferences
+└── Recommendation.swift   # Recommended book + reason
+```
+
+### Auth & Security
+
+- JWT stored in iOS **Keychain** — never in UserDefaults
+- Proactive refresh: if token has < 7 days remaining, refresh in background
+- On `401 EXPIRED_TOKEN` → clear keychain, route to `.auth`
+- On `401 INVALID_TOKEN` → clear keychain, force logout
+- No cookies ever written or read — pure Bearer token auth
+
+---
+
+## Design System
+
+**Repository:** `Paperboxd design elements`
+
+A standalone design language specification covering colors, typography, spacing, and interactive states.
+
+### Color Tokens (OKLCH)
+
+PaperBoxd uses OKLCH for perceptually uniform colors, with a complete light/dark token set:
+
+| Role | Light | Dark |
+|---|---|---|
+| Background | `oklch(1 0 0)` — pure white | `oklch(0.18 0 0)` — deep charcoal |
+| Card / Elevated | `oklch(1 0 0)` | `oklch(0.22 0 0)` |
+| Primary | `oklch(0.205 0 0)` — dark charcoal | `oklch(0.922 0 0)` — near-white |
+| Border | `oklch(0.922 0 0)` | `oklch(1 0 0 / 10%)` |
+| Muted text | `oklch(0.556 0 0)` | `oklch(0.708 0 0)` |
+| Destructive | `oklch(0.577 0.245 27.3)` — warm red | `oklch(0.704 0.191 22.2)` |
+
+### Typography
+
+| Role | Typeface | Fallback | Usage |
+|---|---|---|---|
+| Wordmark | `brooklyn-heritage-script` | Pinyon Script | Brand logo / hero |
+| Editorial H2 | `cofo-glassier` | Playfair Display | Section headings |
+| Display Accent | `el-paso` | Abril Fatface | Decorative display |
+| Display Brand | `fabulosa` | Playfair Display | Landing page |
+| Body Editorial | `helvetica` | Inter | Long-form copy |
+| UI / Body | `Geist` | Inter, system-ui | All functional UI |
+| Mono | `Geist Mono` | JetBrains Mono | Code, timestamps |
+
+**Semantic type classes:** `.pb-wordmark`, `.pb-h1`, `.pb-h2`, `.pb-h3`, `.pb-body`, `.pb-body-editorial`, `.pb-muted`, `.pb-small`, `.pb-mono`
+
+### Spacing & Radius
+
+```
+--radius:     0.625rem (10px)   base
+--radius-sm:  0.375rem (6px)
+--radius-md:  0.5rem   (8px)
+--radius-lg:  0.625rem (10px)
+--radius-xl:  0.875rem (14px)
+--radius-2xl: 1rem     (16px)   cards
+--radius-full: 9999px            pills
+```
+
+### Design Principles
+
+1. **Social proof is the product.** Every individual action surfaces community context nearby.
+2. **Restraint is the feature.** A sparse book cover grid is more inviting than a data-dense list.
+3. **Literary without being precious.** Personality from typography hierarchy, not forced dark aesthetics.
+4. **Earned familiarity.** Established patterns executed with precision to feel distinctly PaperBoxd.
+5. **Discovery is the reward loop.** Every screen offers a credible next book or person to follow.
+
+### HTML Prototypes
+
+| Prototype | File |
+|---|---|
+| Home / Feed | `Pages/Home.html` |
+| Landing Page | `Pages/Landing.html` |
+| Profile Page (Rich) | `Pages/Profile Page Rich.html` |
+| Book Detail Page | `Pages/Book Page.html` |
+| Leaderboard System | `Pages/Leaderboard System.html` |
+| Onboarding v2 | `Pages/Onboarding v2.html` |
+| Search | `Pages/Search.html` |
+| Loading States | `Pages/Loading.html` |
+
+Plus interactive JSX device frames: `Components/ios-frame.jsx`, `Components/android-frame.jsx`, `Components/design-canvas.jsx`, `Components/tweaks-panel.jsx`
+
+---
+
+## Mobile API Contract
+
+The Go backend exposes a dedicated mobile namespace at `/api/mobile/auth/*` with:
+
+- **Long-lived JWT tokens** (30-day default) — no cookies
+- **Pure Bearer auth** — `Authorization: Bearer <jwt>`
+- **Consistent error shape:**
+  ```json
+  { "error": "Human readable message", "code": "SNAKE_CASE_CODE" }
+  ```
+- **Mobile pagination block:**
+  ```json
+  { "pagination": { "page": 1, "per_page": 20, "total": 123, "total_pages": 7 } }
+  ```
+
+### Auth Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/mobile/auth/login` | POST | Email + password login |
+| `/api/mobile/auth/register` | POST | Registration (auto-generates username) |
+| `/api/mobile/auth/otp/send` | POST | Send 6-digit OTP to email |
+| `/api/mobile/auth/otp/verify` | POST | Verify OTP → issue JWT |
+| `/api/mobile/auth/google` | POST | Google ID token verification → JWT |
+| `/api/mobile/auth/refresh` | POST | Re-mint token (requires valid Bearer) |
+
+### Error Codes
+
+| Code | HTTP | Meaning |
+|---|---|---|
+| `VALIDATION_ERROR` | 400 | Body/params failed validation |
+| `UNAUTHORIZED` | 401 | Missing/invalid/expired token |
+| `INVALID_TOKEN` | 401 | Token parse or signature mismatch |
+| `EXPIRED_TOKEN` | 401 | Token past `exp` |
+| `FORBIDDEN` | 403 | Authenticated but not allowed |
+| `NOT_FOUND` | 404 | Resource does not exist |
+| `CONFLICT` | 409 | Uniqueness violation (email/username taken) |
+| `RATE_LIMITED` | 429 | Rate limit tripped — retry after 60s |
+| `INTERNAL_ERROR` | 500 | Unhandled server error |
+
+### Rate Limits
+
+- **100 req/min** per Bearer token (or per IP if unauthenticated) in production
+- **5,000 req/min** in development
+- On `429 RATE_LIMITED`: back off ≥ 60s before retrying
+
+Full mobile API contract: [`MOBILE_API.md`](MOBILE_API.md)
+
+---
+
+## Deployment
+
+### Production Infrastructure
+
+| Service | Provider | Spec | Cost |
+|---|---|---|---|
+| Go API | Railway | Hobby plan, Singapore | $5/month |
+| PostgreSQL 16 | Railway | 5GB storage, 25 connections | included |
+| Redis 7 | Railway | 256MB memory | included |
+| Next.js Frontend | Vercel | Pro-tier CDN | separate |
+
+### URLs
+
+| Surface | URL |
+|---|---|
+| Website | https://paperboxd.in |
+| Backend API | https://paperboxd-backend-production-d9e0.up.railway.app |
+
+---
+
+## Development Setup
+
+### Prerequisites
+
+- **Go 1.21+** (see `go.mod`)
+- **PostgreSQL** and **Redis** (local or via Docker)
+- **Node.js 20+** and **npm** (for frontend)
+- **Xcode 15+** (for iOS)
+- Optional: [`migrate`](https://github.com/golang-migrate/migrate), [`sqlc`](https://docs.sqlc.dev/overview/install.html)
+
+### Backend
+
+```bash
+# 1. Start local Postgres + Redis
+make docker-up
+
+# 2. Set environment variables
+export DATABASE_URL="postgres://paperboxd:dev_password_change_in_prod@localhost:5432/paperboxd_dev?sslmode=disable"
+export JWT_SECRET="your-development-secret-at-least-32-chars-long"
+export REDIS_URL="localhost:6379"
+
+# 3. Run migrations
+make migrate-up
+
+# 4. Start the server
+make dev
+# → Health check: GET http://localhost:8080/health
+# → API base:     http://localhost:8080/api/v1
+```
+
+### Frontend
+
+```bash
+cd paperboxd
+cp .env.example .env.local
+# Fill in DATABASE_URL, NEXTAUTH_SECRET, GOOGLE_CLIENT_ID/SECRET, RESEND_API_KEY, etc.
+npm install
+npm run dev
+# → http://localhost:3000
+```
+
+### sqlc Workflow
+
+```bash
+# 1. Edit migrations/ (schema) or queries/ (named queries)
+make sqlc
+# → Regenerates internal/db/
+
+# 2. Verify compilation
+go build ./...
+
+# 3. Commit internal/db/ alongside your changes
 ```
 
 ---
 
-## Design Decisions & Rationale
+### Completed ✅
 
-### Why Next.js App Router?
+- [x] Next.js MVP with MongoDB (December 2025)
+- [x] Go + PostgreSQL backend rewrite (March–April 2026)
+- [x] Zero-loss data migration (39 users, 4,129 books)
+- [x] 60+ REST API endpoints with full documentation
+- [x] Redis caching layer
+- [x] JWT auth (web + mobile)
+- [x] Leaderboard system (global, friends, 6 dimensions)
+- [x] XP & gamification
+- [x] Referral system
+- [x] pgvector embeddings (recommendations v2 foundation)
+- [x] Mobile API contract (`MOBILE_API.md`)
+- [x] iOS app (SwiftUI) — Phase 1
 
-- **Server Components**: Reduce client bundle size by rendering on server
-- **File-based Routing**: Intuitive, convention-based routing
-- **API Routes**: Integrated backend eliminates need for separate server
-- **Streaming SSR**: Progressive page loading for better perceived performance
-- **Built-in Optimizations**: Image optimization, font optimization, code splitting
+### In Progress 🔄
 
-### Why MongoDB?
+- [ ] Frontend integration: Next.js → Go backend (~50%, blocked by auth bug)
+- [ ] Auth bug fix: login creating new user instead of authenticating existing
+- [ ] End-to-end testing
 
-- **Flexible Schema**: Easy to evolve data models as features grow
-- **Rich Document Structure**: Nested data (e.g., `bookshelf` array in User) reduces joins
-- **Atlas Free Tier**: Sufficient for MVP and early growth (512MB)
-- **Mongoose ODM**: TypeScript support, validation, middleware hooks
-- **Horizontal Scalability**: Easy to shard when needed
+### Planned 📅
 
-### Why Tailwind CSS?
-
-- **Utility-First**: Rapid UI development without context switching
-- **Design System**: Consistent spacing, colors, typography
-- **Performance**: Purged CSS ensures minimal bundle size
-- **Responsive**: Built-in breakpoint system
-- **Dark Mode**: Native support via `dark:` variant
-
-### Why Radix UI + Custom Components?
-
-- **Accessibility**: Radix handles ARIA, keyboard navigation, focus management
-- **Unstyled Primitives**: Full control over design while maintaining accessibility
-- **Shadcn Pattern**: Proven component architecture used by thousands of projects
-- **Composability**: Mix Radix primitives with custom logic seamlessly
-
-### Why NextAuth.js v5?
-
-- **Integrated Solution**: No need for separate auth service
-- **Multiple Providers**: Credentials + OAuth in one package
-- **Session Management**: Built-in JWT and database session strategies
-- **TypeScript Support**: Excellent type safety
-- **Middleware**: Route protection with minimal code
-
-### Why Hybrid Search (DB + Google Books)?
-
-- **Performance**: Database queries are 10-50x faster than API calls
-- **Cost Efficiency**: Reduced Google Books API usage saves quota
-- **Reliability**: Not dependent on external API for cached books
-- **User Experience**: Instant results for previously searched books
-- **Storage Management**: Automatic cleanup prevents unbounded growth
+| Timeline | Milestone |
+|---|---|
+| Q3 2026 | iOS App Store submission, Android (Kotlin/Jetpack Compose) |
+| Q3 2026 | Recommendation engine v2 (embedding-based semantic search) |
+| Q4 2026 | Performance optimization, Redis hot-path caching |
+| Q4 2026 | Abuse protection + advanced rate limiting |
+| Q4 2026 | Social features v2 (book clubs, reading challenges) |
+| 2027+ | Multi-region deployment, premium features, external API |
 
 ---
 
-## Future Considerations
+## Documentation
 
-### Scalability Roadmap
+| Document | Description |
+|---|---|
+| [`docs/API.md`](docs/API.md) | Full REST API reference |
+| [`MOBILE_API.md`](MOBILE_API.md) | Mobile client API contract |
+| [`docs/MIGRATION_REPORT.md`](docs/MIGRATION_REPORT.md) | MongoDB → PostgreSQL migration details |
+| [`docs/LESSONS_LEARNED.md`](docs/LESSONS_LEARNED.md) | Reflections on the migration process |
+| [`CHANGELOG.md`](CHANGELOG.md) | Version history |
+| [`ROADMAP.md`](ROADMAP.md) | Development roadmap |
 
-1. **Database Sharding**: Partition users by region or shard key
-2. **CDN for Static Assets**: Cloudflare or Vercel Edge Network
-3. **Redis Caching**: Cache frequently accessed data (user profiles, book details)
-4. **GraphQL API**: Consider GraphQL if API complexity grows
-5. **Microservices**: Split API routes into separate services if needed
+---
 
-### Feature Expansion
+## Contact
 
-- **Book Reviews**: Full review system with ratings (infrastructure in place)
-- **Recommendations**: ✅ Implemented - Sophisticated rule-based recommendation system with multi-signal learning
-- **Rich Text Editor**: ✅ Implemented - Full-featured Tiptap editor for diary entries
-- **Book Sharing**: ✅ Implemented - Share books with followers via activity feed
-- **Private Lists**: ✅ Implemented - Private lists with username-based access management
-- **Profile Link Sharing**: ✅ Implemented - Copy profile link to clipboard from header dropdown
-- **Pinterest-Style Endless Feed**: ✅ Implemented - Responsive masonry grid with infinite scroll on home page
-- **Recommendations Page**: ✅ Implemented - Dedicated page for personalized recommendation carousels
-- **Diary Entry Likes**: ✅ Implemented - Like diary entries with activity notifications
-- **SEO Optimization**: ✅ Implemented - Sitemap, robots.txt, structured data, and comprehensive meta tags
-- **Home Page Caching**: ✅ Implemented - Client-side caching with pull-to-refresh for mobile
-- **OTP Login**: ✅ Implemented - Passwordless authentication via email verification codes
-- **Password Reset**: ✅ Implemented - Secure password reset flow with email links
-- **Email Service**: ✅ Implemented - Resend integration for transactional emails
-- **Social Groups**: Book clubs and reading groups
-- **Reading Challenges**: Annual/yearly reading goals
-- **Export Data**: Export reading history (CSV, JSON)
-- **Newsletter**: ✅ Implemented - Email subscription system
-- **Onboarding**: ✅ Implemented - User preference questionnaire
+**Developer:** Hridyesh  
+**Email:** paperboxd@gmail.com  
+**Website:** [paperboxd.in](https://paperboxd.in)
 
-### Technical Debt
+---
 
-- **Image Upload**: Currently disabled (base64 in MongoDB caused cookie size issues). Future: Cloudinary or S3 integration
-- **Rate Limiting**: Implement API rate limiting middleware
-- **Analytics**: Server-side tracking implemented via EventTracker. Future: Optional privacy-respecting analytics (Plausible, PostHog) with user consent
-- **Testing**: Add unit tests (Vitest) and E2E tests (Playwright)
-- **Newsletter Email Service**: Currently stores emails in database. Future: Integrate with email service provider (SendGrid, Mailchimp, etc.)
-- **Email Delivery**: ✅ Implemented - Resend API integration for OTP codes and password reset emails
+*Powered by Go, PostgreSQL, Next.js, SwiftUI, and a lot of coffee ☕*
