@@ -68,6 +68,8 @@
     "react-dom": "19.1.2",
     "react-easy-crop": "^5.5.3",
     "react-hook-form": "^7.66.0",
+    "react-markdown": "^9.1.0",
+    "remark-gfm": "^4.0.1",
     "resend": "^6.5.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
