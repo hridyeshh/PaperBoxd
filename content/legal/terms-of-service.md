@@ -31,7 +31,7 @@ You agree not to:
 - Use the Service to harm, stalk, or harvest data about other users
 - Interfere with the normal operation of the Service (e.g., spamming, denial-of-service behavior)
 
-We may suspend or terminate accounts that violate this section.
+**We have zero tolerance for objectionable content and abusive behavior.** You can report any review, list, diary entry, or user from within the app, and you can block any user so their content no longer reaches you. We review reported content and remove violating material — and suspend or terminate the accounts responsible — typically within 24 hours. Contact us at paperboxd@gmail.com to report abuse.
 
 ## 5. Your Content
 

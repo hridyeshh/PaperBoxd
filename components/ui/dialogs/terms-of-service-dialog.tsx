@@ -151,7 +151,7 @@ export function TermsOfServiceDialog({ open, onOpenChange }: TermsOfServiceDialo
 
             <h3 style={subHeading}>Content Moderation</h3>
             <p style={body}>
-              We reserve the right to review, edit, or remove content that violates these Terms. We are not obligated to monitor user content but may do so at our discretion.
+              We have zero tolerance for objectionable content and abusive behavior. You can report any review, list, diary entry, or user from within the app, and you can block any user so their content no longer reaches you. We review reported content and remove violating material — and suspend or terminate the accounts responsible — typically within 24 hours. Contact us at paperboxd@gmail.com to report abuse.
             </p>
           </section>
 
