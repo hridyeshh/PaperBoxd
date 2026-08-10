@@ -4,7 +4,7 @@
 
 PaperBoxd is a modern social book-tracking platform that transforms reading into a connected, discoverable experience — inspired by the simplicity and community spirit of Letterboxd, but built exclusively for books.
 
-**Website:** [paperboxd.in](https://paperboxd.in) · **API:** [api.paperboxd.com](https://api.paperboxd.com) · **Contact:** paperboxd@gmail.com
+**Website:** [paperboxd.in](https://paperboxd.in) · **Contact:** paperboxd@gmail.com
 
 ---
 
