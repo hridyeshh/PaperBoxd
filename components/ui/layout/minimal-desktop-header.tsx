@@ -8,6 +8,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { logoutAction } from "@/lib/auth/actions";
 import { signOut } from "next-auth/react";
 import BookLoader from "@/components/ui/features/book-loader";
+import { PaperboxdMark } from "@/components/ui/brand/paperboxd-mark";
 import { cn, DEFAULT_AVATAR } from "@/lib/utils";
 import { SearchModal, CommandItem } from "@/components/ui/features/search-modal";
 import { ThemeToggle } from "@/components/ui/features/theme-toggle";
@@ -167,14 +168,7 @@ export function MinimalDesktopHeader() {
             }
             className="flex items-center gap-2 pr-3 hover:opacity-75 transition-opacity"
           >
-            <Image
-              src="/icon.jpg"
-              alt="PaperBoxd"
-              width={26}
-              height={26}
-              className="rounded-full flex-shrink-0"
-              priority
-            />
+            <PaperboxdMark className="size-[26px] flex-shrink-0 text-foreground" />
             <span
               className={cn("text-[1.55rem] leading-none text-foreground select-none", pinyonScript.className)}
             >
