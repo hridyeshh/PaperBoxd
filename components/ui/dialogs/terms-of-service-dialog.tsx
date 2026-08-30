@@ -151,7 +151,7 @@ export function TermsOfServiceDialog({ open, onOpenChange }: TermsOfServiceDialo
 
             <h3 style={subHeading}>Content Moderation</h3>
             <p style={body}>
-              We have zero tolerance for objectionable content and abusive behavior. You can report any review, list, diary entry, or user from within the app, and you can block any user so their content no longer reaches you. We review reported content and remove violating material — and suspend or terminate the accounts responsible — typically within 24 hours. Contact us at paperboxd@gmail.com to report abuse.
+              We have zero tolerance for objectionable content and abusive behavior. You can report any review, list, diary entry, or user from within the app, and you can block any user so their content no longer reaches you. We review reported content and remove violating material — and suspend or terminate the accounts responsible — typically within 24 hours. Contact us at hridyesh@paperboxd.in to report abuse.
             </p>
           </section>
 
@@ -256,8 +256,8 @@ export function TermsOfServiceDialog({ open, onOpenChange }: TermsOfServiceDialo
             <p style={body}>For questions about these Terms:</p>
             <div style={{ border: "1px solid #efefef", borderRadius: 10, padding: "16px 20px", background: "#fafafa" }}>
               <p style={{ ...body, marginBottom: 0 }}>
-                <a href="mailto:paperboxd@gmail.com" style={{ color: "#111", textDecoration: "underline", textUnderlineOffset: 3, fontFamily: serif }}>
-                  paperboxd@gmail.com
+                <a href="mailto:hridyesh@paperboxd.in" style={{ color: "#111", textDecoration: "underline", textUnderlineOffset: 3, fontFamily: serif }}>
+                  hridyesh@paperboxd.in
                 </a>
               </p>
             </div>

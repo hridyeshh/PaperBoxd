@@ -150,8 +150,8 @@ export function AboutUsDialog({ open, onOpenChange }: AboutUsDialogProps) {
             <h2 style={sectionHeading}>Get in Touch</h2>
             <div style={{ border: "1px solid #efefef", borderRadius: 10, padding: "16px 20px", background: "#fafafa" }}>
               <p style={{ ...body, marginBottom: 0 }}>
-                <a href="mailto:paperboxd@gmail.com" style={{ color: "#111", textDecoration: "underline", textUnderlineOffset: 3, fontFamily: serif }}>
-                  paperboxd@gmail.com
+                <a href="mailto:hridyesh@paperboxd.in" style={{ color: "#111", textDecoration: "underline", textUnderlineOffset: 3, fontFamily: serif }}>
+                  hridyesh@paperboxd.in
                 </a>
               </p>
             </div>

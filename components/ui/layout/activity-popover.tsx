@@ -67,6 +67,14 @@ type ActivityFromAPI = {
   detail?: string | null;
 };
 
+type FollowRequest = {
+  request_id: string;
+  id: string;
+  username: string;
+  name: string;
+  avatar_url?: string | null;
+};
+
 type DiaryEntryData = {
   id: string;
   bookId?: string | null;
@@ -236,6 +244,7 @@ export function ActivityPopover({
   const [isLoading, setIsLoading] = React.useState(false);
   const [fetched, setFetched] = React.useState(false);
   const [processingRequest, setProcessingRequest] = React.useState<string | null>(null);
+  const [followRequests, setFollowRequests] = React.useState<FollowRequest[]>([]);
   const [selectedDiaryEntry, setSelectedDiaryEntry] = React.useState<DiaryEntryData | null>(null);
   const [selectedDiaryEntryUsername, setSelectedDiaryEntryUsername] = React.useState<string | null>(null);
 
@@ -260,11 +269,51 @@ export function ActivityPopover({
     }
   }, [username]);
 
+  const fetchFollowRequests = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/users/me/follow-requests");
+      if (!res.ok) return;
+      const data = await res.json();
+      setFollowRequests(Array.isArray(data?.requests) ? data.requests : []);
+    } catch {
+      // silently fail — the bell still works without them
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (username) fetchFollowRequests();
+  }, [username, fetchFollowRequests]);
+
+  const handleFollowRequest = React.useCallback(
+    async (request: FollowRequest, action: "accept" | "reject") => {
+      setProcessingRequest(request.request_id);
+      try {
+        const res = await fetch(
+          `/api/users/me/follow-requests/${encodeURIComponent(request.username)}`,
+          { method: action === "accept" ? "POST" : "DELETE" }
+        );
+        if (!res.ok) throw new Error("Request failed");
+        setFollowRequests((prev) => prev.filter((r) => r.request_id !== request.request_id));
+        toast.success(
+          action === "accept"
+            ? `@${request.username} can now see your profile`
+            : "Request declined"
+        );
+      } catch {
+        toast.error("Could not update that request");
+      } finally {
+        setProcessingRequest(null);
+      }
+    },
+    []
+  );
+
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
     if (next) {
       onOpen?.();
       fetchActivities();
+      fetchFollowRequests();
       // Mark as viewed
       localStorage.setItem(`activity_last_viewed_${username}`, new Date().toISOString());
     }
@@ -350,7 +399,7 @@ export function ActivityPopover({
               aria-label="Updates"
             >
               <Bell className="h-5 w-5 text-foreground/80" />
-              {hasNewActivities && (
+              {(hasNewActivities || followRequests.length > 0) && (
                 <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 border border-background" />
               )}
             </button>
@@ -362,7 +411,7 @@ export function ActivityPopover({
               )}
             >
               Updates
-              {hasNewActivities && (
+              {(hasNewActivities || followRequests.length > 0) && (
                 <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-red-500 border-2 border-background" />
               )}
             </button>
@@ -388,11 +437,57 @@ export function ActivityPopover({
 
           {/* Body */}
           <div className="max-h-[440px] overflow-y-auto">
+            {followRequests.length > 0 && (
+              <div className="border-b border-border/50 bg-muted/30">
+                <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Follow requests
+                </p>
+                {followRequests.map((request) => (
+                  <div key={request.request_id} className="flex items-center gap-3 px-4 py-2.5">
+                    <div className="relative h-9 w-9 flex-shrink-0 overflow-hidden rounded-full border border-border bg-muted">
+                      <Image
+                        src={request.avatar_url || DEFAULT_AVATAR}
+                        alt=""
+                        fill
+                        className="object-cover"
+                        sizes="36px"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs leading-snug text-foreground">
+                        <span className="font-semibold">@{request.username}</span>
+                        <span className="text-muted-foreground"> wants to follow you</span>
+                      </p>
+                      <div className="flex gap-2 mt-2">
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs px-3"
+                          onClick={() => handleFollowRequest(request, "accept")}
+                          disabled={processingRequest === request.request_id}
+                        >
+                          {processingRequest === request.request_id ? "…" : "Confirm"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs px-3"
+                          onClick={() => handleFollowRequest(request, "reject")}
+                          disabled={processingRequest === request.request_id}
+                        >
+                          Decline
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {isLoading && !fetched ? (
               <div className="flex items-center justify-center py-10">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
-            ) : activities.length === 0 ? (
+            ) : activities.length === 0 && followRequests.length === 0 ? (
               <div className="py-10 text-center">
                 <p className="text-sm font-medium text-foreground">No updates yet</p>
                 <p className="mt-1 text-xs text-muted-foreground">

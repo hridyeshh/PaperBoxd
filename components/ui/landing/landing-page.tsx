@@ -1,39 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, createContext, useContext } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
-import { Send } from "lucide-react";
-import { PrivacyPolicyDialog } from "@/components/ui/dialogs/privacy-policy-dialog";
-import { TermsOfServiceDialog } from "@/components/ui/dialogs/terms-of-service-dialog";
-import { CookieSettingsDialog } from "@/components/ui/dialogs/cookie-settings-dialog";
-import { AboutUsDialog } from "@/components/ui/dialogs/about-us-dialog";
-
-// ── Book cover data ──────────────────────────────────────────────────────────
-// Gradient + typography fallbacks used while real books load (or if the API fails).
-const COVERS = [
-  { g: "linear-gradient(155deg,#6b5b95 0%,#2f1f50 100%)", t: "The Left Hand\nof Darkness", a: "Le Guin" },
-  { g: "linear-gradient(155deg,#c44536 0%,#6a1f1a 100%)", t: "Pachinko", a: "Min Jin Lee" },
-  { g: "linear-gradient(155deg,#c49a6c 0%,#7a5230 100%)", t: "Norwegian\nWood", a: "Murakami" },
-  { g: "linear-gradient(155deg,#2a4a3a 0%,#10201a 100%)", t: "Piranesi", a: "Clarke" },
-  { g: "linear-gradient(155deg,#3a5a7a 0%,#15253a 100%)", t: "The Sea,\nthe Sea", a: "Murdoch" },
-  { g: "linear-gradient(155deg,#8a3a5a 0%,#3d1528 100%)", t: "Beloved", a: "Morrison" },
-  { g: "linear-gradient(155deg,#4a6a2a 0%,#1e2e10 100%)", t: "Circe", a: "Miller" },
-  { g: "linear-gradient(155deg,#b85c38 0%,#5c2810 100%)", t: "Middlemarch", a: "Eliot" },
-  { g: "linear-gradient(155deg,#2a3a5a 0%,#0e1525 100%)", t: "Master &\nMargarita", a: "Bulgakov" },
-  { g: "linear-gradient(155deg,#8a7a2a 0%,#3d3510 100%)", t: "Anna\nKarenina", a: "Tolstoy" },
-  { g: "linear-gradient(155deg,#5a2a6a 0%,#250e30 100%)", t: "Americanah", a: "Adichie" },
-  { g: "linear-gradient(155deg,#1a5a4a 0%,#081f18 100%)", t: "Demon\nCopperhead", a: "Kingsolver" },
-  { g: "linear-gradient(155deg,#6b4a2a 0%,#2d1a08 100%)", t: "Lonesome\nDove", a: "McMurtry" },
-  { g: "linear-gradient(155deg,#3a2a6a 0%,#150e30 100%)", t: "Invisible\nMan", a: "Ellison" },
-  { g: "linear-gradient(155deg,#5a4a1a 0%,#251e06 100%)", t: "Their Eyes\nWere Watching\nGod", a: "Hurston" },
-  { g: "linear-gradient(155deg,#1a3a5a 0%,#081525 100%)", t: "Remains\nof the Day", a: "Ishiguro" },
-  { g: "linear-gradient(155deg,#6a3a2a 0%,#2d1510 100%)", t: "Wide\nSargasso\nSea", a: "Rhys" },
-  { g: "linear-gradient(155deg,#2a5a3a 0%,#0e2518 100%)", t: "Kindred", a: "Butler" },
-  { g: "linear-gradient(155deg,#6b2a3a 0%,#2d1018 100%)", t: "Beautiful\nWorld", a: "Rooney" },
-  { g: "linear-gradient(155deg,#3a4a2a 0%,#15200e 100%)", t: "Trust", a: "Diaz" },
-  { g: "linear-gradient(155deg,#5a3a6a 0%,#251530 100%)", t: "Tomorrow,\nand Tomorrow", a: "Zevin" },
-  { g: "linear-gradient(155deg,#2a6a5a 0%,#0e2820 100%)", t: "Klara &\nthe Sun", a: "Ishiguro" },
-];
+import {
+  BooksContext,
+  useBooks,
+  useLandingBooks,
+  coverBg,
+  type LandingBook,
+} from "@/components/ui/landing/books";
+import { LandingNav, LandingFooter } from "@/components/ui/landing/web-chrome";
+import { CasesGrid, FAQDigest, PBW_CASES, PBW_ARROW } from "@/components/ui/landing/web-sections";
 
 const FRIENDS = [
   { u: "maya.r", n: "Maya", g: "linear-gradient(135deg,#d97757,#6b3520)" },
@@ -43,94 +20,6 @@ const FRIENDS = [
   { u: "omar", n: "Omar", g: "linear-gradient(135deg,#c79a3a,#5a4218)" },
   { u: "lin", n: "Lin", g: "linear-gradient(135deg,#6f5b8e,#2f243f)" },
 ];
-
-// ── Real books (with placeholder fallback) ───────────────────────────────────
-
-type LandingBook = {
-  id: string;
-  src?: string;      // real cover image URL (undefined → render gradient + typography)
-  title: string;     // single-line plain title
-  author: string;
-  g: string;         // gradient fallback
-  t: string;         // multi-line typography for fallback rendering
-};
-
-const FALLBACK_BOOKS: LandingBook[] = COVERS.map((c, i) => ({
-  id: `f-${i}`,
-  title: c.t.replace(/\n/g, " "),
-  author: c.a,
-  g: c.g,
-  t: c.t,
-}));
-
-const BooksContext = createContext<LandingBook[]>(FALLBACK_BOOKS);
-const useBooks = () => useContext(BooksContext);
-
-type LandingApiBook = {
-  id: string;
-  title: string;
-  author: string;
-  cover: string;
-};
-
-// Loads an image and resolves true only if it's a real cover (not a placeholder).
-// Google Books "no image available" placeholders are typically ≤128px wide.
-function validateCoverImage(url: string, timeoutMs = 2500): Promise<boolean> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const timer = setTimeout(() => resolve(false), timeoutMs);
-    img.onload = () => {
-      clearTimeout(timer);
-      resolve(img.naturalWidth > 128 && img.naturalHeight > 150);
-    };
-    img.onerror = () => {
-      clearTimeout(timer);
-      resolve(false);
-    };
-    img.src = url;
-  });
-}
-
-function useLandingBooks(): { books: LandingBook[]; loading: boolean } {
-  const [books, setBooks] = useState<LandingBook[]>(FALLBACK_BOOKS);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/books/landing?limit=40")
-      .then((r) => (r.ok ? r.json() : null))
-      .then(async (data: { books?: LandingApiBook[] } | null) => {
-        if (cancelled) return;
-        if (data?.books?.length) {
-          const candidates = data.books.filter(
-            (b) => b.cover && b.cover.trim().startsWith("http")
-          );
-          // Validate all covers in parallel — strips placeholder "no image" images
-          const results = await Promise.all(
-            candidates.map((b) => validateCoverImage(b.cover))
-          );
-          if (cancelled) return;
-          const real: LandingBook[] = candidates
-            .filter((_, i) => results[i])
-            .map((b, i) => {
-              const fb = FALLBACK_BOOKS[i % FALLBACK_BOOKS.length];
-              return {
-                id: b.id || `r-${i}`,
-                src: b.cover,
-                title: b.title,
-                author: b.author,
-                g: fb.g,
-                t: b.title,
-              };
-            });
-          if (real.length > 0) setBooks(real);
-        }
-        if (!cancelled) setLoading(false);
-      })
-      .catch(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
-  return { books, loading };
-}
 
 // ── Hooks ────────────────────────────────────────────────────────────────────
 
@@ -211,12 +100,6 @@ interface SphereProps {
   count?: number;
   coverW?: number;
   spin?: number;
-}
-
-function coverBg(book: LandingBook): string {
-  return book.src
-    ? `center / cover no-repeat url("${book.src}"), ${book.g}`
-    : book.g;
 }
 
 function Sphere({ size = 460, count = 18, coverW = 60, spin = 60 }: SphereProps) {
@@ -315,122 +198,6 @@ function Sphere({ size = 460, count = 18, coverW = 60, spin = 60 }: SphereProps)
 }
 
 // ── Nav ───────────────────────────────────────────────────────────────────────
-
-function LandingNav({ dialogOpen }: { dialogOpen: boolean }) {
-  const [dark, setDark] = useState(false);
-  useEffect(() => {
-    const on = () => {
-      const sections = document.querySelectorAll("[data-nav-dark]");
-      let isDark = false;
-      sections.forEach((s) => {
-        const r = s.getBoundingClientRect();
-        if (r.top < 80 && r.bottom > 80) isDark = true;
-      });
-      setDark(isDark);
-    };
-    on();
-    window.addEventListener("scroll", on, { passive: true });
-    window.addEventListener("resize", on);
-    return () => {
-      window.removeEventListener("scroll", on);
-      window.removeEventListener("resize", on);
-    };
-  }, []);
-
-  return (
-    <nav
-      className="lp-nav"
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 100,
-        height: 64,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "0 28px",
-        background: dark ? "rgba(15,15,15,0.6)" : "rgba(255,255,255,0.78)",
-        backdropFilter: "saturate(180%) blur(14px)",
-        WebkitBackdropFilter: "saturate(180%) blur(14px)",
-        borderBottom: dark ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(0,0,0,0.05)",
-        transition: "background .3s, border-color .3s, color .3s, opacity .25s",
-        color: dark ? "#fff" : "#111",
-        opacity: dialogOpen ? 0 : 1,
-        pointerEvents: dialogOpen ? "none" : "auto",
-      }}
-    >
-      <span
-        className="lp-nav-wordmark"
-        style={{
-          fontFamily: '"brooklyn-heritage-script", "Pinyon Script", cursive',
-          fontSize: 30,
-          lineHeight: 1,
-          color: "inherit",
-        }}
-      >
-        PaperBoxd
-      </span>
-      <div className="lp-nav-actions" style={{ display: "flex", gap: 22, alignItems: "center" }}>
-        <a
-          href="#explore"
-          className="lp-nav-link"
-          style={{
-            fontSize: 13.5,
-            fontWeight: 500,
-            color: dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.6)",
-            textDecoration: "none",
-          }}
-        >
-          Explore
-        </a>
-        <a
-          href="#friends"
-          className="lp-nav-link"
-          style={{
-            fontSize: 13.5,
-            fontWeight: 500,
-            color: dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.6)",
-            textDecoration: "none",
-          }}
-        >
-          Friends
-        </a>
-        <Link
-          href="/auth"
-          className="lp-nav-link"
-          style={{
-            fontSize: 13.5,
-            fontWeight: 500,
-            color: dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.6)",
-            textDecoration: "none",
-          }}
-        >
-          Sign in
-        </Link>
-        <Link
-          href="/auth"
-          style={{
-            background: dark ? "#fff" : "#111",
-            color: dark ? "#111" : "#fff",
-            fontFamily: "inherit",
-            fontSize: 13,
-            fontWeight: 600,
-            border: "none",
-            padding: "8px 16px",
-            borderRadius: 999,
-            cursor: "pointer",
-            textDecoration: "none",
-            display: "inline-block",
-          }}
-        >
-          Join free
-        </Link>
-      </div>
-    </nav>
-  );
-}
 
 // ── Hero ──────────────────────────────────────────────────────────────────────
 
@@ -655,7 +422,7 @@ function Landing3D() {
       eyebrow: "Chapter two",
       h: "A diary, not a database.",
       em: "Memories, not metadata.",
-      sub: "Pages logged, moods captured, half-finished books forgiven. PaperBoxd remembers the reading, not just the books.",
+      sub: "Pages logged, a line written when you feel like it, half-finished books forgiven. PaperBoxd remembers the reading, not just the books.",
     },
     {
       eyebrow: "Chapter three",
@@ -958,7 +725,7 @@ function DiaryCard() {
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", fontFamily: '"Geist Mono", monospace', fontSize: 10, color: "#aaa", letterSpacing: "0.08em" }}>
         <span>Tue · 7:42 pm</span>
-        <span>Slow burn</span>
+        <span>★★★★☆</span>
       </div>
     </div>
   );
@@ -1018,7 +785,7 @@ function LandingFeatures() {
         <em style={{ fontStyle: "italic", fontWeight: 400, color: "rgba(0,0,0,0.5)" }}>built one shelf at a time.</em>
       </h2>
       <p className="lp-reveal lp-reveal-d2" style={{ fontSize: "clamp(15px, 1.5vw, 19px)", lineHeight: 1.55, color: "rgba(0,0,0,0.55)", maxWidth: 540, marginTop: 20 }}>
-        Three small things that change how you read. No streaks. No notifications you didn&apos;t ask for. No engagement bait.
+        Three small things that change how you read. No notifications you didn&apos;t ask for, no engagement bait, no ads.
       </p>
 
       <div className="lp-features-grid">
@@ -1030,7 +797,7 @@ function LandingFeatures() {
               A diary, not a database.
             </h3>
             <p style={{ fontSize: 14, lineHeight: 1.55, color: "rgba(0,0,0,0.6)", margin: 0 }}>
-              Log pages, capture moods, write a sentence when you feel like it. Your library remembers the reading, not just the title.
+              Log pages, rate what you finish, write a sentence when you feel like it. Your library remembers the reading, not just the title.
             </p>
           </div>
           <div style={{ marginTop: 28, flex: 1, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
@@ -1046,7 +813,7 @@ function LandingFeatures() {
               Friends, between covers.
             </h3>
             <p style={{ fontSize: 14, lineHeight: 1.55, color: "rgba(0,0,0,0.6)", margin: 0 }}>
-              See what they shelved, what they loved, what they quietly abandoned at p.42. Borrow their lists.
+              See what they shelved, what they loved, and what&apos;s still sitting unfinished. Borrow their lists.
             </p>
           </div>
           <div style={{ marginTop: 28, flex: 1, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
@@ -1062,7 +829,7 @@ function LandingFeatures() {
               Recommendations that listen.
             </h3>
             <p style={{ fontSize: 14, lineHeight: 1.55, color: "rgba(255,255,255,0.62)", margin: 0 }}>
-              The more you shelve, the smarter your wall gets. Five carousels of next reads, curated from your taste and your friends&apos;.
+              The more you shelve, the smarter your wall gets. Six carousels of next reads, curated from your taste and your friends&apos;.
             </p>
           </div>
           <div style={{ marginTop: 28, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
@@ -1189,7 +956,7 @@ function LandingFriendsBand() {
             than the feed.
           </h2>
           <p className="lp-reveal lp-reveal-d2" style={{ fontSize: "clamp(15px, 1.5vw, 19px)", lineHeight: 1.55, color: "rgba(255,255,255,0.6)", maxWidth: 540, marginTop: 20 }}>
-            Follow people who read, not influencers who post. See what they finished at 2am, what they put down at p.42, and what they keep going back to.
+            Follow people who read, not influencers who post. See what they finished at 2am, what&apos;s still unfinished, and what they keep going back to.
           </p>
           <div className="lp-reveal lp-reveal-d3" style={{ marginTop: 28 }}>
             <Link href="/auth" className="lp-pill lp-pill-invert">Find your friends</Link>
@@ -1232,6 +999,45 @@ function LandingFriendsBand() {
 }
 
 // ── CTA ───────────────────────────────────────────────────────────────────────
+
+// ── Case studies teaser ───────────────────────────────────────────────────────
+
+// Three of the ten — the rest live on /case-studies.
+function LandingCaseStudies() {
+  // Drop `wide` so the teaser is an even 3-up row — the ragged editorial grid
+  // is for the full /case-studies page.
+  const featured = useMemo(() => PBW_CASES.slice(0, 3).map((c) => ({ ...c, wide: false })), []);
+  return (
+    <section id="case-studies" className="pbw-wrap" style={{ padding: "120px 24px 40px" }}>
+      <div className="lp-reveal">
+        <div className="pbw-kicker">Research</div>
+        <h2 className="pbw-h2" style={{ marginTop: 16 }}>
+          What happens when<br /><em>taste gets a shelf.</em>
+        </h2>
+        <p className="pbw-p" style={{ maxWidth: 480, marginTop: 20 }}>
+          Ten things publishers, libraries and creators have already proved about
+          readers — and what each one changed about how PaperBoxd is built.
+        </p>
+      </div>
+      <CasesGrid cases={featured} />
+      <div style={{ marginTop: 40 }}>
+        <Link className="pbw-pill pbw-pill--ghost" href="/case-studies">
+          All ten write-ups {PBW_ARROW}
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+// ── FAQ teaser ────────────────────────────────────────────────────────────────
+
+function LandingFAQ() {
+  return (
+    <section id="faq" className="pbw-wrap" style={{ padding: "110px 24px 40px" }}>
+      <FAQDigest />
+    </section>
+  );
+}
 
 function LandingCTA() {
   return (
@@ -1276,227 +1082,6 @@ function LandingCTA() {
         </div>
       </div>
     </section>
-  );
-}
-
-// ── Footer ────────────────────────────────────────────────────────────────────
-
-interface LandingFooterProps {
-  privacyOpen: boolean; setPrivacyOpen: (v: boolean) => void;
-  termsOpen: boolean;   setTermsOpen:   (v: boolean) => void;
-  cookieOpen: boolean;  setCookieOpen:  (v: boolean) => void;
-  aboutOpen: boolean;   setAboutOpen:   (v: boolean) => void;
-}
-
-function LandingFooter({ privacyOpen, setPrivacyOpen, termsOpen, setTermsOpen, cookieOpen, setCookieOpen, aboutOpen, setAboutOpen }: LandingFooterProps) {
-  const [email, setEmail] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  const handleNewsletter = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!email || submitting) return;
-    setSubmitting(true);
-    setMsg(null);
-    try {
-      const res = await fetch("/api/newsletter/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, source: "landing-footer" }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setMsg({ type: "success", text: data.message || "You're in. Welcome." });
-        setEmail("");
-        setTimeout(() => setMsg(null), 5000);
-      } else {
-        setMsg({ type: "error", text: data.error || "Something went wrong." });
-      }
-    } catch {
-      setMsg({ type: "error", text: "Failed to subscribe. Try again later." });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const fl: React.CSSProperties = {
-    display: "block",
-    color: "#444",
-    textDecoration: "none",
-    fontSize: 14,
-    marginBottom: 8,
-    fontFamily: 'var(--font-playfair), "Playfair Display", Georgia, serif',
-    transition: "color .15s",
-  };
-  const ch: React.CSSProperties = {
-    fontFamily: '"Geist Sans", "Geist", system-ui, sans-serif',
-    fontSize: 9.5,
-    letterSpacing: "0.22em",
-    textTransform: "uppercase" as const,
-    color: "#aaa",
-    marginBottom: 16,
-    fontWeight: 500,
-  };
-  const btnLink: React.CSSProperties = {
-    display: "block",
-    background: "none",
-    border: "none",
-    padding: 0,
-    color: "#444",
-    fontSize: 14,
-    cursor: "pointer",
-    textAlign: "left" as const,
-    marginBottom: 8,
-    fontFamily: 'var(--font-playfair), "Playfair Display", Georgia, serif',
-  };
-  const iconBtn: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 34,
-    height: 34,
-    borderRadius: 999,
-    border: "1px solid #e0e0e0",
-    background: "transparent",
-    color: "#555",
-    cursor: "pointer",
-    textDecoration: "none",
-    transition: "border-color .2s, color .2s",
-  };
-
-  return (
-    <>
-      <footer style={{ borderTop: "1px solid #efefef", padding: "64px 24px 36px", background: "#fafafa" }}>
-        <div style={{ maxWidth: 1240, margin: "0 auto" }}>
-          <div className="lp-footer-grid">
-
-            {/* Newsletter column */}
-            <div style={{ position: "relative" }}>
-              <div style={{ fontFamily: '"brooklyn-heritage-script", "Pinyon Script", cursive', fontSize: 34, color: "#111", lineHeight: 1, marginBottom: 12 }}>
-                PaperBoxd
-              </div>
-              <p style={{ fontSize: 14, color: "#777", lineHeight: 1.6, maxWidth: 280, marginBottom: 20, fontFamily: 'var(--font-playfair), "Playfair Display", Georgia, serif' }}>
-                Subscribe to be the first to know about new features and updates.
-              </p>
-              <form onSubmit={handleNewsletter} style={{ position: "relative", maxWidth: 280 }}>
-                <input
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={submitting}
-                  style={{
-                    width: "100%",
-                    padding: "10px 44px 10px 14px",
-                    border: "1px solid #e0e0e0",
-                    borderRadius: 999,
-                    fontSize: 13.5,
-                    background: "#fff",
-                    color: "#111",
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
-                />
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  style={{
-                    position: "absolute",
-                    right: 5,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    width: 30,
-                    height: 30,
-                    borderRadius: 999,
-                    background: "#111",
-                    border: "none",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#fff",
-                    opacity: submitting ? 0.5 : 1,
-                  }}
-                >
-                  <Send size={13} />
-                </button>
-              </form>
-              {msg && (
-                <p style={{ marginTop: 10, fontSize: 12.5, color: msg.type === "success" ? "#2a7a4a" : "#b03030" }}>
-                  {msg.text}
-                </p>
-              )}
-              {/* decorative blur */}
-              <div style={{ position: "absolute", right: -16, top: 0, width: 80, height: 80, borderRadius: "50%", background: "rgba(0,0,0,0.04)", filter: "blur(24px)", pointerEvents: "none" }} />
-            </div>
-
-            {/* Quick Links */}
-            <div>
-              <div style={ch}>Quick Links</div>
-              <Link href="/" style={fl}>Home</Link>
-              <button style={btnLink} onClick={() => setAboutOpen(true)}>About Us</button>
-              <Link href="/recommendations" style={fl}>Discover Books</Link>
-              <Link href="/search" style={fl}>Search</Link>
-              <Link href="/lists" style={fl}>Lists</Link>
-            </div>
-
-            {/* Contact */}
-            <div>
-              <div style={ch}>Contact</div>
-              <p style={{ fontSize: 14, color: "#444", lineHeight: 1.8, marginTop: 0, fontFamily: 'var(--font-playfair), "Playfair Display", Georgia, serif' }}>
-                PaperBoxd<br />
-                Your Reading Companion<br />
-                <a href="mailto:paperboxd@gmail.com" style={{ color: "#444", textDecoration: "underline", textUnderlineOffset: 3, fontFamily: 'var(--font-playfair), "Playfair Display", Georgia, serif' }}>paperboxd@gmail.com</a><br />
-                Follow us for book updates
-              </p>
-            </div>
-
-            {/* Follow */}
-            <div>
-              <div style={ch}>Follow</div>
-              <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
-                <a href="https://x.com/hridyeshhh" target="_blank" rel="noopener noreferrer" style={iconBtn} title="Twitter / X">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.738l7.73-8.835L1.254 2.25H8.08l4.261 5.635 5.903-5.635Zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                </a>
-                <a href="https://www.instagram.com/hridyeshhhh/" target="_blank" rel="noopener noreferrer" style={iconBtn} title="Instagram">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
-                </a>
-                <a href="https://www.linkedin.com/in/hridyeshh/" target="_blank" rel="noopener noreferrer" style={iconBtn} title="LinkedIn">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                </a>
-                <a href="https://github.com/hridyeshh/PaperBoxd" target="_blank" rel="noopener noreferrer" style={iconBtn} title="GitHub">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
-                </a>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Bottom bar */}
-          <div style={{ marginTop: 48, paddingTop: 24, borderTop: "1px solid #efefef", display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-            <span style={{ fontFamily: '"Geist Sans", "Geist", system-ui, sans-serif', fontSize: 11, color: "#bbb", letterSpacing: "0.06em" }}>© {new Date().getFullYear()} PaperBoxd. All rights reserved.</span>
-            <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "center" }}>
-              <button style={{ ...btnLink, fontSize: 11, color: "#bbb", marginBottom: 0, fontFamily: '"Geist Sans", "Geist", system-ui, sans-serif', letterSpacing: "0.04em" }} onClick={() => setPrivacyOpen(true)}>
-                Privacy Policy
-              </button>
-              <button style={{ ...btnLink, fontSize: 11, color: "#bbb", marginBottom: 0, fontFamily: '"Geist Sans", "Geist", system-ui, sans-serif', letterSpacing: "0.04em" }} onClick={() => setTermsOpen(true)}>
-                Terms of Service
-              </button>
-              <button style={{ ...btnLink, fontSize: 11, color: "#bbb", marginBottom: 0, fontFamily: '"Geist Sans", "Geist", system-ui, sans-serif', letterSpacing: "0.04em" }} onClick={() => setCookieOpen(true)}>
-                Cookie Settings
-              </button>
-            </div>
-            <span style={{ fontFamily: '"Geist Mono", monospace', fontSize: 11, color: "#bbb", letterSpacing: "0.05em" }}>Made for readers, in too many time zones.</span>
-          </div>
-        </div>
-      </footer>
-
-      <PrivacyPolicyDialog open={privacyOpen} onOpenChange={setPrivacyOpen} />
-      <TermsOfServiceDialog open={termsOpen} onOpenChange={setTermsOpen} />
-      <CookieSettingsDialog open={cookieOpen} onOpenChange={setCookieOpen} />
-      <AboutUsDialog open={aboutOpen} onOpenChange={setAboutOpen} />
-    </>
   );
 }
 
@@ -1662,30 +1247,20 @@ export function LandingPage() {
           .lp-friends-grid { grid-template-columns: 1fr; gap: 40px; }
         }
 
-        .lp-footer-grid {
-          display: grid;
-          grid-template-columns: 2fr 1fr 1fr 1fr;
-          gap: 40px;
-        }
-        @media (max-width: 760px) {
-          .lp-footer-grid { grid-template-columns: 1fr 1fr; gap: 32px; }
-        }
+        /* .lp-footer-grid and the mobile .lp-nav rules live in globals.css —
+           the nav and footer are shared with /case-studies, /faq and the 404. */
 
         @media (max-width: 640px) {
           .lp-features-grid { padding: 0; }
         }
 
-        /* ── Mobile browser: keep hero logo + nav inside the viewport ── */
+        /* ── Mobile browser: keep the hero logo inside the viewport ── */
         @media (max-width: 768px) {
           .lp-wordmark {
             font-size: clamp(40px, 15vw, 92px) !important;
             max-width: 100%;
             overflow-wrap: anywhere;
           }
-          .lp-nav { padding: 0 16px !important; }
-          .lp-nav-wordmark { font-size: 24px !important; }
-          .lp-nav-link { display: none !important; }
-          .lp-nav-actions { gap: 0 !important; }
         }
 
         /* ── Splash loader ── */
@@ -1773,7 +1348,9 @@ export function LandingPage() {
         <Landing3D />
         <LandingFeatures />
         <LandingSpotlight />
+        <LandingCaseStudies />
         <LandingFriendsBand />
+        <LandingFAQ />
         <LandingCTA />
         <LandingFooter
           privacyOpen={privacyOpen} setPrivacyOpen={setPrivacyOpen}

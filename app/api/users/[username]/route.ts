@@ -399,6 +399,10 @@ export async function GET(
       pronouns: Array.isArray(goUser.pronouns) ? goUser.pronouns : [],
       links: Array.isArray(goUser.links) ? goUser.links : [],
       isPublic: goUser.is_public ?? true,
+      // Private profiles come back redacted from Go: canView is false and the
+      // collections below arrive empty because the gate 403s them.
+      canView: goUser.can_view ?? true,
+      hasRequested: goUser.has_requested ?? false,
 
       // Stats
       totalBooksRead: goUser.books_read_count ?? bookshelf.length,

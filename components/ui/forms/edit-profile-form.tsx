@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/primitives/label";
 import { Textarea } from "@/components/ui/primitives/textarea";
 import { AvatarEditor } from "@/components/ui/features/avatar-editor";
 import { cn, DEFAULT_AVATAR } from "@/lib/utils";
+import { toast } from "sonner";
 
 export type EditableProfile = {
   username: string;
@@ -163,6 +164,32 @@ export function EditProfileForm({
     },
     [],
   );
+
+  const [savingVisibility, setSavingVisibility] = React.useState(false);
+
+  const handleVisibilityChange = React.useCallback(async (isPublic: boolean) => {
+    const previous = localProfile.isPublic;
+    updateProfile({ isPublic });
+    setSavingVisibility(true);
+    try {
+      const response = await fetch("/api/users/me/visibility", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isPublic }),
+      });
+      if (!response.ok) throw new Error("Failed to update visibility");
+      toast.success(
+        isPublic
+          ? "Your profile is public. Anyone waiting to follow you was let in."
+          : "Your profile is private. New followers have to be approved.",
+      );
+    } catch {
+      updateProfile({ isPublic: previous });
+      toast.error("Could not change your privacy setting");
+    } finally {
+      setSavingVisibility(false);
+    }
+  }, [localProfile.isPublic, updateProfile]);
 
   function handleChange(event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     const target = event.target;
@@ -466,6 +493,42 @@ export function EditProfileForm({
             rows={3}
           />
           <p className="text-xs text-muted-foreground/60">Under 160 characters.</p>
+        </div>
+
+        <div className={fieldGroupClass}>
+          <Label className={fieldLabelClass} htmlFor="isPublic">Privacy</Label>
+          <div className="flex items-start justify-between gap-4 rounded-2xl border border-input bg-background px-4 py-3">
+            <div className="space-y-1">
+              <div className="text-sm font-medium text-foreground">
+                {localProfile.isPublic ? "Public account" : "Private account"}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {localProfile.isPublic
+                  ? "Anyone can see your shelves, diary and lists."
+                  : "Only followers you approve can see your shelves, diary and lists. Your name and avatar stay visible so people can ask."}
+              </p>
+            </div>
+            <button
+              id="isPublic"
+              type="button"
+              role="switch"
+              aria-checked={!localProfile.isPublic}
+              aria-label="Private account"
+              disabled={savingVisibility}
+              onClick={() => handleVisibilityChange(!localProfile.isPublic)}
+              className={cn(
+                "relative mt-1 h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50",
+                localProfile.isPublic ? "bg-muted" : "bg-foreground",
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 h-5 w-5 rounded-full bg-background shadow transition-transform",
+                  localProfile.isPublic ? "translate-x-0.5" : "translate-x-[22px]",
+                )}
+              />
+            </button>
+          </div>
         </div>
       </div>
 

@@ -21,6 +21,7 @@ import { HomeLayoutHeader } from "@/components/ui/layout/home-layout-header";
 import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-pattern";
 import { Dropdown } from "@/components/ui/primitives/dropdown";
 import { EditProfileForm, defaultProfile, type EditableProfile } from "@/components/ui/forms/edit-profile-form";
+import { FollowRequestsPanel } from "@/components/ui/features/follow-requests-panel";
 import {
   Dialog,
   DialogContent,
@@ -3530,6 +3531,10 @@ export default function UserProfilePage() {
 
   // Follow state
   const [isFollowing, setIsFollowing] = React.useState(false);
+  // Private-profile state: canView is false when the owner has locked the
+  // account and the viewer is neither the owner nor an approved follower.
+  const [canView, setCanView] = React.useState(true);
+  const [hasRequested, setHasRequested] = React.useState(false);
   const [isFollowLoading, setIsFollowLoading] = React.useState(false);
 
   // Auth prompt state
@@ -3657,6 +3662,8 @@ export default function UserProfilePage() {
               isPublic: typeof data.user.isPublic === "boolean" ? data.user.isPublic : defaultProfile.isPublic,
               avatar: avatarValue,
             };
+            setCanView(data.user.canView !== false);
+            setHasRequested(data.user.hasRequested === true);
             console.log(`[Profile] Setting profile data with avatar:`, profile.avatar ? `"${profile.avatar.substring(0, 100)}..."` : 'missing');
             setProfileData(profile);
 
@@ -4193,6 +4200,9 @@ export default function UserProfilePage() {
     return isAuthenticated && currentUsername === activeUsername;
   }, [isAuthenticated, currentUsername, activeUsername]);
 
+  // The owner always sees their own profile; everyone else is bound by canView.
+  const isLocked = !canView && !isOwnProfile;
+
   const handleAuthPrompt = React.useCallback(() => {
     setAuthPromptOpen(true);
   }, []);
@@ -4303,6 +4313,7 @@ export default function UserProfilePage() {
       const data = await response.json();
 
       setIsFollowing(data.isFollowing);
+      setHasRequested(data.hasRequested === true);
       setFollowersCount(data.followersCount);
 
       if (isOwnProfile) {
@@ -4744,7 +4755,7 @@ export default function UserProfilePage() {
                           : "bg-foreground text-background"
                       )}
                     >
-                      {isFollowLoading ? "..." : isFollowing ? "Following" : "Follow"}
+                      {isFollowLoading ? "..." : isFollowing ? "Following" : hasRequested ? "Requested" : "Follow"}
                     </button>
                   )}
                 </div>
@@ -4935,6 +4946,25 @@ export default function UserProfilePage() {
           {/* ── BODY ─────────────────────────────────────────────── */}
           <div className="max-w-5xl mx-auto px-4 md:px-9 py-6 pb-24 md:pb-8">
 
+            <FollowRequestsPanel enabled={isOwnProfile && !profileData.isPublic} />
+
+            {isLocked ? (
+              <div className="max-w-md mx-auto text-center py-20">
+                <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-full border border-border">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <rect x="4" y="10.5" width="16" height="10" rx="2" />
+                    <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+                  </svg>
+                </div>
+                <h2 className="text-lg font-semibold text-foreground">This account is private</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {hasRequested
+                    ? `${profileData.name || profileData.username} has to approve your request before you can see their shelves, diary and lists.`
+                    : `Follow ${profileData.name || profileData.username} to see their shelves, diary and lists.`}
+                </p>
+              </div>
+            ) : (
+            <>
             {/* Horizontal tabs */}
             <div className="flex gap-0 border-b border-border mb-8 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
               {dockLabels.map((label) => (
@@ -5462,6 +5492,8 @@ export default function UserProfilePage() {
 
             ) : (
               <TabPlaceholder label={activeTab} />
+            )}
+            </>
             )}
 
           </div>

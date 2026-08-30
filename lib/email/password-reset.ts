@@ -131,7 +131,7 @@ export async function sendPasswordResetEmail({
                     <tr>
                       <td style="padding: 32px 48px; background-color: #f7f7f7; border-top: 1px solid #ebebeb; text-align: center; border-radius: 0 0 10px 10px;">
                         <p style="margin: 0 0 8px; font-size: 12px; line-height: 1.6; color: #8a8a8a;">
-                          Need help? Contact us at <a href="mailto:paperboxd@gmail.com" style="color: #252525; text-decoration: underline; text-underline-offset: 2px;">paperboxd@gmail.com</a>
+                          Need help? Contact us at <a href="mailto:hridyesh@paperboxd.in" style="color: #252525; text-decoration: underline; text-underline-offset: 2px;">hridyesh@paperboxd.in</a>
                         </p>
                         <p style="margin: 0; font-size: 12px; line-height: 1.6; color: #8a8a8a;">
                           © ${new Date().getFullYear()} PaperBoxd. All rights reserved.

@@ -31,7 +31,7 @@ You agree not to:
 - Use the Service to harm, stalk, or harvest data about other users
 - Interfere with the normal operation of the Service (e.g., spamming, denial-of-service behavior)
 
-**We have zero tolerance for objectionable content and abusive behavior.** You can report any review, list, diary entry, or user from within the app, and you can block any user so their content no longer reaches you. We review reported content and remove violating material — and suspend or terminate the accounts responsible — typically within 24 hours. Contact us at paperboxd@gmail.com to report abuse.
+**We have zero tolerance for objectionable content and abusive behavior.** You can report any review, list, diary entry, or user from within the app, and you can block any user so their content no longer reaches you. We review reported content and remove violating material — and suspend or terminate the accounts responsible — typically within 24 hours. Contact us at hridyesh@paperboxd.in to report abuse.
 
 ## 5. Your Content
 
@@ -54,7 +54,7 @@ Book information (titles, covers, descriptions, ISBNs) is sourced from third-par
 
 PaperBoxd's branding, design, and software are our intellectual property (or licensed to us) and may not be copied or used without permission.
 
-If you believe content on PaperBoxd infringes your intellectual property rights, contact us at paperboxd@gmail.com with:
+If you believe content on PaperBoxd infringes your intellectual property rights, contact us at hridyesh@paperboxd.in with:
 - A description of the copyrighted/trademarked work
 - The specific content you believe infringes it (e.g. a link or screenshot)
 - Your contact information and a statement of good-faith belief that the use is unauthorized
@@ -93,7 +93,7 @@ We may update these Terms from time to time. We'll update the "Effective date" a
 
 ## 15. Contact
 
-Questions about these Terms: paperboxd@gmail.com
+Questions about these Terms: hridyesh@paperboxd.in
 
 ---
 

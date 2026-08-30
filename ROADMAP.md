@@ -167,7 +167,7 @@ As of May 1, 2026:
 
 - Website: <https://paperboxd.in>
 - Backend API: <https://paperboxd-backend-production-d9e0.up.railway.app>
-- Contact: `paperboxd@gmail.com`
+- Contact: `hridyesh@paperboxd.in`
 
 ---
 
