@@ -24,7 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/primitives/input";
 import { BookShareButton } from "@/components/ui/features/book-share-button";
 import { ReadingProgress } from "@/components/ui/features/reading-progress";
-import { StarRating } from "@/components/ui/star-rating";
+import { StarRating, MIN_PAGES_TO_RATE } from "@/components/ui/star-rating";
 import { ReviewsList } from "@/components/ui/reviews-list";
 
 const playfair = Playfair_Display({
@@ -987,6 +987,11 @@ export default function BookDetailPage() {
     ? "Currently Reading"
     : "+ Mark as Finished";
 
+  // Rating/review gate — finishing the book counts on its own, since a book with
+  // no known page count can never accumulate logged pages. Mirrors canRateEntry
+  // on the backend, which enforces it.
+  const canRate = isInBookshelf || pagesRead >= MIN_PAGES_TO_RATE;
+
   // Active states for segmented buttons
   const wantActive = isInTBR && !isInBookshelf && pagesRead === 0;
   const readActive = isInBookshelf;
@@ -1205,6 +1210,7 @@ export default function BookDetailPage() {
                       username={isAuthenticated ? (user?.username ?? null) : null}
                       currentUserId={user?.id}
                       readOnly={!isAuthenticated}
+                      canRate={canRate}
                         />
                   </div>
 
@@ -1794,6 +1800,7 @@ export default function BookDetailPage() {
                   username={isAuthenticated ? (user?.username ?? null) : null}
                   currentUserId={user?.id}
                   readOnly={!isAuthenticated}
+                  canRate={canRate}
                 />
               </div>
 

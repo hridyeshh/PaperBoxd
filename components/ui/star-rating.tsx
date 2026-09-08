@@ -1,7 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { Star, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Star, MoreHorizontal, Pencil, Trash2, BookOpen } from "lucide-react";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/primitives/dialog";
+import { Button } from "@/components/ui/primitives/button";
 import { cn } from "@/lib/utils";
 
 type StarRatingProps = {
@@ -9,8 +19,14 @@ type StarRatingProps = {
   username: string | null;
   currentUserId?: string | null;
   readOnly?: boolean;
+  /** False until the reader has logged MIN_PAGES_TO_RATE pages or finished the
+   *  book. The backend enforces the same rule; this only keeps the UI honest. */
+  canRate?: boolean;
   onRatingChange?: (rating: number | null, review: string | null) => void;
 };
+
+/** Kept in sync with MinPagesToRate in the Go backend. */
+export const MIN_PAGES_TO_RATE = 20;
 
 type ReviewEntry = {
   user_id: string;
@@ -27,6 +43,7 @@ export function StarRating({
   username,
   currentUserId,
   readOnly = false,
+  canRate = true,
   onRatingChange,
 }: StarRatingProps) {
   const [rating, setRating] = React.useState<number | null>(null);
@@ -37,6 +54,7 @@ export function StarRating({
   const [saving, setSaving] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [gateOpen, setGateOpen] = React.useState(false);
 
   // Draft state for editor
   const [draftRating, setDraftRating] = React.useState<number | null>(null);
@@ -86,7 +104,11 @@ export function StarRating({
         headers: { "Content-Type": "application/json", "x-username": username },
         body: JSON.stringify({ rating: newRating ?? 0, review: newReview || null }),
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+        toast.error(err.message || err.error || "Couldn't save your rating");
+        return null;
+      }
       const data = (await res.json()) as { rating?: number | null; review?: string | null; edited?: boolean };
       setRating(newRating);
       setReview(newReview);
@@ -126,8 +148,36 @@ export function StarRating({
   };
 
   const hasRating = rating !== null;
+  // A reader who already rated keeps the edit/delete menu even if their logged
+  // progress later drops below the threshold — the gate blocks new ratings, it
+  // doesn't strand old ones.
   const canInteract = !readOnly && !!username;
+  // Signed in but not far enough into the book: the stars stay tappable and
+  // explain the rule, rather than sitting there dead.
+  const gated = canInteract && !canRate && !hasRating;
   const displayed = hovered ?? draftRating ?? 0;
+
+  const gateDialog = (
+    <Dialog open={gateOpen} onOpenChange={setGateOpen}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4 mx-auto">
+            <BookOpen className="w-8 h-8 text-primary" />
+          </div>
+          <DialogTitle className="text-center">Log a few pages first</DialogTitle>
+          <DialogDescription className="text-center">
+            Rating and reviewing open up once you&apos;re {MIN_PAGES_TO_RATE} pages in — or once
+            you&apos;ve marked the book as finished.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button onClick={() => setGateOpen(false)} className="w-full sm:w-auto">
+            Got it
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 
   // ── Read-only / logged out / no rating yet (no interaction) ──────────────
   if (!canInteract && !hasRating) {
@@ -137,6 +187,28 @@ export function StarRating({
           <Star key={s} className="h-5 w-5 fill-transparent text-muted-foreground/40" />
         ))}
       </div>
+    );
+  }
+
+  // ── Signed in, not far enough in: tappable stars that explain the rule ────
+  if (gated) {
+    return (
+      <>
+        <div className="flex items-center gap-1">
+          {[1, 2, 3, 4, 5].map((star) => (
+            <button
+              key={star}
+              type="button"
+              onClick={() => setGateOpen(true)}
+              className="cursor-pointer hover:scale-110 active:scale-95 transition-all duration-100"
+              aria-label={`Rate ${star} star${star !== 1 ? "s" : ""}`}
+            >
+              <Star className="h-5 w-5 fill-transparent text-muted-foreground/40" />
+            </button>
+          ))}
+        </div>
+        {gateDialog}
+      </>
     );
   }
 

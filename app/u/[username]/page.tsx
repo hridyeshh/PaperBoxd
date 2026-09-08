@@ -50,13 +50,15 @@ import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { ReadingProgressCompact } from "@/components/ui/features/reading-progress-compact";
 
-const dockLabels = ["Overview", "Favourites", "Bookshelf", "Diary", "Lists", "Authors"] as const;
+const dockLabels = ["Overview", "Favourites", "Bookshelf", "Diary", "Lists"] as const;
+// Display text for a dock label. The label itself stays the tab's identity —
+// it is the `?tab=` URL key — so "Diary" is renamed only where it is rendered.
+const tabLabel = (label: DockLabel) => (label === "Diary" ? "Thoughts" : label);
 type DockLabel = (typeof dockLabels)[number] | "Activity";
 type ActivityView = "Friends" | "Me";
 const BOOKSHELF_PAGE_SIZE = 12;
 const LIKES_PAGE_SIZE = 12;
 const TBR_PAGE_SIZE = 12;
-const AUTHORS_PAGE_SIZE = 12;
 const DIARY_PAGE_SIZE = 15; // 3x5 grid
 const LISTS_PAGE_SIZE = 12;
 
@@ -82,14 +84,6 @@ type ActivityEntry = {
   inviter?: string; // For collaboration requests
 };
 
-
-type AuthorStat = {
-  name: string;
-  read: number;
-  tbr: number;
-  cover: string;
-  books?: BookshelfBook[];
-};
 
 type UserListItem = {
   id: string;
@@ -1836,217 +1830,6 @@ function TbrSection({
   );
 }
 
-function AuthorsSection({
-  authors,
-  page,
-  pageSize,
-  onPageChange,
-  bookshelfBooks,
-  isMobile = false,
-}: {
-  authors: AuthorStat[];
-  page: number;
-  pageSize: number;
-  onPageChange: (page: number) => void;
-  bookshelfBooks: BookshelfBook[];
-  isMobile?: boolean;
-}) {
-  const [selectedAuthor, setSelectedAuthor] = React.useState<AuthorStat | null>(null);
-  const [isAuthorDialogOpen, setIsAuthorDialogOpen] = React.useState(false);
-  const [authorBooks, setAuthorBooks] = React.useState<BookshelfBook[]>([]);
-
-  const totalPages = Math.ceil(authors.length / pageSize);
-  const startIndex = (page - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedAuthors = authors.slice(startIndex, endIndex);
-
-  const handleAuthorClick = React.useCallback((author: AuthorStat) => {
-    try {
-      if (!author || !author.name) return;
-
-      // Filter bookshelf books by this author
-      const booksByAuthor = (Array.isArray(bookshelfBooks) ? bookshelfBooks : []).filter((book) => {
-        if (!book || !book.author) return false;
-        const bookAuthor = book.author || "";
-        return bookAuthor.toLowerCase() === author.name.toLowerCase();
-      });
-
-      setAuthorBooks(booksByAuthor);
-      setSelectedAuthor(author);
-      setIsAuthorDialogOpen(true);
-    } catch (error) {
-      console.error("Error in handleAuthorClick:", error);
-    }
-  }, [bookshelfBooks]);
-
-  const router = useRouter();
-  const handleBookClick = React.useCallback((book: BookshelfBook) => {
-    if (book?.id) router.push(`/b/${book.id}`);
-  }, [router]);
-
-  if (authors.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
-        <p className="text-lg font-semibold text-foreground">No authors yet</p>
-        <p className="mt-2 text-sm text-muted-foreground">Authors from the books will appear here.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className={cn(
-        "grid gap-4",
-        isMobile ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
-      )}>
-        {paginatedAuthors.map((author) => {
-          if (!author || !author.name) return null;
-          const displayBooks = (author.books && Array.isArray(author.books)) ? author.books.slice(0, 3) : [];
-
-          return (
-            <div
-              key={author.name}
-              onClick={() => handleAuthorClick(author)}
-              className="group flex flex-col gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm transition-shadow hover:shadow-md cursor-pointer"
-            >
-              {/* 3-Book Grid */}
-              <div className="grid grid-cols-3 gap-1.5">
-                {[0, 1, 2].map((index) => {
-                  const book = displayBooks[index];
-                  const cover = (book && book.cover) ? book.cover : null;
-
-                  return (
-                    <div
-                      key={index}
-                      className="relative aspect-[2/3] overflow-hidden rounded-sm bg-muted/50"
-                    >
-                      {cover ? (
-                        <Image
-                          src={cover}
-                          alt={(book && book.title) ? book.title : `Book ${index + 1}`}
-                          fill
-                          className="object-cover"
-                          sizes="(max-width: 640px) 33vw, 120px"
-                          quality={100}
-                          unoptimized={cover?.includes('isbndb.com') || cover?.includes('images.isbndb.com') || cover?.includes('covers.isbndb.com') || true}
-                          onError={(e) => {
-                            // Fallback to gray placeholder on image error
-                            const target = e.target as HTMLImageElement;
-                            if (target) {
-                              target.style.display = 'none';
-                            }
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-muted/50" />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Author Info */}
-              <div className="flex-1 min-w-0 space-y-1">
-                <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">{author.name || "Unknown Author"}</h3>
-                <p className="text-xs text-muted-foreground">
-                  {author.read || 0} read • {author.tbr || 0} to-be-read
-                </p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      {totalPages > 1 && (
-        <Pagination>
-          <PaginationContent>
-            <PaginationItem>
-              <PaginationPrevious
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (page > 1) onPageChange(page - 1);
-                }}
-                className={page === 1 ? "pointer-events-none opacity-50" : ""}
-              />
-            </PaginationItem>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-              <PaginationItem key={pageNum}>
-                <PaginationLink
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onPageChange(pageNum);
-                  }}
-                  isActive={page === pageNum}
-                >
-                  {pageNum}
-                </PaginationLink>
-              </PaginationItem>
-            ))}
-            <PaginationItem>
-              <PaginationNext
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (page < totalPages) onPageChange(page + 1);
-                }}
-                className={page === totalPages ? "pointer-events-none opacity-50" : ""}
-              />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
-      )}
-
-      {/* Author Books Dialog */}
-      <Dialog open={isAuthorDialogOpen} onOpenChange={setIsAuthorDialogOpen}>
-        <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto p-0">
-          <DialogHeader className="sr-only">
-            <DialogTitle>{selectedAuthor?.name || "Author"} - Books read</DialogTitle>
-          </DialogHeader>
-          <div className="p-6 sm:p-8">
-            {/* Header Section */}
-            <div className="mb-8">
-              <h1 className="text-4xl font-bold text-foreground mb-2">{selectedAuthor?.name}</h1>
-              <p className="text-lg text-muted-foreground">
-                {authorBooks.length} {authorBooks.length === 1 ? "book" : "books"} read
-              </p>
-            </div>
-
-            {/* Books Grid */}
-            {authorBooks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center min-h-[calc(100vh-300px)] text-center">
-                <p className="text-xl text-muted-foreground">
-                  You haven&apos;t read any books by {selectedAuthor?.name} yet
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                {authorBooks.map((book) => (
-                  <div
-                    key={book.id}
-                    onClick={() => handleBookClick(book)}
-                    className="group relative aspect-[2/3] overflow-hidden rounded-lg cursor-pointer"
-                  >
-                    <Image
-                      src={book.cover}
-                      alt={book.title}
-                      fill
-                      className="object-cover transition-transform duration-300 group-hover:scale-105"
-                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 20vw, 16vw"
-                      quality={100}
-                      unoptimized={book.cover?.includes('isbndb.com') || book.cover?.includes('images.isbndb.com') || book.cover?.includes('covers.isbndb.com') || true}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
 function ListCard({
   list,
   canEdit,
@@ -2738,7 +2521,7 @@ function DiarySection({
     <>
       <div className="space-y-6">
         <div className="mb-4">
-          <h2 className="text-xl font-semibold text-foreground">Diary</h2>
+          <h2 className="text-xl font-semibold text-foreground">Thoughts</h2>
           <p className="text-sm text-muted-foreground">Thoughts and reflections on books</p>
         </div>
         <div className={cn(
@@ -3360,7 +3143,6 @@ export default function UserProfilePage() {
   const [likesPage, setLikesPage] = React.useState(1);
   const [tbrPage, setTbrPage] = React.useState(1);
   const [isEditOpen, setIsEditOpen] = React.useState(false);
-  const [authorsPage, setAuthorsPage] = React.useState(1);
   const [diaryPage, setDiaryPage] = React.useState(1);
   const [listsPage, setListsPage] = React.useState(1);
   const [isSavingProfile, setIsSavingProfile] = React.useState(false);
@@ -4326,53 +4108,6 @@ export default function UserProfilePage() {
       setIsFollowLoading(false);
     }
   }, [isAuthenticated, activeUsername, isOwnProfile, isFollowing]);
-  const authorStats = React.useMemo<AuthorStat[]>(() => {
-    const placeholderCover = DEFAULT_COVER;
-    const map = new Map<string, AuthorStat>();
-    const ensureEntry = (name: string, cover?: string) => {
-      if (!map.has(name)) {
-        map.set(name, {
-          name,
-          read: 0,
-          tbr: 0,
-          cover: cover ?? placeholderCover,
-          books: [],
-        });
-      } else if (cover) {
-        const entry = map.get(name)!;
-        if (!entry.cover || entry.cover === placeholderCover) {
-          entry.cover = cover;
-        }
-      }
-      return map.get(name)!;
-    };
-    try {
-      bookshelfBooks.forEach((book) => {
-        if (!book || !book.author) return;
-        const entry = ensureEntry(book.author, book.cover);
-        entry.read += 1;
-        // Add book to author's books array (only from bookshelf, not TBR)
-        if (!entry.books) {
-          entry.books = [];
-        }
-        entry.books.push(book);
-      });
-      tbrBooks.forEach((book) => {
-        if (!book || !book.author) return;
-        const entry = ensureEntry(book.author, book.cover);
-        entry.tbr += 1;
-      });
-      // Sort books for each author (by finishedOn date, newest first)
-      map.forEach((entry) => {
-        if (entry.books) {
-          entry.books = entry.books.slice(0, 3); // Keep only first 3 books
-        }
-      });
-    } catch (error) {
-      console.error("Error calculating author stats:", error);
-    }
-    return Array.from(map.values()).sort((a, b) => b.read + b.tbr - (a.read + a.tbr));
-  }, [bookshelfBooks, tbrBooks]);
 
   const handleProfileSave = React.useCallback(async (data: EditableProfile) => {
     if (!activeUsername) return;
@@ -4516,7 +4251,7 @@ export default function UserProfilePage() {
 
   const dockItems = React.useMemo(() => {
     return dockLabels.map((label) => ({
-      label,
+      label: tabLabel(label),
       onClick: () => setActiveTab(label),
       isActive: activeTab === label,
     }));
@@ -4977,7 +4712,7 @@ export default function UserProfilePage() {
                     activeTab === label && "border-foreground text-foreground font-semibold"
                   )}
                 >
-                  {label}
+                  {tabLabel(label)}
                 </button>
               ))}
               {/* DNF tab — visible on all profiles */}
@@ -5097,53 +4832,8 @@ export default function UserProfilePage() {
                     </div>
                   )}
 
-                  {/* Top Authors */}
-                  {authorStats.length > 0 && (
-                    <div>
-                      <div className="flex items-baseline justify-between mb-4">
-                        <h2 className="font-bold text-xl tracking-tight">Top Authors</h2>
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab("Authors")}
-                          className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          All {authorStats.length} →
-                        </button>
-                      </div>
-                      <div className="bg-card border border-border rounded-xl divide-y divide-border overflow-hidden">
-                        {authorStats.slice(0, 5).map((author, idx) => {
-                          const initials = author.name
-                            .split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("");
-                          const gradients = [
-                            "linear-gradient(135deg,#b85c38,#6e2f1f)",
-                            "linear-gradient(135deg,#a8893f,#5a4520)",
-                            "linear-gradient(135deg,#5a8050,#2a4a2a)",
-                            "linear-gradient(135deg,#3a6a8a,#1a4060)",
-                            "linear-gradient(135deg,#6b5b95,#2f1f50)",
-                          ];
-                          return (
-                            <div key={author.name} className="flex items-center gap-3 px-4 py-3">
-                              <span className="font-mono text-[10px] text-muted-foreground font-semibold w-5 text-right flex-shrink-0">#{idx + 1}</span>
-                              <div
-                                className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-[10px] flex-shrink-0"
-                                style={{ background: gradients[idx % gradients.length] }}
-                              >
-                                {initials}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="font-semibold text-sm leading-tight truncate">{author.name}</div>
-                                <div className="text-[11px] text-muted-foreground">{author.read} book{author.read !== 1 ? "s" : ""} read</div>
-                              </div>
-                              <span className="font-mono font-semibold text-sm text-foreground">{author.read}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
                   {/* Empty state for overview */}
-                  {favoriteBooks.length === 0 && currentlyReading.length === 0 && authorStats.length === 0 && (
+                  {favoriteBooks.length === 0 && currentlyReading.length === 0 && (
                     <div className="flex flex-col items-center justify-center rounded-2xl border border-border bg-muted/20 p-12 text-center">
                       <p className="text-lg font-semibold text-foreground">Nothing here yet</p>
                       <p className="mt-2 text-sm text-muted-foreground">Start tracking books to see your overview.</p>
@@ -5340,16 +5030,6 @@ export default function UserProfilePage() {
                   />
                 )}
               </div>
-
-            ) : activeTab === "Authors" ? (
-              <AuthorsSection
-                authors={authorStats}
-                page={authorsPage}
-                pageSize={isMobile ? 8 : AUTHORS_PAGE_SIZE}
-                onPageChange={setAuthorsPage}
-                bookshelfBooks={bookshelfBooks}
-                isMobile={isMobile}
-              />
 
             ) : activeTab === "Bookshelf" ? (
               <BookshelfSection
