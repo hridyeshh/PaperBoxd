@@ -54,13 +54,17 @@ export async function GET() {
     const { username } = session.user;
 
     // Fetch all sources in parallel. Use settled so one failure doesn't kill rest.
-    const [progressRes, crRes, tbrRes, diaryRes] = await Promise.allSettled([
+    const [progressRes, lastRes, crRes, tbrRes, diaryRes] = await Promise.allSettled([
       goFetchAuthed<{
         today_pages: number;
         today_books: number;
-        last_book?: TodayLastBook | null;
         week_bars: WeekBar[];
       }>(`/api/v1/users/${encodeURIComponent(username)}/reading/today`),
+      // /reading/last, not /reading/today's last_book: the hero card must show the
+      // most recently logged book regardless of date, matching iOS/Android.
+      goFetchAuthed<{ last_book?: TodayLastBook | null }>(
+        `/api/v1/users/${encodeURIComponent(username)}/reading/last`,
+      ),
       bookshelfApi.getCurrentlyReading(username, 1, 100),
       bookshelfApi.getTBR(username, 1, 100),
       diaryApi.getEntries(username, 1, 100),
@@ -72,11 +76,17 @@ export async function GET() {
     let lastBook: TodayLastBook | null = null;
     let logBars: number[] | null = null;
 
+    if (lastRes.status === "fulfilled" && lastRes.value.status < 400) {
+      lastBook = lastRes.value.data?.last_book ?? null;
+    } else {
+      console.error("[progress] Go /reading/last failed:",
+        lastRes.status === "fulfilled" ? lastRes.value.status : (lastRes as PromiseRejectedResult).reason);
+    }
+
     if (progressRes.status === "fulfilled" && progressRes.value.status < 400) {
       const raw = progressRes.value.data;
       todayPages = raw.today_pages ?? 0;
       todayBooks = raw.today_books ?? 0;
-      lastBook = raw.last_book ?? null;
 
       if (Array.isArray(raw.week_bars)) {
         const barMap = new Map<string, number>();

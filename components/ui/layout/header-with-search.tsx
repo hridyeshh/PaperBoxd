@@ -143,7 +143,7 @@ export function Header({
     return () => clearInterval(interval);
   }, [isAuthenticated, user?.username, pathname]);
   
-  // avatar_url is stored in the pb_user cookie by the auth provider — no fetch needed
+  // avatar_url comes from the auth provider (GET /api/me) — no fetch needed here
   const avatarSrc = (user?.avatar_url && user.avatar_url.trim() !== "")
     ? user.avatar_url
     : DEFAULT_AVATAR;

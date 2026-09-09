@@ -26,8 +26,6 @@ import { loginAction } from "@/lib/auth/actions";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/auth-provider";
-import { PrivacyPolicyDialog } from "@/components/ui/dialogs/privacy-policy-dialog";
-import { TermsOfServiceDialog } from "@/components/ui/dialogs/terms-of-service-dialog";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { AuthBookColumnsStrip } from "@/components/ui/auth/auth-book-columns";
 
@@ -71,6 +69,18 @@ const signUpSchema = z.object({
     .regex(/^[a-z0-9_-]+$/, "Only lowercase letters, numbers, underscores, and hyphens"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
+  // PaperBoxd is 18+. Self-declared, not verified — the same standard most
+  // consumer apps use, and the backend re-checks it on register.
+  birthday: z
+    .string()
+    .min(1, "Date of birth is required")
+    .refine((value) => {
+      const dob = new Date(value);
+      if (Number.isNaN(dob.getTime()) || dob > new Date()) return false;
+      const eighteenth = new Date(dob);
+      eighteenth.setFullYear(eighteenth.getFullYear() + 18);
+      return eighteenth <= new Date();
+    }, { message: "You must be at least 18 years old to use PaperBoxd" }),
   terms: z
     .boolean()
     .refine((value) => value, {
@@ -450,8 +460,6 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
     error: null,
     showPassword: false,
   });
-  const [privacyDialogOpen, setPrivacyDialogOpen] = React.useState(false);
-  const [termsDialogOpen, setTermsDialogOpen] = React.useState(false);
   const isSubmittingRef = React.useRef(false);
   const hasSucceededRef = React.useRef(false);
 
@@ -464,7 +472,7 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
     formState: { errors },
   } = useForm<SignUpFormValues>({
     resolver: zodResolver(signUpSchema),
-    defaultValues: { name: "", username: "", email: "", password: "", terms: false },
+    defaultValues: { name: "", username: "", email: "", password: "", birthday: "", terms: false },
   });
 
   const codeForm = useForm<OTPCodeFormValues>({
@@ -485,6 +493,7 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
           username: data.username,
           email: data.email,
           password: data.password,
+          birthday: data.birthday,
         }),
       });
 
@@ -558,6 +567,7 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
           username: formValues.username,
           email: pendingEmail,
           password: formValues.password,
+          birthday: formValues.birthday,
         }),
       });
 
@@ -723,6 +733,28 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
                     </p>
                   ) : null}
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="birthday">Date of birth</Label>
+                  {/* Native date input: no picker dependency, and it gets the
+                      platform's own accessible calendar for free. */}
+                  <Input
+                    id="birthday"
+                    type="date"
+                    max={new Date().toISOString().split("T")[0]}
+                    disabled={formState.isLoading}
+                    className={cn(
+                      "border border-border bg-background/95 focus-visible:border-black",
+                      errors.birthday && "border-destructive focus-visible:ring-destructive",
+                    )}
+                    {...register("birthday")}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    PaperBoxd is for readers aged 18 and over.
+                  </p>
+                  {errors.birthday ? (
+                    <p className="text-xs text-destructive">{errors.birthday.message}</p>
+                  ) : null}
+                </div>
                 <div className="flex items-start space-x-2">
                   <Checkbox
                     id="terms"
@@ -738,23 +770,23 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
                     </Label>
                     <p className="text-xs text-muted-foreground">
                       By signing up, you agree to our{" "}
-                      <Button
-                        variant="link"
-                        className="h-auto p-0 text-xs"
-                        type="button"
-                        onClick={() => setTermsDialogOpen(true)}
+                      <a
+                        href="/terms"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline underline-offset-2 hover:opacity-80"
                       >
                         Terms
-                      </Button>{" "}
+                      </a>{" "}
                       and{" "}
-                      <Button
-                        variant="link"
-                        className="h-auto p-0 text-xs"
-                        type="button"
-                        onClick={() => setPrivacyDialogOpen(true)}
+                      <a
+                        href="/privacy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline underline-offset-2 hover:opacity-80"
                       >
                         Privacy Policy
-                      </Button>
+                      </a>
                       .
                     </p>
                   </div>
@@ -893,15 +925,6 @@ function AuthSignUp({ onSignIn }: AuthSignUpProps) {
           </Button>
         </div>
       )}
-
-      <PrivacyPolicyDialog
-        open={privacyDialogOpen}
-        onOpenChange={setPrivacyDialogOpen}
-      />
-      <TermsOfServiceDialog
-        open={termsDialogOpen}
-        onOpenChange={setTermsDialogOpen}
-      />
     </motion.div>
     </>
   );

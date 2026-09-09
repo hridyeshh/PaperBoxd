@@ -83,7 +83,7 @@ export async function searchOpenLibrary(
   try {
     const response = await fetch(url.toString(), {
       headers: {
-        "User-Agent": "PaperBoxd/1.0 (https://paperboxd.app; contact@paperboxd.app)",
+        "User-Agent": "PaperBoxd/1.0 (https://paperboxd.in; contact@paperboxd.in)",
       },
       signal: controller.signal,
     });
@@ -141,7 +141,7 @@ export async function getOpenLibraryWork(workId: string): Promise<OpenLibraryWor
   try {
     const response = await fetch(url, {
       headers: {
-        "User-Agent": "PaperBoxd/1.0 (https://paperboxd.app; contact@paperboxd.app)",
+        "User-Agent": "PaperBoxd/1.0 (https://paperboxd.in; contact@paperboxd.in)",
       },
       signal: controller.signal,
     });

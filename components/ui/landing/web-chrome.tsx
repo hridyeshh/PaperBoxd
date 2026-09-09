@@ -7,9 +7,6 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Send } from "lucide-react";
-import { PrivacyPolicyDialog } from "@/components/ui/dialogs/privacy-policy-dialog";
-import { TermsOfServiceDialog } from "@/components/ui/dialogs/terms-of-service-dialog";
-import { CookieSettingsDialog } from "@/components/ui/dialogs/cookie-settings-dialog";
 import { AboutUsDialog } from "@/components/ui/dialogs/about-us-dialog";
 
 export type NavLink = { label: string; href: string };
@@ -145,13 +142,10 @@ export function LandingNav({ dialogOpen = false, links = LANDING_NAV_LINKS, acti
 // ── Footer ────────────────────────────────────────────────────────────────────
 
 interface LandingFooterProps {
-  privacyOpen: boolean; setPrivacyOpen: (v: boolean) => void;
-  termsOpen: boolean;   setTermsOpen:   (v: boolean) => void;
-  cookieOpen: boolean;  setCookieOpen:  (v: boolean) => void;
-  aboutOpen: boolean;   setAboutOpen:   (v: boolean) => void;
+  aboutOpen: boolean; setAboutOpen: (v: boolean) => void;
 }
 
-export function LandingFooter({ privacyOpen, setPrivacyOpen, termsOpen, setTermsOpen, cookieOpen, setCookieOpen, aboutOpen, setAboutOpen }: LandingFooterProps) {
+export function LandingFooter({ aboutOpen, setAboutOpen }: LandingFooterProps) {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -341,24 +335,21 @@ export function LandingFooter({ privacyOpen, setPrivacyOpen, termsOpen, setTerms
           <div style={{ marginTop: 48, paddingTop: 24, borderTop: "1px solid #efefef", display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
             <span style={{ fontFamily: '"Geist Sans", "Geist", system-ui, sans-serif', fontSize: 11, color: "#bbb", letterSpacing: "0.06em" }}>© {new Date().getFullYear()} PaperBoxd. All rights reserved.</span>
             <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "center" }}>
-              <button style={{ ...btnLink, fontSize: 11, color: "#bbb", marginBottom: 0, fontFamily: '"Geist Sans", "Geist", system-ui, sans-serif', letterSpacing: "0.04em" }} onClick={() => setPrivacyOpen(true)}>
+              <a href="/privacy" style={{ ...btnLink, fontSize: 11, color: "#bbb", marginBottom: 0, fontFamily: '"Geist Sans", "Geist", system-ui, sans-serif', letterSpacing: "0.04em" }}>
                 Privacy Policy
-              </button>
-              <button style={{ ...btnLink, fontSize: 11, color: "#bbb", marginBottom: 0, fontFamily: '"Geist Sans", "Geist", system-ui, sans-serif', letterSpacing: "0.04em" }} onClick={() => setTermsOpen(true)}>
+              </a>
+              <a href="/terms" style={{ ...btnLink, fontSize: 11, color: "#bbb", marginBottom: 0, fontFamily: '"Geist Sans", "Geist", system-ui, sans-serif', letterSpacing: "0.04em" }}>
                 Terms of Service
-              </button>
-              <button style={{ ...btnLink, fontSize: 11, color: "#bbb", marginBottom: 0, fontFamily: '"Geist Sans", "Geist", system-ui, sans-serif', letterSpacing: "0.04em" }} onClick={() => setCookieOpen(true)}>
+              </a>
+              <a href="/privacy#6-cookies--local-storage" style={{ ...btnLink, fontSize: 11, color: "#bbb", marginBottom: 0, fontFamily: '"Geist Sans", "Geist", system-ui, sans-serif', letterSpacing: "0.04em" }}>
                 Cookie Settings
-              </button>
+              </a>
             </div>
             <span style={{ fontFamily: '"Geist Mono", monospace', fontSize: 11, color: "#bbb", letterSpacing: "0.05em" }}>Made for readers, in too many time zones.</span>
           </div>
         </div>
       </footer>
 
-      <PrivacyPolicyDialog open={privacyOpen} onOpenChange={setPrivacyOpen} />
-      <TermsOfServiceDialog open={termsOpen} onOpenChange={setTermsOpen} />
-      <CookieSettingsDialog open={cookieOpen} onOpenChange={setCookieOpen} />
       <AboutUsDialog open={aboutOpen} onOpenChange={setAboutOpen} />
     </>
   );
@@ -367,16 +358,10 @@ export function LandingFooter({ privacyOpen, setPrivacyOpen, termsOpen, setTerms
 // Footer that owns its own dialog state — for pages that don't need to dim the
 // nav while a dialog is open (everything except the landing page).
 export function WebFooter() {
-  const [privacyOpen, setPrivacyOpen] = useState(false);
-  const [termsOpen, setTermsOpen] = useState(false);
-  const [cookieOpen, setCookieOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   return (
     <LandingFooter
-      privacyOpen={privacyOpen} setPrivacyOpen={setPrivacyOpen}
-      termsOpen={termsOpen}     setTermsOpen={setTermsOpen}
-      cookieOpen={cookieOpen}   setCookieOpen={setCookieOpen}
-      aboutOpen={aboutOpen}     setAboutOpen={setAboutOpen}
+      aboutOpen={aboutOpen} setAboutOpen={setAboutOpen}
     />
   );
 }

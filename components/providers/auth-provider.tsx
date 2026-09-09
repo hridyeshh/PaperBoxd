@@ -28,14 +28,14 @@ const AuthContext = createContext<AuthContextType>({
   setAuthUser: () => {},
 });
 
-function readJwtUser(): JwtUser | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie
-    .split("; ")
-    .find((row) => row.startsWith("pb_user="));
-  if (!match) return null;
+// pb_user is httpOnly, so the browser cannot read it. /api/me returns the same
+// payload from the cookie server-side.
+async function fetchJwtUser(): Promise<JwtUser | null> {
   try {
-    return JSON.parse(decodeURIComponent(match.slice("pb_user=".length))) as JwtUser;
+    const res = await fetch("/api/me", { cache: "no-store" });
+    if (!res.ok) return null;
+    const { user } = (await res.json()) as { user: JwtUser | null };
+    return user ?? null;
   } catch {
     return null;
   }
@@ -47,10 +47,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Stable sync identity so consumers using refreshUser in effect deps don't
   // re-fire on every render. setUser bails on referentially-equal updates via
-  // a structural compare; pb_user cookie is parsed fresh each call so two
-  // sync()s for the same logged-in user no longer churn child effects.
-  const sync = useCallback(() => {
-    const next = readJwtUser();
+  // a structural compare; the user is fetched fresh each call so two sync()s
+  // for the same logged-in user no longer churn child effects.
+  const sync = useCallback(async () => {
+    const next = await fetchJwtUser();
     setUser((prev) => {
       if (prev === next) return prev;
       if (prev && next && prev.id === next.id && prev.username === next.username && prev.email === next.email && prev.name === next.name && prev.avatar_url === next.avatar_url) {
@@ -61,11 +61,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    sync();
-    setIsLoading(false);
+    let cancelled = false;
+    // isLoading must not clear until the first fetch settles, or OAuthBridge
+    // reads isAuthenticated === false on a session that is merely still loading
+    // and fires a redundant google-sync.
+    sync().finally(() => {
+      if (!cancelled) setIsLoading(false);
+    });
     // Re-sync when the tab regains focus (handles cross-tab login/logout)
-    window.addEventListener("focus", sync);
-    return () => window.removeEventListener("focus", sync);
+    const onFocus = () => { void sync(); };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+    };
   }, [sync]);
 
   // Fire once per authenticated user per tab session to update last_activity_date.

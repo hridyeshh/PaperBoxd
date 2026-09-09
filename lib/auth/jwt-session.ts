@@ -45,9 +45,11 @@ export async function setSession(
     path: "/",
   });
 
-  // Non-httpOnly so client JS can read user info (not sensitive)
+  // httpOnly: this payload carries the account email and id, so a single XSS
+  // anywhere on the site could read it straight off document.cookie. The client
+  // reads the same data through GET /api/me instead.
   cookieStore.set(USER_KEY, JSON.stringify(user), {
-    httpOnly: false,
+    httpOnly: true,
     secure: isProduction,
     sameSite: "lax",
     maxAge: 60 * 60 * 24 * 7, // 7 days

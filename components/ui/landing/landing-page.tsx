@@ -1143,11 +1143,10 @@ export function LandingPage() {
       return () => clearTimeout(t);
     }
   }, [loading]);
-  const [privacyOpen, setPrivacyOpen] = useState(false);
-  const [termsOpen, setTermsOpen] = useState(false);
-  const [cookieOpen, setCookieOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
-  const anyDialogOpen = privacyOpen || termsOpen || cookieOpen || aboutOpen;
+  // The legal dialogs are gone — their links now navigate to /privacy and
+  // /terms, so About is the only dialog left that can hold the page open.
+  const anyDialogOpen = aboutOpen;
 
   return (
     <BooksContext.Provider value={books}>
@@ -1353,10 +1352,7 @@ export function LandingPage() {
         <LandingFAQ />
         <LandingCTA />
         <LandingFooter
-          privacyOpen={privacyOpen} setPrivacyOpen={setPrivacyOpen}
-          termsOpen={termsOpen}     setTermsOpen={setTermsOpen}
-          cookieOpen={cookieOpen}   setCookieOpen={setCookieOpen}
-          aboutOpen={aboutOpen}     setAboutOpen={setAboutOpen}
+          aboutOpen={aboutOpen} setAboutOpen={setAboutOpen}
         />
       </div>
     </BooksContext.Provider>

@@ -13,7 +13,7 @@ By creating an account or using PaperBoxd (the "Service"), you agree to these Te
 
 ## 2. Eligibility
 
-You must be at least 18 years old to use PaperBoxd. [PLACEHOLDER — update once shipped: by creating an account, you confirm your date of birth meets this requirement.] We may suspend or terminate accounts found to violate this requirement.
+You must be at least 18 years old to use PaperBoxd. Signing up on the web requires you to confirm your date of birth; our iOS and Android apps do not yet ask. We may suspend or terminate accounts found to violate this requirement.
 
 ## 3. Your Account
 
@@ -31,7 +31,7 @@ You agree not to:
 - Use the Service to harm, stalk, or harvest data about other users
 - Interfere with the normal operation of the Service (e.g., spamming, denial-of-service behavior)
 
-**We have zero tolerance for objectionable content and abusive behavior.** You can report any review, list, diary entry, or user from within the app, and you can block any user so their content no longer reaches you. We review reported content and remove violating material — and suspend or terminate the accounts responsible — typically within 24 hours. Contact us at hridyesh@paperboxd.in to report abuse.
+**We have zero tolerance for objectionable content and abusive behavior.** You can report any review, list, diary entry, or user from within the app, and you can block any user so their content no longer reaches you. We review reported content and remove violating material — and suspend or terminate the accounts responsible — typically within 24 hours. Contact us at contact@paperboxd.in to report abuse.
 
 ## 5. Your Content
 
@@ -54,7 +54,7 @@ Book information (titles, covers, descriptions, ISBNs) is sourced from third-par
 
 PaperBoxd's branding, design, and software are our intellectual property (or licensed to us) and may not be copied or used without permission.
 
-If you believe content on PaperBoxd infringes your intellectual property rights, contact us at hridyesh@paperboxd.in with:
+If you believe content on PaperBoxd infringes your intellectual property rights, contact us at contact@paperboxd.in with:
 - A description of the copyrighted/trademarked work
 - The specific content you believe infringes it (e.g. a link or screenshot)
 - Your contact information and a statement of good-faith belief that the use is unauthorized
@@ -63,7 +63,7 @@ We'll review and remove infringing content where warranted.
 
 ## 9. Subscriptions & Payments
 
-**PaperBoxd does not currently offer any paid subscriptions or process payments.** [PLACEHOLDER — this section will be updated with full billing terms, refund policy, and auto-renewal disclosures before any paid feature (e.g. Scan & Know premium tier) is launched. Do not treat this as final.]
+**PaperBoxd does not currently offer any paid subscriptions or process payments.** If that changes, we will publish full billing, refund and auto-renewal terms here before any paid feature launches.
 
 ## 10. Termination
 
@@ -79,7 +79,7 @@ We'll review and remove infringing content where warranted.
 
 ## 12. Governing Law & Dispute Resolution
 
-[PLACEHOLDER — **business decision needed, not a drafting default**: These Terms will be governed by the laws of India, with courts in [PLACEHOLDER — e.g. Bangalore, Karnataka] having jurisdiction. Decide whether disputes should go through Indian courts or a binding arbitration clause — arbitration is common for consumer apps to limit litigation cost/exposure, but has tradeoffs (harder for users to challenge, may need specific arbitration-body language to be enforceable). Get legal input before finalizing this section.]
+These Terms are governed by the laws of India. The courts of Bengaluru, Karnataka have exclusive jurisdiction over any dispute arising from them or from your use of the Service.
 
 ## 13. Changes to These Terms
 
@@ -93,12 +93,13 @@ We may update these Terms from time to time. We'll update the "Effective date" a
 
 ## 15. Contact
 
-Questions about these Terms: hridyesh@paperboxd.in
+Questions about these Terms: contact@paperboxd.in
 
 ---
 
 ## Outstanding placeholders before this can be published
 
-1. **Governing law / dispute resolution decision — arbitration vs. courts (§12) — needs a decision + legal sign-off, not just a placeholder fill-in**
-2. Age-gate implementation status — update §2 once DOB/18+ check ships
-3. Revisit §9 in full before any paid feature launches
+1. Set the effective date (§ header) — the only remaining literal placeholder
+2. §12 governing law: decided — Indian law, courts of Bengaluru, Karnataka. Still wants a lawyer's read before publication.
+3. Age gate — §2 currently states, truthfully, that age is not verified; update once the DOB check ships
+4. Revisit §9 in full before any paid feature launches
