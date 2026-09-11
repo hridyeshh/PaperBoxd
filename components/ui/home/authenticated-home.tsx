@@ -55,7 +55,6 @@ interface CurrentlyReadingBook {
   updatedAt: string | null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 /** FeedBook (Go BookCandidate shape) → BookItem for the existing carousel. */
 function mapFeedBook(b: { id: string; title: string; authors: string[]; cover_url: string; reason?: string; reasonType?: string; confidence?: string }): BookItem | null {
   return mapBook({
@@ -69,6 +68,7 @@ function mapFeedBook(b: { id: string; title: string; authors: string[]; cover_ur
   });
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapBook(b: any): BookItem | null {
   const id = b?.id || b?._id;
   if (!id) return null;

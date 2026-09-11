@@ -136,7 +136,6 @@ function DesktopSearchPage({ router }: { router: ReturnType<typeof useRouter> })
                 isSearching={isSearching}
                 searchError={searchError}
                 setQuery={setQuery}
-                setSearchError={setSearchError}
                 currentResults={currentResults}
                 bookResults={bookResults}
                 userResults={userResults}

@@ -214,7 +214,6 @@ export function MobileSearchWithFeed() {
                 isSearching={isSearching}
                 searchError={searchError}
                 setQuery={setQuery}
-                setSearchError={setSearchError}
                 currentResults={currentResults}
                 bookResults={bookResults}
                 userResults={userResults}
@@ -240,7 +239,6 @@ export function SearchResultsBody({
   isSearching,
   searchError,
   setQuery,
-  setSearchError,
   currentResults,
   bookResults,
   userResults,
@@ -256,7 +254,6 @@ export function SearchResultsBody({
   isSearching: boolean;
   searchError: string | null;
   setQuery: (q: string) => void;
-  setSearchError: (e: string | null) => void;
   currentResults: BookSearchResult[] | UserSearchResult[] | VibeSearchItem[];
   bookResults: BookSearchResult[];
   userResults: UserSearchResult[];

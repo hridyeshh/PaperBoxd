@@ -1657,7 +1657,7 @@ function TbrSection({
     return (
       <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
         <p className="text-lg font-semibold text-foreground">No to-be-read books yet</p>
-        <p className="mt-2 text-sm text-muted-foreground">Books added to DNF (Did Not Finish) list will appear here.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Books you save to read next will appear here.</p>
       </div>
     );
   }
@@ -4762,7 +4762,9 @@ export default function UserProfilePage() {
                   {tabLabel(label)}
                 </button>
               ))}
-              {/* DNF tab — visible on all profiles */}
+              {/* To-be-read tab — visible on all profiles. Backed by
+                  tbrBooks; it was labelled "DNF", which web has never been
+                  able to write (no DNF action exists here). */}
               <button
                 key="Activity"
                 type="button"
@@ -4772,7 +4774,7 @@ export default function UserProfilePage() {
                   activeTab === "Activity" && "border-foreground text-foreground font-semibold"
                 )}
               >
-                DNF
+                TBR
               </button>
             </div>
 
@@ -4996,12 +4998,12 @@ export default function UserProfilePage() {
                 <div className="flex items-baseline justify-between">
                   <div>
                     <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-                      DNF
+                      To Be Read
                       <span className="text-[10px] font-extrabold tracking-widest uppercase px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                         {tbrBooks.length}
                       </span>
                     </h2>
-                    <p className="text-sm text-muted-foreground">Books you&apos;ve started or queued — none finished.</p>
+                    <p className="text-sm text-muted-foreground">Books saved to read next.</p>
                   </div>
                 </div>
 
