@@ -10,6 +10,7 @@ export const revalidate = 30;
 interface GoVolumeInfo {
   title: string;
   authors?: string[];
+  categories?: string[];
   imageLinks?: { thumbnail?: string; smallThumbnail?: string; medium?: string };
 }
 
@@ -130,7 +131,10 @@ interface GoActivityResponse {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const DEFAULT_COVER = "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
+// Empty, not a stock photo: an unrelated Unsplash portrait rendered as a
+// book cover reads as a real cover. Clients fall back to their own neutral
+// placeholder (lib/utils DEFAULT_COVER) when this is empty.
+const DEFAULT_COVER = "";
 
 function bookCover(vi?: GoVolumeInfo): string {
   return vi?.imageLinks?.thumbnail ?? vi?.imageLinks?.smallThumbnail ?? vi?.imageLinks?.medium ?? DEFAULT_COVER;
@@ -207,8 +211,13 @@ export async function GET(
 
     // ── Bookshelf ─────────────────────────────────────────────────────────────
     const bookshelf: unknown[] = [];
+    // Go counts the whole shelf; the array below is only the first 100. The
+    // profile stat must use this number, not bookshelf.length, or a reader
+    // with 150 finished books is shown as having read 100.
+    let booksReadTotal = 0;
     if (bookshelfResult.status === "fulfilled" && bookshelfResult.value.status < 400) {
-      const bs = bookshelfResult.value.data as GoBookshelfResponse;
+      const bs = bookshelfResult.value.data as GoBookshelfResponse & { total_count?: number };
+      if (typeof bs?.total_count === "number") booksReadTotal = bs.total_count;
       (bs?.books ?? [])
         .filter((b) => b.status === "read")
         .forEach((b) => {
@@ -216,9 +225,12 @@ export async function GET(
             finishedOn: b.finished_at ?? b.added_at,
             rating: b.rating ?? undefined,
             status: b.status,
+            // Feeds the profile's "reads mostly …" line.
+            categories: b.volumeInfo?.categories ?? [],
           }));
         });
     }
+    if (!booksReadTotal) booksReadTotal = bookshelf.length;
 
     // ── Favorites ─────────────────────────────────────────────────────────────
     const favoriteBooks: unknown[] = [];
@@ -405,7 +417,8 @@ export async function GET(
       hasRequested: goUser.has_requested ?? false,
 
       // Stats
-      totalBooksRead: goUser.books_read_count ?? bookshelf.length,
+      totalBooksRead: booksReadTotal,
+      booksReadTotal,
       totalPagesRead: goUser.total_pages_read ?? 0,
       followersCount: goUser.followers_count ?? 0,
       followingCount: goUser.following_count ?? 0,

@@ -55,6 +55,18 @@ function BookSheetPanel({
   const [books, setBooks] = React.useState<ShelfBook[]>([]);
   const [loading, setLoading] = React.useState(false);
 
+  // "Nothing here yet." was the same line on all three shelves. Each one is a
+  // different thing to be missing, and each has the same fix: find a book.
+  const emptyCopy = React.useMemo(() => {
+    if (title.toLowerCase().includes("liked")) {
+      return { line: "No books you've loved yet.", action: "Find one to love" };
+    }
+    if (title.toLowerCase().includes("want")) {
+      return { line: "Nothing saved to read yet.", action: "Save a book" };
+    }
+    return { line: "No finished books yet.", action: "Find a book" };
+  }, [title]);
+
   React.useEffect(() => {
     if (!open) return;
     setLoading(true);
@@ -110,7 +122,16 @@ function BookSheetPanel({
             </div>
           ) : books.length === 0 ? (
             <div className="py-16 text-center">
-              <div className={`text-base text-muted-foreground ${playfair.className} italic`}>Nothing here yet.</div>
+              <div className={`text-base text-muted-foreground ${playfair.className} italic`}>
+                {emptyCopy.line}
+              </div>
+              <button
+                type="button"
+                onClick={() => { onClose(); router.push("/search"); }}
+                className="mt-5 inline-flex items-center rounded-full bg-foreground px-5 py-2.5 text-sm font-semibold text-background transition-opacity hover:opacity-85"
+              >
+                {emptyCopy.action}
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-4">
@@ -386,7 +407,9 @@ export function HomeSidebar() {
               </button>
             ))
           ) : (
-            <div className="px-2.5 py-2 text-xs text-muted-foreground">No lists yet</div>
+            <div className="px-2.5 py-2 text-xs text-muted-foreground">
+              No lists yet — make one below.
+            </div>
           )}
 
           {/* New list button */}

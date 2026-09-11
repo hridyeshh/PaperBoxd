@@ -11,6 +11,10 @@ import {
 } from "@/components/ui/landing/books";
 import { LandingNav, LandingFooter } from "@/components/ui/landing/web-chrome";
 import { CasesGrid, FAQDigest, PBW_CASES, PBW_ARROW } from "@/components/ui/landing/web-sections";
+import { LandingCommunity } from "@/components/ui/landing/community";
+import { useCommunity } from "@/hooks/use-community";
+import { timeAgo } from "@/lib/activity-transform";
+import { track } from "@/lib/analytics";
 
 const FRIENDS = [
   { u: "maya.r", n: "Maya", g: "linear-gradient(135deg,#d97757,#6b3520)" },
@@ -22,6 +26,18 @@ const FRIENDS = [
 ];
 
 // ── Hooks ────────────────────────────────────────────────────────────────────
+
+/**
+ * The first event in the funnel, and the only one that happens before an
+ * account exists. It rides on an anon_id rather than a user_id — without it
+ * the landing -> signup -> activation conversion is unmeasurable, because
+ * there is nothing to attribute the visit to yet.
+ */
+function useLandingView() {
+  useEffect(() => {
+    track("landing_viewed");
+  }, []);
+}
 
 function useScrollY() {
   const [y, setY] = useState(0);
@@ -351,7 +367,7 @@ function LandingHero() {
 
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
           <Link href="/auth" className="lp-pill lp-pill-primary">
-            Start saving your books
+            Join the readers
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14M13 5l7 7-7 7" />
             </svg>
@@ -928,14 +944,62 @@ function LandingSpotlight() {
 
 // ── Friends band ──────────────────────────────────────────────────────────────
 
+type BandAct = {
+  key: string;
+  name: string;
+  avatar: string | null;
+  gradient: string;
+  verb: string;
+  obj: string;
+  cover: string | null;
+  meta: string;
+  body?: string;
+  href?: string;
+};
+
+function avatarGradient(seed: string): string {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) % 360;
+  return `linear-gradient(135deg,hsl(${h},45%,55%),hsl(${(h + 40) % 360},40%,30%))`;
+}
+
 function LandingFriendsBand() {
   const books = useBooks();
-  const acts: Array<{ f: typeof FRIENDS[0]; verb: string; obj: string; book: LandingBook | null; meta: string; body?: string }> = [
-    { f: FRIENDS[0], verb: "finished",   obj: books[3 % books.length].title, book: books[3 % books.length], meta: "★★★★★ · 2 h ago", body: "Felt like wandering my own house with the lights off." },
-    { f: FRIENDS[1], verb: "shelved",    obj: books[1 % books.length].title, book: books[1 % books.length], meta: "To-be-read · 4 h ago" },
-    { f: FRIENDS[2], verb: "wrote about", obj: books[5 % books.length].title, book: books[5 % books.length], meta: "Diary · yesterday", body: '"Read it twice. Will read it again."' },
-    { f: FRIENDS[3], verb: "liked",      obj: "Slow autumn reads", book: null, meta: "List · yesterday" },
+  const { community } = useCommunity();
+
+  // Real public activity when the community has produced enough of it; the
+  // illustrative cards below are the pre-launch fallback.
+  const live: BandAct[] = community.activity
+    .filter((a) => a.action && (a.detail || a.bookTitle))
+    .slice(0, 4)
+    .map((a) => {
+      const kind = a.type.startsWith("created_list") || a.type.startsWith("shared_list")
+        ? "List"
+        : a.type === "created_diary_entry"
+        ? "Diary"
+        : a.type === "wants_to_read"
+        ? "To-be-read"
+        : null;
+      return {
+        key: a._id,
+        name: (a.userName || a.username || "").split(" ")[0] || a.username,
+        avatar: a.userAvatar,
+        gradient: avatarGradient(a.username || a._id),
+        verb: a.action,
+        obj: a.detail || a.bookTitle || "",
+        cover: a.bookCover,
+        meta: [kind, timeAgo(a.timestamp)].filter(Boolean).join(" · "),
+        href: a.bookSlug ? `/b/${a.bookSlug}` : a.listId ? `/u/${a.username}/lists/${a.listId}` : `/u/${a.username}`,
+      };
+    });
+
+  const mock: BandAct[] = [
+    { key: "m0", name: FRIENDS[0].n, avatar: null, gradient: FRIENDS[0].g, verb: "finished",   obj: books[3 % books.length].title, cover: books[3 % books.length].src ?? null, meta: "★★★★★ · 2 h ago", body: "Felt like wandering my own house with the lights off." },
+    { key: "m1", name: FRIENDS[1].n, avatar: null, gradient: FRIENDS[1].g, verb: "shelved",    obj: books[1 % books.length].title, cover: books[1 % books.length].src ?? null, meta: "To-be-read · 4 h ago" },
+    { key: "m2", name: FRIENDS[2].n, avatar: null, gradient: FRIENDS[2].g, verb: "wrote about", obj: books[5 % books.length].title, cover: books[5 % books.length].src ?? null, meta: "Diary · yesterday", body: '"Read it twice. Will read it again."' },
+    { key: "m3", name: FRIENDS[3].n, avatar: null, gradient: FRIENDS[3].g, verb: "liked",      obj: "Slow autumn reads", cover: null, meta: "List · yesterday" },
   ];
+  const acts = live.length >= 3 ? live : mock;
 
   return (
     <section
@@ -964,34 +1028,38 @@ function LandingFriendsBand() {
         </div>
 
         <div className="lp-reveal lp-reveal-d2" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {acts.map((a, i) => (
-            <div
-              key={i}
-              style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                borderRadius: 16,
-                padding: 16,
-                display: "flex",
-                gap: 14,
-                alignItems: "flex-start",
-              }}
-            >
-              <div style={{ width: 36, height: 36, borderRadius: 999, flexShrink: 0, background: a.f.g }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, color: "#ddd", lineHeight: 1.45 }}>
-                  <strong style={{ fontWeight: 600, color: "#fff" }}>{a.f.n}</strong>{" "}
-                  {a.verb}{" "}
-                  <em style={{ fontStyle: "italic", fontFamily: '"Playfair Display", serif', color: "#fff" }}>{a.obj}</em>
+          {acts.map((a) => {
+            const card = (
+              <div
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 16,
+                  padding: 16,
+                  display: "flex",
+                  gap: 14,
+                  alignItems: "flex-start",
+                }}
+              >
+                <div style={{ width: 36, height: 36, borderRadius: 999, flexShrink: 0, background: a.avatar ? `center / cover no-repeat url("${a.avatar}")` : a.gradient }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, color: "#ddd", lineHeight: 1.45 }}>
+                    <strong style={{ fontWeight: 600, color: "#fff" }}>{a.name}</strong>{" "}
+                    {a.verb}{" "}
+                    <em style={{ fontStyle: "italic", fontFamily: '"Playfair Display", serif', color: "#fff" }}>{a.obj}</em>
+                  </div>
+                  <div style={{ fontFamily: '"Geist Mono", monospace', fontSize: 10.5, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", marginTop: 4 }}>{a.meta}</div>
+                  {a.body && <div style={{ fontFamily: '"Playfair Display", serif', fontStyle: "italic", fontSize: 13.5, color: "rgba(255,255,255,0.6)", marginTop: 6, lineHeight: 1.5 }}>{a.body}</div>}
                 </div>
-                <div style={{ fontFamily: '"Geist Mono", monospace', fontSize: 10.5, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", marginTop: 4 }}>{a.meta}</div>
-                {a.body && <div style={{ fontFamily: '"Playfair Display", serif', fontStyle: "italic", fontSize: 13.5, color: "rgba(255,255,255,0.6)", marginTop: 6, lineHeight: 1.5 }}>{a.body}</div>}
+                {a.cover && (
+                  <div style={{ width: 32, aspectRatio: "2/3", borderRadius: 3, flexShrink: 0, background: `center / cover no-repeat url("${a.cover}")` }} />
+                )}
               </div>
-              {a.book && (
-                <div style={{ width: 32, aspectRatio: "2/3", borderRadius: 3, flexShrink: 0, background: coverBg(a.book) }} />
-              )}
-            </div>
-          ))}
+            );
+            return a.href
+              ? <Link key={a.key} href={a.href} style={{ textDecoration: "none", color: "inherit" }}>{card}</Link>
+              : <div key={a.key}>{card}</div>;
+          })}
         </div>
       </div>
     </section>
@@ -1070,7 +1138,7 @@ function LandingCTA() {
         </h2>
         <div className="lp-reveal lp-reveal-d2" style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 36, flexWrap: "wrap" }}>
           <Link href="/auth" className="lp-pill lp-pill-primary">
-            Start saving your books
+            Join the readers
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14M13 5l7 7-7 7" />
             </svg>
@@ -1134,6 +1202,7 @@ function LandingSplash({ visible }: { visible: boolean }) {
 
 export function LandingPage() {
   useReveals();
+  useLandingView();
   const { books, loading } = useLandingBooks();
   const [splashGone, setSplashGone] = useState(false);
 
@@ -1345,6 +1414,7 @@ export function LandingPage() {
         <LandingNav dialogOpen={anyDialogOpen} />
         <LandingHero />
         <Landing3D />
+        <LandingCommunity />
         <LandingFeatures />
         <LandingSpotlight />
         <LandingCaseStudies />

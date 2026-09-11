@@ -10,10 +10,12 @@ const playfair = Playfair_Display({
   weight: ["400", "700"],
   style: ["normal", "italic"],
 });
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useRecImpression, trackRecClick } from "@/hooks/use-rec-impression";
+import { RecFeedback } from "@/components/ui/book/rec-feedback";
 import { Button } from "@/components/ui/primitives/button";
 import {
   Dialog,
@@ -29,6 +31,9 @@ export interface BookCarouselBook {
   title: string;
   author: string;
   cover: string;
+  /** Server-authored "why this book" line, when the source provides one. */
+  reason?: string;
+  reasonType?: string;
 }
 
 // Props for the main BookCarousel component
@@ -42,20 +47,64 @@ export interface BookCarouselProps {
 // Sub-component for individual book cards in the carousel
 const BookCard = ({ book }: { book: BookCarouselBook }) => {
   const router = useRouter();
+  // Impressions are what the discovery funnel divides by, so they are counted
+  // on visibility rather than on render — see useRecImpression.
+  const impressionRef = useRecImpression(book.id, book.reasonType);
+
+  // Feedback opens in place rather than in a popover: a rail card is 140px
+  // wide and anything floating over it lands half off-screen on a phone.
+  const [showFeedback, setShowFeedback] = React.useState(false);
+  const [dismissed, setDismissed] = React.useState(false);
+
+  // Once a reader has answered, the card going away is the confirmation that
+  // the answer registered. Leaving it in place reads as the button doing
+  // nothing, which is how people learn to stop giving feedback.
+  if (dismissed) return null;
+
+  if (showFeedback) {
+    return (
+      <div className="w-[140px] flex-shrink-0 rounded-lg border bg-card p-3">
+        <p className="mb-2 text-[11px] font-medium leading-tight line-clamp-2">{book.title}</p>
+        <RecFeedback
+          bookId={book.id}
+          reasonType={book.reasonType}
+          onResolved={(v) => {
+            // "Love it" is a reason to keep the book in front of them, not to
+            // take it away.
+            if (v !== "loved") setDismissed(true);
+            else setShowFeedback(false);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <motion.div
-      className="group w-[140px] flex-shrink-0 cursor-pointer"
+      ref={impressionRef}
+      className="group relative w-[140px] flex-shrink-0 cursor-pointer"
       whileHover={{ y: -5 }}
       transition={{ type: "spring", stiffness: 300 }}
       onClick={() => {
         try {
+          trackRecClick(book.id, book.reasonType);
           router.push(`/b/${book.id}`);
         } catch (error) {
           console.error("Navigation error:", error);
         }
       }}
     >
+      <button
+        type="button"
+        aria-label={`Give feedback on ${book.title}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          setShowFeedback(true);
+        }}
+        className="absolute right-1.5 top-1.5 z-10 rounded-full bg-background/85 p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+      >
+        <MoreHorizontal className="h-3.5 w-3.5" />
+      </button>
       <div className="overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm">
         <div className="relative aspect-[2/3] overflow-hidden">
           {book.cover ? (
@@ -75,6 +124,11 @@ const BookCard = ({ book }: { book: BookCarouselBook }) => {
         <div className="p-3">
           <h3 className="text-sm font-semibold leading-tight line-clamp-2">{book.title}</h3>
           <p className="mt-1 text-xs text-muted-foreground truncate">{book.author}</p>
+          {book.reason && (
+            <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground/80 line-clamp-2">
+              {book.reason}
+            </p>
+          )}
         </div>
       </div>
     </motion.div>

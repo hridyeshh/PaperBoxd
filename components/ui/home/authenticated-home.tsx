@@ -9,6 +9,11 @@ import { createBookSlug } from "@/lib/utils/book-slug";
 import { cn } from "@/lib/utils";
 import { Playfair_Display } from "next/font/google";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/primitives/dialog";
+import { useCommunity } from "@/hooks/use-community";
+import { SuggestedReaders } from "@/components/ui/home/suggested-readers";
+import { track } from "@/lib/analytics";
+import { useFeed, type FeedModule } from "@/hooks/use-feed";
+import { SurpriseMe } from "@/components/ui/home/surprise-me";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -33,6 +38,11 @@ interface BookItem {
   ratingsCount?: number;
   pageCount?: number;
   author?: string;
+  slug?: string;
+  label?: string;
+  reasonType?: string;
+  /** Server confidence tier as a sentence ("Wild card"), shown under the reason. */
+  confidence?: string;
 }
 
 interface CurrentlyReadingBook {
@@ -46,6 +56,19 @@ interface CurrentlyReadingBook {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+/** FeedBook (Go BookCandidate shape) → BookItem for the existing carousel. */
+function mapFeedBook(b: { id: string; title: string; authors: string[]; cover_url: string; reason?: string; reasonType?: string; confidence?: string }): BookItem | null {
+  return mapBook({
+    id: b.id,
+    title: b.title,
+    authors: b.authors,
+    cover: b.cover_url,
+    reason: b.reason,
+    reasonType: b.reasonType,
+    confidence: b.confidence,
+  });
+}
+
 function mapBook(b: any): BookItem | null {
   const id = b?.id || b?._id;
   if (!id) return null;
@@ -70,11 +93,18 @@ function mapBook(b: any): BookItem | null {
     averageRating: b.averageRating,
     ratingsCount: b.ratingsCount,
     pageCount: b.pageCount,
+    // The recommendation pool ships a server-authored reason with every book
+    // ("Maya read this", "You read more by Le Guin"). It was being fetched and
+    // dropped here, so every personalised carousel looked like a random shelf.
+    label: b.reason,
+    reasonType: b.reasonType,
+    confidence: b.confidence,
   };
 }
 
 function goToBook(router: ReturnType<typeof useRouter>, book: BookItem | { bookId: string; title: string; isbn?: string; isbn13?: string }) {
   const isCurrentlyReading = "bookId" in book;
+  if (!isCurrentlyReading && (book as BookItem).slug) return router.push(`/b/${(book as BookItem).slug}`);
   const id = isCurrentlyReading ? book.bookId : (book as BookItem).isbn13 || (book as BookItem).isbn || (book as BookItem).openLibraryId || (book as BookItem).isbndbId || (book as BookItem)._id || book.id;
   const bookId = isCurrentlyReading ? book.bookId : id as string;
   if (!bookId) return router.push(`/b/${createBookSlug(book.title)}`);
@@ -103,17 +133,24 @@ interface ProgressLastBook {
 function HeroStrip({
   currentBook,
   username,
+  greeting,
   todayPages,
   sessions,
   weekBars,
   progressLoading,
+  tbrCount,
+  tbrPick,
 }: {
   currentBook: CurrentlyReadingBook | null;
   username: string;
+  /** Server-authored, in the reader's time zone ("Good evening."). */
+  greeting?: string;
   todayPages: number;
   sessions: number;
   weekBars: number[];
   progressLoading: boolean;
+  tbrCount: number;
+  tbrPick: CurrentlyReadingBook | null;
 }) {
   const router = useRouter();
   const maxBar = Math.max(...weekBars, 1);
@@ -142,7 +179,7 @@ function HeroStrip({
         {/* Left */}
         <div>
           <h1 className={cn(playfair.className, "text-4xl font-semibold tracking-tight leading-[1.05] text-foreground")}>
-            Welcome back, {username}.<br />
+            {greeting ? greeting.replace(/\.$/, "") : "Welcome back"}, {username}.<br />
             <span className="italic font-normal text-2xl text-muted-foreground">
               What are you reading?
             </span>
@@ -221,15 +258,55 @@ function HeroStrip({
                 Log pages
               </button>
             </div>
+          ) : tbrPick ? (
+            <div
+              className="mt-5 bg-background border border-border rounded-2xl p-4 flex gap-4 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => { track("tbr_nudge_clicked", { tbr_count: tbrCount }, tbrPick.bookId); goToBook(router, tbrPick); }}
+            >
+              <div className="relative shrink-0 rounded-lg overflow-hidden shadow-md" style={{ width: 72, aspectRatio: "2/3" }}>
+                {tbrPick.cover ? (
+                  <Image src={tbrPick.cover} alt={tbrPick.title} fill className="object-cover" sizes="72px" unoptimized />
+                ) : (
+                  <div className="absolute inset-0" style={{ background: `hsl(${(tbrPick.title.charCodeAt(0) * 7) % 360},35%,45%)` }} />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-mono text-[9.5px] tracking-[0.22em] uppercase text-muted-foreground">
+                  {tbrCount === 1 ? "1 book waiting on your TBR" : `${tbrCount} books waiting on your TBR`}
+                </div>
+                <div className={cn(playfair.className, "text-xl font-semibold text-foreground mt-1 leading-tight line-clamp-2")}>
+                  Start with <em className="font-normal">{tbrPick.title}</em>?
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">{tbrPick.author}</div>
+                <button
+                  className="mt-3 text-[11.5px] text-muted-foreground hover:text-foreground transition-colors bg-transparent border-none cursor-pointer tracking-wide p-0"
+                  onClick={(e) => { e.stopPropagation(); router.push(`/u/${username}?tab=Bookshelf`); }}
+                >
+                  See your whole TBR →
+                </button>
+              </div>
+              <button
+                className="self-center shrink-0 bg-foreground text-background px-5 py-2.5 rounded-full text-sm font-semibold hover:opacity-85 transition-opacity cursor-pointer"
+                onClick={(e) => { e.stopPropagation(); track("tbr_nudge_clicked", { tbr_count: tbrCount }, tbrPick.bookId); goToBook(router, tbrPick); }}
+              >
+                Open book
+              </button>
+            </div>
           ) : (
             <div className="mt-5 bg-background border border-dashed border-border rounded-2xl p-4 flex items-center gap-3">
               <div className="rounded-lg bg-muted shrink-0" style={{ width: 48, aspectRatio: "2/3" }} />
-              <div>
-                <div className="text-sm font-medium text-foreground">Nothing in progress</div>
+              <div className="flex-1">
+                <div className="text-sm font-medium text-foreground">What are you reading?</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  Start a book and it will appear here
+                  Find a book and mark it as reading — pages you log show up here.
                 </div>
               </div>
+              <button
+                className="shrink-0 bg-foreground text-background px-4 py-2 rounded-full text-xs font-semibold hover:opacity-85 transition-opacity cursor-pointer"
+                onClick={() => router.push("/search")}
+              >
+                Find a book
+              </button>
             </div>
           )}
         </div>
@@ -320,6 +397,8 @@ interface FriendActivity {
   id: string;
   username: string;
   userName: string;
+  /** Set by groupActivities when several people did the same thing. */
+  groupCount?: number;
   userAvatar: string | null;
   action: string;
   bookId: string;
@@ -350,20 +429,60 @@ function avatarHue(username: string): number {
   return h;
 }
 
-function FriendsRail({ activities }: { activities: FriendActivity[] }) {
+/**
+ * Collapses several people acting on the same book into one story, so a rail
+ * reads "3 people you follow started Dune" instead of the same cover three
+ * times. The newest row wins the timestamp and the link.
+ */
+function groupActivities(activities: FriendActivity[]): FriendActivity[] {
+  const byBook = new Map<string, FriendActivity[]>();
+  const order: string[] = [];
+  for (const a of activities) {
+    const key = `${a.bookId}|${a.action}`;
+    if (!byBook.has(key)) {
+      byBook.set(key, []);
+      order.push(key);
+    }
+    byBook.get(key)!.push(a);
+  }
+  return order.map((key) => {
+    const group = byBook.get(key)!;
+    const first = group[0];
+    if (group.length === 1) return first;
+    const others = group.length - 1;
+    return {
+      ...first,
+      // The card renders "@username" above and "<action> <title>" below, so the
+      // extra people belong in the username slot.
+      username: first.username,
+      userName: `${first.userName || first.username} and ${others} other${others === 1 ? "" : "s"}`,
+      groupCount: group.length,
+    };
+  });
+}
+
+function FriendsRail({
+  activities,
+  eyebrow = "Your friends · this week",
+  title = "Between covers.",
+}: {
+  activities: FriendActivity[];
+  eyebrow?: string;
+  title?: string;
+}) {
   const router = useRouter();
   if (activities.length === 0) return null;
-  const shown = activities.slice(0, 5);
+  const shown = groupActivities(activities).slice(0, 5);
 
   return (
     <section className="mt-6">
       <div className="flex justify-between items-baseline mb-2.5">
         <div>
           <div className="font-mono text-[10.5px] tracking-[0.22em] uppercase text-muted-foreground">
-            Your friends · this week
+            {eyebrow}
           </div>
           <h2 className={cn(playfair.className, "text-[22px] font-semibold text-foreground mt-0.5")}>
-            Between covers.
+            {title}
           </h2>
         </div>
       </div>
@@ -389,7 +508,7 @@ function FriendsRail({ activities }: { activities: FriendActivity[] }) {
                 </div>
               )}
               <div className="text-xs font-semibold text-foreground truncate flex-1">
-                @{a.username}
+                {a.groupCount && a.groupCount > 1 ? a.userName : `@${a.username}`}
               </div>
             </div>
             <div
@@ -416,6 +535,7 @@ function FriendsRail({ activities }: { activities: FriendActivity[] }) {
 // ── Horizontal carousel ───────────────────────────────────────────────────────
 
 function BookCard({ book, onClick, width = "w-[130px]" }: { book: BookItem; onClick: () => void; width?: string }) {
+  // `label` is the server's stated reason this book is on a discovery shelf.
   return (
     <div className={cn(width, "shrink-0 cursor-pointer group")} onClick={onClick}>
       <div className="rounded-xl overflow-hidden border border-border/50 bg-background shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
@@ -443,6 +563,17 @@ function BookCard({ book, onClick, width = "w-[130px]" }: { book: BookItem; onCl
         <div className="p-2.5 pb-3">
           <div className="text-xs font-semibold text-foreground line-clamp-2 leading-tight">{book.title}</div>
           <div className="text-[10.5px] text-muted-foreground truncate mt-0.5">{book.authors?.[0] || ""}</div>
+          {/* Reasons are now sentences ("Because you loved Stoner"), so two
+              lines rather than one truncated line — a cut-off reason is a
+              reason the reader cannot check. */}
+          {book.label && (
+            <div className="font-mono text-[9px] tracking-[0.06em] text-muted-foreground/80 mt-1 line-clamp-2 leading-snug" title={book.label}>
+              {book.label}
+            </div>
+          )}
+          {book.confidence && (
+            <div className="text-[9px] italic text-foreground/60 mt-0.5 truncate">{book.confidence}</div>
+          )}
         </div>
       </div>
     </div>
@@ -544,6 +675,8 @@ export function AuthenticatedHome() {
   // Stats from /api/home/stats + /api/home/progress
   const [currentlyReading, setCurrentlyReading] = useState<CurrentlyReadingBook[]>([]);
   const [lastLoggedBook, setLastLoggedBook] = useState<ProgressLastBook | null>(null);
+  const [tbrCount, setTbrCount] = useState(0);
+  const [tbrPick, setTbrPick] = useState<CurrentlyReadingBook | null>(null);
   const [todayPages, setTodayPages] = useState(0);
   const [sessions, setSessions] = useState(0);
   const [weekBars, setWeekBars] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
@@ -554,7 +687,9 @@ export function AuthenticatedHome() {
 
   const applyStats = React.useCallback((stats: unknown, progress: unknown) => {
     if (stats) {
-      const s = stats as { currentlyReading?: CurrentlyReadingBook[] };
+      const s = stats as { currentlyReading?: CurrentlyReadingBook[]; shelfCounts?: { tbr?: number }; tbrPick?: CurrentlyReadingBook | null };
+      setTbrCount(s.shelfCounts?.tbr ?? 0);
+      setTbrPick(s.tbrPick ?? null);
       const cr: CurrentlyReadingBook[] = s.currentlyReading || [];
       cr.sort((a, b) => {
         const ta = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
@@ -627,9 +762,11 @@ export function AuthenticatedHome() {
 
   // Friends rail — real activity from followed users in the last 7 days
   const [friendActivities, setFriendActivities] = useState<FriendActivity[]>([]);
+  const [friendsLoaded, setFriendsLoaded] = useState(false);
+  const { feed } = useFeed(isAuthenticated);
   useEffect(() => {
     if (!isAuthenticated || !user?.username) return;
-    const BOOK_TYPES = new Set(["added_book", "read", "started_reading", "rated", "liked", "reviewed", "diary_entry"]);
+    const BOOK_TYPES = new Set(["added_book", "read", "finished_reading", "started_reading", "wants_to_read", "rated", "liked", "reviewed", "diary_entry", "created_diary_entry"]);
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     fetch(`/api/users/${user.username}/activities/following?page=1&pageSize=40`)
       .then((r) => (r.ok ? r.json() : null))
@@ -654,9 +791,52 @@ export function AuthenticatedHome() {
           }))
           .slice(0, 5);
         setFriendActivities(filtered);
+        setFriendsLoaded(true);
       })
-      .catch(() => {/* non-critical */});
+      .catch(() => { setFriendsLoaded(true); });
   }, [isAuthenticated, user?.username]);
+
+  // Community snapshot: trending carousel always; public activity rail only
+  // when the follow graph is too thin to fill the friends rail.
+  const { community } = useCommunity(isAuthenticated);
+  const communityActivities: FriendActivity[] = community.activity
+    .filter((a) => a.username !== user?.username && a.bookId && a.bookTitle)
+    .slice(0, 5)
+    .map((a) => ({
+      id: a._id,
+      username: a.username || "",
+      userName: a.userName || "",
+      userAvatar: a.userAvatar,
+      action: a.action,
+      bookId: a.bookId as string,
+      bookTitle: a.bookTitle as string,
+      bookSlug: a.bookSlug,
+      timestamp: a.timestamp,
+    }));
+  const shelfToBooks = (shelf: typeof community.trendingBooks): BookItem[] =>
+    shelf
+      .filter((b) => b.cover)
+      .map((b) => ({
+        id: b.id,
+        _id: b.id,
+        slug: b.slug,
+        title: b.title,
+        authors: [b.author],
+        description: "",
+        publishedDate: "",
+        cover: b.cover,
+        label: b.label,
+      }));
+  const risingBooks = shelfToBooks(community.rising);
+  const mostTbrBooks = shelfToBooks(community.mostTbr);
+  const hiddenGemBooks = shelfToBooks(community.hiddenGems);
+  const trendingBooks: BookItem[] = community.trendingBooks
+    .filter((b) => b.cover)
+    .map((b) => ({ id: b.id, _id: b.id, slug: b.slug, title: b.title, authors: [b.author], description: "", publishedDate: "", cover: b.cover }));
+
+  useEffect(() => {
+    if (isAuthenticated) track("feed_viewed");
+  }, [isAuthenticated]);
 
   // Fetch carousel data — stale-while-revalidate
   useEffect(() => {
@@ -728,6 +908,8 @@ export function AuthenticatedHome() {
   const rawFavorites  = carouselData["favorites"] ?? [];
 
   const used = new Set<string>();
+  const feedModules: FeedModule[] = (feed?.modules ?? []).filter((m) => m.books.length > 0);
+  for (const m of feedModules) for (const b of m.books) used.add(b.id);
   const dedupe = (list: BookItem[]) => {
     const out: BookItem[] = [];
     for (const b of list) {
@@ -749,33 +931,99 @@ export function AuthenticatedHome() {
       <HeroStrip
         currentBook={currentBook}
         username={username}
+        greeting={feed?.greeting}
         todayPages={todayPages}
         sessions={sessions}
         weekBars={weekBars}
         progressLoading={progressLoading}
+        tbrCount={tbrCount}
+        tbrPick={tbrPick}
       />
 
+      <SurpriseMe className="mt-4" serifClass={playfair.className} />
+
       <FriendsRail activities={friendActivities} />
+      {friendsLoaded && friendActivities.length < 3 && (
+        <SuggestedReaders enabled={isAuthenticated} serifClass={playfair.className} />
+      )}
+      {friendsLoaded && friendActivities.length < 3 && (
+        <FriendsRail
+          activities={communityActivities}
+          eyebrow="Around Paperboxd · this week"
+          title="What readers are into."
+        />
+      )}
 
       <div className="flex flex-col gap-4 mt-6">
+        {/* Server-assembled modules. Each carries its own title and reason;
+            books in them are removed from the legacy rails below so nothing
+            appears twice. */}
+        {feedModules.map((m) => (
+          <div key={m.kind} className="flex flex-col gap-2">
+            <HomeCarousel
+              title={m.title}
+              subtitle={m.subtitle}
+              books={m.books.map(mapFeedBook).filter((b): b is BookItem => b !== null)}
+            />
+            {/* Taste twin: the roadmap's CTA. Their shelf is where the rest
+                of "books they loved that you haven't read" lives. */}
+            {m.twin && (
+              <button
+                type="button"
+                onClick={() => { window.location.href = `/u/${m.twin!.username}?tab=Bookshelf`; }}
+                className="self-start font-mono text-[10px] tracking-[0.08em] uppercase text-foreground/70 hover:text-foreground underline underline-offset-4"
+              >
+                Steal their TBR →
+              </button>
+            )}
+          </div>
+        ))}
         {friendBooks.length > 0 && (
           <HomeCarousel
-            title="Your friends are liking these"
-            subtitle="Books people you follow added this week."
+            title="Your friends are reading these"
+            subtitle="Read or liked by people you follow."
             books={friendBooks}
+          />
+        )}
+        {trendingBooks.length >= 4 && (
+          <HomeCarousel
+            title="Trending this week"
+            subtitle="Most shelved across Paperboxd in the last 7 days."
+            books={trendingBooks.filter((b) => !used.has(b.id))}
+          />
+        )}
+        {risingBooks.length >= 4 && (
+          <HomeCarousel
+            title="Rising this week"
+            subtitle="Picking up speed faster than they were last week."
+            books={risingBooks.filter((b) => !used.has(b.id))}
+          />
+        )}
+        {mostTbrBooks.length >= 4 && (
+          <HomeCarousel
+            title="Most added to TBR"
+            subtitle="What readers are planning to get to."
+            books={mostTbrBooks.filter((b) => !used.has(b.id))}
+          />
+        )}
+        {hiddenGemBooks.length >= 4 && (
+          <HomeCarousel
+            title="Hidden gems"
+            subtitle="Loved by the few readers who have found them."
+            books={hiddenGemBooks.filter((b) => !used.has(b.id))}
           />
         )}
         {recBooks.length > 0 && (
           <HomeCarousel
             title="Worth your shelf"
-            subtitle="Hand-picked picks we think you'll love."
+            subtitle="Picked for you from what you've read, rated and followed."
             books={recBooks}
           />
         )}
         {favBooks.length > 0 && (
           <HomeCarousel
-            title="Because you read…"
-            subtitle="Quiet, melancholy, a little odd."
+            title="Close to your taste"
+            subtitle="Similar to the books you've shelved and loved."
             books={favBooks}
           />
         )}

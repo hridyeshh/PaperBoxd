@@ -47,6 +47,8 @@ function DesktopSearchPage({ router }: { router: ReturnType<typeof useRouter> })
     userResults,
     vibeResults,
     vibePersonalised,
+    understood,
+    refined,
     isSearching,
     searchError,
     setSearchError,
@@ -140,6 +142,8 @@ function DesktopSearchPage({ router }: { router: ReturnType<typeof useRouter> })
                 userResults={userResults}
                 vibeResults={vibeResults}
                 vibePersonalised={vibePersonalised}
+                understood={understood}
+                refined={refined}
                 vibePrompts={vibePrompts}
                 router={router}
               />

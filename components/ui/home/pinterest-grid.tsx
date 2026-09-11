@@ -30,7 +30,7 @@ type Book = {
 };
 
 function fallbackReasonType(reason: string): string {
-  if (reason.includes("read this")) return "social";
+  if (reason.includes("read this") || reason.includes("loved this")) return "social";
   if (reason.startsWith("You read")) return "author";
   if (reason.startsWith("Matches your")) return "genre";
   if (reason === "Picked for you") return "favorites";
@@ -42,7 +42,14 @@ function fallbackReasonType(reason: string): string {
 function getChipStyle(reasonType?: string, reason?: string): string {
   const type = reasonType || fallbackReasonType(reason || "");
   switch (type) {
-    case "social":    return "bg-indigo-500/80 text-white";
+    case "social":
+    case "people_like_you": return "bg-indigo-500/80 text-white";
+    case "because_loved":
+    case "tbr_similar":
+    case "trait":
+    case "recent":    return "bg-rose-500/80 text-white";
+    case "hidden_gem": return "bg-teal-600/80 text-white";
+    case "trending":  return "bg-amber-500/80 text-white";
     case "velocity":  return "bg-orange-500/80 text-white";
     case "diary":     return "bg-purple-500/80 text-white";
     case "author":    return "bg-blue-500/80 text-white";
@@ -57,7 +64,12 @@ function getChipStyle(reasonType?: string, reason?: string): string {
 function getChipIcon(reasonType?: string, reason?: string): string {
   const type = reasonType || fallbackReasonType(reason || "");
   switch (type) {
-    case "social":    return "👤";
+    case "social":
+    case "people_like_you": return "👤";
+    case "because_loved":
+    case "tbr_similar": return "♥";
+    case "hidden_gem": return "◆";
+    case "trending":  return "↑";
     case "velocity":  return "⚡";
     case "diary":     return "✦";
     case "author":    return "✍";
@@ -108,7 +120,12 @@ export function PinterestGrid({ books, onLoadMore, hasMore = false, isLoading = 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          book_ids: books.map((b) => b.id).filter(Boolean),
+          items: books
+            .filter((b) => b.id)
+            .map((b) => ({
+              book_id: b.id,
+              reason_type: b.reasonType ?? (b.reason ? fallbackReasonType(b.reason) : undefined),
+            })),
           event_type: "impression",
         }),
         keepalive: true,
@@ -149,7 +166,11 @@ export function PinterestGrid({ books, onLoadMore, hasMore = false, isLoading = 
     fetch("/api/recommendations/feedback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ book_id: book.id, event_type: "click" }),
+      body: JSON.stringify({
+        book_id: book.id,
+        reason_type: book.reasonType ?? (book.reason ? fallbackReasonType(book.reason) : undefined),
+        event_type: "click",
+      }),
       keepalive: true,
     }).catch(() => {});
 

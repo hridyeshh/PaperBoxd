@@ -13,6 +13,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Playfair_Display } from "next/font/google";
 import { toast } from "sonner";
+import { useCommunity } from "@/hooks/use-community";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -20,6 +21,16 @@ const playfair = Playfair_Display({
   weight: ["400", "600", "700", "800"],
   style: ["normal", "italic"],
 });
+
+// Starting points for an expressive title. Free text either way; these exist
+// because "List name…" produced folders ("Fantasy", "2026") rather than writing.
+const LIST_PROMPTS = [
+  "Books that changed me",
+  "My comfort books",
+  "Books I want to read this year",
+  "Everyone should read this once",
+  "Books that destroyed me",
+];
 
 interface BookCover {
   id?: string;
@@ -61,6 +72,75 @@ function getCoverUrl(book: BookCover): string | null {
     img?.small ||
     img?.extraLarge ||
     null
+  );
+}
+
+/**
+ * Lists other readers have made public. Lists are the one thing on Paperboxd a
+ * reader writes for an audience, and until now they were only ever visible on
+ * their author's profile.
+ */
+function PublicLists() {
+  const { community } = useCommunity();
+  const lists = community.lists.filter((l) => l.coverUrls.length > 0);
+  if (lists.length < 2) return null;
+
+  return (
+    <section className="mt-14">
+      <div className="mb-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Globe className="h-4 w-4 text-[#b85c38]" />
+          <span className="text-xs font-semibold uppercase tracking-widest text-[#b85c38]">
+            From other readers
+          </span>
+        </div>
+        <h2 className={cn("text-2xl font-bold tracking-tight text-foreground", playfair.className)}>
+          Lists worth reading
+        </h2>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {lists.map((list) => (
+          <Link
+            key={list.id}
+            href={`/u/${list.username}/lists/${list.id}`}
+            className="group flex flex-col rounded-2xl border border-border bg-card p-5 transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+          >
+            <div className="mb-4 grid grid-cols-3 gap-1.5">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="relative aspect-[2/3] overflow-hidden rounded-lg bg-muted">
+                  {list.coverUrls[i] && (
+                    <Image
+                      src={list.coverUrls[i]}
+                      alt=""
+                      fill
+                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                      sizes="(max-width: 640px) 33vw, 100px"
+                      unoptimized
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            <h3
+              className={cn(
+                "mb-1 line-clamp-2 text-base font-bold leading-tight tracking-tight text-foreground",
+                playfair.className,
+              )}
+            >
+              {list.title}
+            </h3>
+            <p className="mb-3 text-xs text-muted-foreground truncate">by {list.ownerName}</p>
+            <div className="mt-auto flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <BookOpen className="h-3.5 w-3.5" />
+              <span className="font-mono">{list.bookCount}</span>
+              <span>{list.bookCount === 1 ? "book" : "books"}</span>
+              {list.saveCount > 0 && <span className="ml-1">· saved {list.saveCount}×</span>}
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -201,10 +281,25 @@ export default function ListsPage() {
                 <p className={cn("mb-4 text-base font-semibold", playfair.className)}>
                   Create a new list
                 </p>
+                {/* A list is a piece of writing, not a folder. The prompts are
+                    starting points, not fixed categories — the field stays free
+                    text. */}
+                <div className="mb-3 flex flex-wrap gap-1.5">
+                  {LIST_PROMPTS.map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => setNewListName(prompt)}
+                      className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[#b85c38] hover:text-foreground"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                   <input
                     type="text"
-                    placeholder="List name…"
+                    placeholder="Books that changed me…"
                     value={newListName}
                     onChange={(e) => setNewListName(e.target.value)}
                     autoFocus
@@ -327,6 +422,8 @@ export default function ListsPage() {
                 ))}
               </div>
             )}
+
+            <PublicLists />
           </div>
         </div>
       </div>

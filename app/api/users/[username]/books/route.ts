@@ -198,6 +198,8 @@ export async function POST(
         if (googleForGo) goBody.google_books_id = googleForGo;
         if (isbn) goBody.isbn = isbn;
         if (book_id) goBody.book_id = book_id;
+        const displayOrder = Number(rest.displayOrder ?? rest.display_order);
+        if (displayOrder >= 1 && displayOrder <= 4) goBody.display_order = displayOrder;
 
         const { data, status } = await favoritesApi.add(username, goBody);
         if (status >= 400) {

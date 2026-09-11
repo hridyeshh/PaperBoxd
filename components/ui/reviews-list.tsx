@@ -16,6 +16,19 @@ type Review = {
   review?: string | null;
   reviewed_at?: string | null;
   edited?: boolean;
+  /** Set for rows that came from a diary note rather than a shelf review. */
+  kind?: "review" | "diary";
+  entry_id?: string;
+};
+
+type DiaryEntry = {
+  id: string;
+  user_id: string;
+  username: string;
+  avatar_url?: string | null;
+  content: string;
+  rating?: number | null;
+  created_at: string;
 };
 
 type ReviewsListProps = {
@@ -72,15 +85,47 @@ export function ReviewsList({ bookId, currentUserId, currentUsername }: ReviewsL
   const [reviews, setReviews] = React.useState<Review[]>([]);
   const [loading, setLoading] = React.useState(true);
 
+  // A shelf review and a diary note about the same book are the same act of
+  // writing; the reader should not have to know which form produced which.
+  // Both land here, newest first, deduped so one person's note does not appear
+  // twice when they also left a review.
   React.useEffect(() => {
     let cancelled = false;
-    fetch(`/api/books/${encodeURIComponent(bookId)}/reviews`)
-      .then((res) => res.ok ? res.json() : { reviews: [] })
-      .then((data: { reviews?: Review[] }) => {
-        if (!cancelled) setReviews(Array.isArray(data.reviews) ? data.reviews : []);
+    Promise.all([
+      fetch(`/api/books/${encodeURIComponent(bookId)}/reviews`)
+        .then((res) => (res.ok ? res.json() : { reviews: [] }))
+        .catch(() => ({ reviews: [] })),
+      fetch(`/api/books/${encodeURIComponent(bookId)}/diary`)
+        .then((res) => (res.ok ? res.json() : { entries: [] }))
+        .catch(() => ({ entries: [] })),
+    ])
+      .then(([reviewData, diaryData]: [{ reviews?: Review[] }, { entries?: DiaryEntry[] }]) => {
+        if (cancelled) return;
+        const fromReviews: Review[] = (Array.isArray(reviewData.reviews) ? reviewData.reviews : [])
+          .map((r) => ({ ...r, kind: "review" as const }));
+        const seen = new Set(fromReviews.map((r) => r.user_id));
+        const fromDiary: Review[] = (Array.isArray(diaryData.entries) ? diaryData.entries : [])
+          .filter((e) => e.content?.trim() && !seen.has(e.user_id))
+          .map((e) => ({
+            user_id: e.user_id,
+            entry_id: e.id,
+            username: e.username,
+            avatar_url: e.avatar_url,
+            rating: e.rating,
+            review: e.content,
+            reviewed_at: e.created_at,
+            kind: "diary" as const,
+          }));
+        const merged = [...fromReviews, ...fromDiary].sort((a, b) => {
+          const at = a.reviewed_at ? new Date(a.reviewed_at).getTime() : 0;
+          const bt = b.reviewed_at ? new Date(b.reviewed_at).getTime() : 0;
+          return bt - at;
+        });
+        setReviews(merged);
       })
-      .catch(() => { if (!cancelled) setReviews([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     return () => { cancelled = true; };
   }, [bookId]);
 
@@ -108,7 +153,10 @@ export function ReviewsList({ bookId, currentUserId, currentUsername }: ReviewsL
       ) : reviews.length === 0 ? (
         <div className="py-14 text-center">
           <p className={cn(playfair.className, "text-lg text-muted-foreground")} style={{ fontStyle: "italic" }}>
-            No reviews yet. Be the first.
+            Nobody has written about this one yet.
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Rate it, or write a diary note — both show up here.
           </p>
         </div>
       ) : (
@@ -116,7 +164,7 @@ export function ReviewsList({ bookId, currentUserId, currentUsername }: ReviewsL
           {reviews.map((r) => {
             const isMe = r.user_id === currentUserId || r.username === currentUsername;
             return (
-              <div key={r.user_id} className="py-5 border-b border-border/50 last:border-0">
+              <div key={r.entry_id ?? r.user_id} className="py-5 border-b border-border/50 last:border-0">
                 <div className="flex items-start gap-3">
                   {/* Avatar */}
                   <Link
@@ -144,6 +192,11 @@ export function ReviewsList({ bookId, currentUserId, currentUsername }: ReviewsL
                       {isMe && (
                         <span className="text-[0.625rem] uppercase tracking-[0.1em] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                           You
+                        </span>
+                      )}
+                      {r.kind === "diary" && (
+                        <span className="text-[0.625rem] uppercase tracking-[0.1em] text-muted-foreground/60 font-medium">
+                          from their diary
                         </span>
                       )}
                       {r.edited && (

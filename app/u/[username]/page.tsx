@@ -22,6 +22,9 @@ import { AnimatedGridPattern } from "@/components/ui/shared/animated-grid-patter
 import { Dropdown } from "@/components/ui/primitives/dropdown";
 import { EditProfileForm, defaultProfile, type EditableProfile } from "@/components/ui/forms/edit-profile-form";
 import { FollowRequestsPanel } from "@/components/ui/features/follow-requests-panel";
+import { ReadingIdentity } from "@/components/ui/profile/reading-identity";
+import { TasteDashboard } from "@/components/ui/profile/taste-dashboard";
+import { EmptyState } from "@/components/ui/shared/empty-state";
 import {
   Dialog,
   DialogContent,
@@ -2366,12 +2369,16 @@ function ListsCarousel({ lists, canEdit, username, onListCreated, onListDeleted,
         )}
       </div>
       {lists.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
-          <p className="text-lg font-semibold text-foreground">No lists yet</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {canEdit ? "Create your first reading list to get started." : "This user hasn't created any lists yet."}
-          </p>
-        </div>
+        <EmptyState
+          title={canEdit ? "No lists yet" : "No public lists"}
+          description={
+            canEdit
+              ? "A list is the one thing here you write for other people. Books that changed you, comfort reads, anything."
+              : "This reader hasn't published any lists yet."
+          }
+          actionLabel={canEdit ? "Make a list" : undefined}
+          actionHref={canEdit ? "/lists" : undefined}
+        />
       ) : (
         <>
           <div className={cn(
@@ -2499,14 +2506,16 @@ function DiarySection({
 
   if (entries.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
-        <p className="text-lg font-semibold text-foreground">No diary entries yet</p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {isOwnProfile
-            ? "Start writing about books you've read to see your entries here."
-            : "This user hasn't written any diary entries yet."}
-        </p>
-      </div>
+      <EmptyState
+        title={isOwnProfile ? "Write your first note" : "No diary entries yet"}
+        description={
+          isOwnProfile
+            ? "A line about what a book did to you is worth more later than you think. Open any book and write."
+            : "This reader hasn't written any diary entries yet."
+        }
+        actionLabel={isOwnProfile ? "Find a book" : undefined}
+        actionHref={isOwnProfile ? "/search" : undefined}
+      />
     );
   }
 
@@ -3154,6 +3163,10 @@ export default function UserProfilePage() {
   // Book collections from API
   const [favoriteBooks, setFavoriteBooks] = React.useState<ProfileBook[]>([]);
   const [bookshelfBooks, setBookshelfBooks] = React.useState<BookshelfBook[]>([]);
+  // Go's own count of finished books. The array above is capped at 100 by the
+  // profile route, so it cannot be used as a stat.
+  const [booksReadTotal, setBooksReadTotal] = React.useState(0);
+  const [joinedAt, setJoinedAt] = React.useState<string | null>(null);
   const [likedBooks, setLikedBooks] = React.useState<LikedBook[]>([]);
   const [tbrBooks, setTbrBooks] = React.useState<TbrBook[]>([]);
   const [readingLists, setReadingLists] = React.useState<ReadingList[]>([]);
@@ -3448,6 +3461,14 @@ export default function UserProfilePage() {
             setHasRequested(data.user.hasRequested === true);
             console.log(`[Profile] Setting profile data with avatar:`, profile.avatar ? `"${profile.avatar.substring(0, 100)}..."` : 'missing');
             setProfileData(profile);
+            setBooksReadTotal(
+              typeof data.user.booksReadTotal === "number"
+                ? data.user.booksReadTotal
+                : typeof data.user.totalBooksRead === "number"
+                ? data.user.totalBooksRead
+                : 0,
+            );
+            setJoinedAt(typeof data.user.createdAt === "string" ? data.user.createdAt : null);
 
             type BookFromAPI = {
               bookId?: { toString(): string } | string;
@@ -4287,7 +4308,9 @@ export default function UserProfilePage() {
   const levelName = leaderboardStats?.level_name   ?? pdAny?.levelName ?? getLevelName(level);
   // Prefer cookie-based streak (accurate server-tracked) over Go backend streak (may lag)
   const currentStreak = cookieStreak ?? leaderboardStats?.current_streak ?? pdAny?.currentStreak ?? 0;
-  const booksReadStat = bookshelfBooks.length || leaderboardStats?.books_read || 0;
+  // booksReadTotal is Go's count of the whole shelf; bookshelfBooks is only the
+  // first 100 rows the profile route loads, so it is a floor, never the stat.
+  const booksReadStat = booksReadTotal || leaderboardStats?.books_read || bookshelfBooks.length || 0;
   const diaryEntriesStat = diaryEntries.length || leaderboardStats?.diary_entries || 0;
   // XP-within-level using backend's variable thresholds
   const levelStart   = xpAtLevelStart(level);
@@ -4441,6 +4464,13 @@ export default function UserProfilePage() {
                     @{profileData.username}
                     {profileData.pronouns?.length ? ` · ${profileData.pronouns.join("/")}` : ""}
                   </div>
+                  <ReadingIdentity
+                    books={bookshelfBooks}
+                    booksReadTotal={booksReadStat}
+                    createdAt={joinedAt}
+                    className="max-w-xs mx-auto mb-3"
+                  />
+                  {isOwnProfile && <TasteDashboard className="mb-3 text-left" />}
                   {profileData.bio && (
                     <p className="italic text-sm text-muted-foreground max-w-xs mx-auto mb-3 leading-snug">
                       &ldquo;{profileData.bio}&rdquo;
@@ -4535,6 +4565,13 @@ export default function UserProfilePage() {
                       ) : null}
                     </h1>
                     <div className="text-sm text-muted-foreground mb-3.5">@{profileData.username}</div>
+                    <ReadingIdentity
+                      books={bookshelfBooks}
+                      booksReadTotal={booksReadStat}
+                      createdAt={joinedAt}
+                      className="mb-3"
+                    />
+                    {isOwnProfile && <TasteDashboard className="mb-4 max-w-[560px]" />}
                     {profileData.bio && (
                       <p className="italic text-[17px] text-muted-foreground leading-snug mb-4 max-w-[560px]">
                         &ldquo;{profileData.bio}&rdquo;
@@ -4683,6 +4720,16 @@ export default function UserProfilePage() {
 
             <FollowRequestsPanel enabled={isOwnProfile && !profileData.isPublic} />
 
+            {/* Bound to the page-level authPromptOpen that handleFollow and
+                handleAuthPrompt set. Without this the signed-out Follow button
+                and the "sign in to explore" banner set state nothing rendered,
+                so neither ever reached /auth. */}
+            <AuthPromptDialog
+              open={authPromptOpen}
+              onOpenChange={setAuthPromptOpen}
+              action="follow readers and browse their shelves"
+            />
+
             {isLocked ? (
               <div className="max-w-md mx-auto text-center py-20">
                 <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-full border border-border">
@@ -4737,7 +4784,34 @@ export default function UserProfilePage() {
               <div className="grid grid-cols-1 md:grid-cols-[1fr_280px] gap-8">
                 {/* Left column */}
                 <div className="min-w-0 space-y-10">
-                  {/* Favourites strip */}
+                  {/* Favourites strip. An empty Top 4 is the single biggest
+                      hole in a profile's identity, so the owner gets a prompt
+                      rather than a missing section. */}
+                  {favoriteBooks.length === 0 && isOwnProfile && (
+                    <div>
+                      <h2 className="font-bold text-xl tracking-tight mb-4">Books I love</h2>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("Favourites")}
+                        className="w-full text-left border border-dashed border-border rounded-xl p-5 hover:border-border/60 transition-colors"
+                      >
+                        <div className="grid grid-cols-4 gap-3 mb-4">
+                          {[0, 1, 2, 3].map((i) => (
+                            <div
+                              key={i}
+                              className="aspect-[2/3] rounded-lg bg-muted/60 flex items-center justify-center"
+                            >
+                              <Plus className="size-5 text-muted-foreground/50" />
+                            </div>
+                          ))}
+                        </div>
+                        <div className="text-sm font-medium text-foreground">Pick your Top 4</div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          The four books you would hand to someone. They lead your profile.
+                        </div>
+                      </button>
+                    </div>
+                  )}
                   {favoriteBooks.length > 0 && (
                     <div>
                       <div className="flex items-baseline justify-between mb-4">
@@ -4834,10 +4908,17 @@ export default function UserProfilePage() {
 
                   {/* Empty state for overview */}
                   {favoriteBooks.length === 0 && currentlyReading.length === 0 && (
-                    <div className="flex flex-col items-center justify-center rounded-2xl border border-border bg-muted/20 p-12 text-center">
-                      <p className="text-lg font-semibold text-foreground">Nothing here yet</p>
-                      <p className="mt-2 text-sm text-muted-foreground">Start tracking books to see your overview.</p>
-                    </div>
+                    <EmptyState
+                      className="rounded-2xl border-border"
+                      title={isOwnProfile ? "Start your reading universe" : "Nothing here yet"}
+                      description={
+                        isOwnProfile
+                          ? "Add a book you loved and your Top 4, current reads and stats fill in from there."
+                          : "This reader hasn't added anything yet."
+                      }
+                      actionLabel={isOwnProfile ? "Find a book" : undefined}
+                      actionHref={isOwnProfile ? "/search" : undefined}
+                    />
                   )}
                 </div>
 
@@ -4925,12 +5006,16 @@ export default function UserProfilePage() {
                 </div>
 
                 {tbrBooks.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center rounded-3xl border border-border/70 bg-muted/20 p-12 text-center">
-                    <p className="text-lg font-semibold text-foreground">Nothing here yet</p>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Books you start reading or add to TBR will show up here.
-                    </p>
-                  </div>
+                  <EmptyState
+                    title={isOwnProfile ? "Save books you want to read" : "Nothing here yet"}
+                    description={
+                      isOwnProfile
+                        ? "Anything you start or add to your TBR lands here, with the pages you've logged."
+                        : "This reader hasn't started or saved anything yet."
+                    }
+                    actionLabel={isOwnProfile ? "Browse books" : undefined}
+                    actionHref={isOwnProfile ? "/search" : undefined}
+                  />
                 ) : (
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                     {[...tbrBooks]

@@ -131,6 +131,12 @@ function isValidCover(url: string | undefined): boolean {
   return l.startsWith("http") && !BAD_COVER.some((p) => l.includes(p));
 }
 
+function clampLimit(raw: unknown): number {
+  const n = parseInt(String(raw ?? ""), 10);
+  if (!Number.isFinite(n) || n < 1) return 5;
+  return Math.min(n, 12);
+}
+
 function pickCover(imageLinks: Record<string, string | undefined> = {}): string {
   const order = ["large", "medium", "thumbnail", "smallThumbnail", "extraLarge"];
   return order.map((k) => imageLinks[k]).find((u) => isValidCover(u)) ?? "";
@@ -164,6 +170,9 @@ export async function POST(request: NextRequest) {
   let genres: string[] = [];
   let topAuthors: string[] = [];
   let readTitles: Set<string> = new Set();
+  // How many candidates to assemble. 5 for the single-book reveal; the
+  // "books you love" picker asks for more so there is something to choose from.
+  let limit = 5;
 
   const ct = request.headers.get("content-type") ?? "";
   if (ct.includes("multipart/form-data")) {
@@ -179,6 +188,7 @@ export async function POST(request: NextRequest) {
     } catch {
       genres = [];
     }
+    limit = clampLimit(fd.get("limit"));
 
     const file = fd.get("file") as File | null;
     if (file) {
@@ -193,6 +203,7 @@ export async function POST(request: NextRequest) {
     try {
       const body = await request.json();
       genres = Array.isArray(body.genres) ? body.genres : [];
+      limit = clampLimit(body.limit);
     } catch {
       genres = [];
     }
@@ -216,7 +227,7 @@ export async function POST(request: NextRequest) {
     if (status < 400) {
       const recs: GoRec[] = (data as { recommendations?: GoRec[] }).recommendations ?? [];
       for (const rec of recs) {
-        if (books.length >= 5) break;
+        if (books.length >= limit) break;
         if (!rec.id || !rec.title || !isValidCover(rec.cover_url)) continue;
         push({
           id: rec.id,
@@ -231,7 +242,7 @@ export async function POST(request: NextRequest) {
 
   // ── 2. Author-based augmentation (from Goodreads history) ────────────────
 
-  if (books.length < 3 && topAuthors.length > 0) {
+  if (books.length < Math.min(3, limit) && topAuthors.length > 0) {
     await Promise.all(
       topAuthors.slice(0, 3).map(async (author) => {
         try {
@@ -240,7 +251,7 @@ export async function POST(request: NextRequest) {
           );
           if (status >= 400) return;
           for (const item of data.items ?? []) {
-            if (books.length >= 5) break;
+            if (books.length >= limit) break;
             const title = item.volumeInfo?.title ?? "";
             const cover = pickCover(item.volumeInfo?.imageLinks);
             if (!item.id || !title || !cover) continue;
@@ -259,9 +270,9 @@ export async function POST(request: NextRequest) {
 
   // ── 3. Genre keyword fallback ─────────────────────────────────────────────
 
-  if (books.length < 3 && genres.length > 0) {
-    for (const genre of genres.slice(0, 3)) {
-      if (books.length >= 5) break;
+  if (books.length < limit && genres.length > 0) {
+    for (const genre of genres.slice(0, limit > 5 ? genres.length : 3)) {
+      if (books.length >= limit) break;
       const query = GENRE_QUERIES[genre] ?? genre;
       try {
         const { data, status } = await goFetch<{ items?: GoSearchItem[] }>(
@@ -269,7 +280,7 @@ export async function POST(request: NextRequest) {
         );
         if (status >= 400) continue;
         for (const item of data.items ?? []) {
-          if (books.length >= 5) break;
+          if (books.length >= limit) break;
           const title = item.volumeInfo?.title ?? "";
           const cover = pickCover(item.volumeInfo?.imageLinks);
           if (!item.id || !title || !cover) continue;

@@ -301,7 +301,7 @@ export default function AuthorDetailPage() {
                   )}
                   {hasBooks && (
                     <span className="text-sm text-muted-foreground">
-                      {books.length} {books.length === 1 ? "book" : "books"} in PaperBoxd
+                      {books.length} {books.length === 1 ? "book" : "books"} on PaperBoxd
                     </span>
                   )}
                 </div>
@@ -349,7 +349,7 @@ export default function AuthorDetailPage() {
         <div className="mx-auto max-w-5xl px-4 sm:px-6 py-10 pb-24 md:pb-12">
           <div className="flex items-baseline justify-between mb-6">
             <h2 className="text-[0.8125rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-              Books in PaperBoxd
+              Books on PaperBoxd
             </h2>
             {hasBooks && (
               <span className="text-xs text-muted-foreground tabular-nums">
@@ -368,14 +368,23 @@ export default function AuthorDetailPage() {
                   className="group text-left"
                 >
                   <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-muted shadow-sm ring-1 ring-border/40 transition-shadow duration-300 group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.14)]">
-                    <Image
-                      src={book.cover}
-                      alt={`${book.title} cover`}
-                      fill
-                      className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
-                      sizes="(max-width: 640px) 45vw, (max-width: 1024px) 22vw, 18vw"
-                      unoptimized
-                    />
+                    {book.cover ? (
+                      <Image
+                        src={book.cover}
+                        alt={`${book.title} cover`}
+                        fill
+                        className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+                        sizes="(max-width: 640px) 45vw, (max-width: 1024px) 22vw, 18vw"
+                        unoptimized
+                      />
+                    ) : (
+                      // Coverless books get their own title, not a stock photo.
+                      <div className="absolute inset-0 flex items-end p-2.5 bg-muted">
+                        <span className="text-[0.8125rem] font-semibold leading-tight text-muted-foreground line-clamp-4">
+                          {book.title}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <h3 className="mt-2.5 text-[0.8125rem] font-semibold text-foreground line-clamp-2 leading-snug">
                     {book.title}
@@ -386,7 +395,7 @@ export default function AuthorDetailPage() {
           ) : (
             <div className="py-16 text-center">
               <p className={cn(playfair.className, "text-lg text-muted-foreground")} style={{ fontStyle: "italic" }}>
-                No books by this author in PaperBoxd yet.
+                No books by this author on PaperBoxd yet.
               </p>
             </div>
           )}

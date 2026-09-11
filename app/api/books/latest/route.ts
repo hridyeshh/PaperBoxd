@@ -27,13 +27,9 @@ type GoBook = {
 function flattenBook(b: GoBook) {
   const vi = b.volumeInfo ?? {};
   const il = vi.imageLinks ?? {};
+  // No stock-photo fallback — see the note in /api/books/by-author.
   const cover =
-    il.large ||
-    il.medium ||
-    il.thumbnail ||
-    il.smallThumbnail ||
-    il.extraLarge ||
-    "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
+    il.large || il.medium || il.thumbnail || il.smallThumbnail || il.extraLarge || "";
   return {
     id: b.id,
     _id: b._id ?? b.id,

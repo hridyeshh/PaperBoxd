@@ -44,12 +44,10 @@ export async function GET(request: NextRequest) {
         id: b.id,
         title: vi.title ?? "Unknown Title",
         author: vi.authors?.[0] ?? "Unknown Author",
-        cover:
-          il.large ||
-          il.medium ||
-          il.thumbnail ||
-          il.smallThumbnail ||
-          "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+        // No stock-photo fallback: an unrelated Unsplash portrait presented as
+        // a book cover is worse than no cover. Clients render their own
+        // typographic placeholder when this is empty.
+        cover: il.large || il.medium || il.thumbnail || il.smallThumbnail || "",
       };
     });
 

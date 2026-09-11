@@ -22,12 +22,8 @@ function toCarouselBook(b: GoBook) {
     id: b.id,
     title: vi.title ?? "Unknown Title",
     author: vi.authors?.[0] ?? "Unknown Author",
-    cover:
-      il.large ||
-      il.medium ||
-      il.thumbnail ||
-      il.smallThumbnail ||
-      "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+    // No stock-photo fallback — see the note in /api/books/by-author.
+    cover: il.large || il.medium || il.thumbnail || il.smallThumbnail || "",
   };
 }
 

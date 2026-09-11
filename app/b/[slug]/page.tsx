@@ -26,6 +26,9 @@ import { BookShareButton } from "@/components/ui/features/book-share-button";
 import { ReadingProgress } from "@/components/ui/features/reading-progress";
 import { StarRating, MIN_PAGES_TO_RATE } from "@/components/ui/star-rating";
 import { ReviewsList } from "@/components/ui/reviews-list";
+import { useBookSocial, useBookFit } from "@/hooks/use-book-social";
+import { track } from "@/lib/analytics";
+import { FriendsProof, ReaderRating, ShelfActivity, BookLists } from "@/components/ui/book/social-proof";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -318,6 +321,15 @@ export default function BookDetailPage() {
 
   // Description expanded state
   const [descExpanded, setDescExpanded] = React.useState(false);
+  // canRate is derived further down; the finish toast reads it through a ref so
+  // it does not depend on declaration order.
+  const canRateRef = React.useRef(false);
+
+  // Social proof: Paperboxd reader stats, people the viewer follows, and the
+  // public lists this book appears in. One request, three surfaces.
+  const socialBookId = book?._id || book?.bookId || book?.id || null;
+  const { social, loaded: socialLoaded } = useBookSocial(socialBookId);
+  const fit = useBookFit(socialBookId);
 
   React.useEffect(() => {
     if (!slug) return;
@@ -365,6 +377,17 @@ export default function BookDetailPage() {
       router.replace(`/b/${canonicalId}`);
     }
   }, [book, slug, router]);
+
+  // book_viewed is the second step of the discovery funnel: it is what turns a
+  // recommendation impression into an "open". Deliberately not gated on
+  // isAuthenticated — a logged-out visitor landing here from a shared link is
+  // exactly the traffic the acquisition funnel needs to see, and the event
+  // rides on anon_id in that case.
+  const viewedBookId = book?.id || book?._id || book?.bookId;
+  React.useEffect(() => {
+    if (!viewedBookId) return;
+    track("book_viewed", {}, String(viewedBookId));
+  }, [viewedBookId]);
 
   // Check if book is in user's collections and if there's a diary entry
   React.useEffect(() => {
@@ -832,6 +855,26 @@ export default function BookDetailPage() {
     })();
   }
 
+  /**
+   * The end of the reading loop. Finishing a book used to be silent on success
+   * — only failures spoke — so the most rewarding action in the product gave
+   * no acknowledgement and no next step. A toast with one action keeps the
+   * celebration lightweight; no modal interrupts the page.
+   */
+  function celebrateFinish(bookId: string) {
+    track("book_finished", {}, bookId);
+    toast.success(`Finished ${book?.volumeInfo?.title ?? "it"}.`, {
+      description: canRateRef.current
+        ? "Rate it or write a note while it's fresh."
+        : "It's on your shelf.",
+      action: {
+        label: "Write a note",
+        onClick: () => setShowDiaryEditor(true),
+      },
+      duration: 6000,
+    });
+  }
+
   function handleBookshelf() {
     if (!isAuthenticated) {
       setSignupAction("bookshelf");
@@ -867,6 +910,8 @@ export default function BookDetailPage() {
           const err = await response.json().catch(() => ({}));
           toast.error(typeof err?.error === "string" ? err.error : "Could not update bookshelf");
           setIsInBookshelf(prev);
+        } else if (next) {
+          celebrateFinish(canonicalId);
         }
       } catch {
         toast.error("Could not update bookshelf");
@@ -909,6 +954,13 @@ export default function BookDetailPage() {
           const err = await response.json().catch(() => ({}));
           toast.error(typeof err?.error === "string" ? err.error : "Could not update TBR");
           setIsInTBR(prev);
+        } else if (next) {
+          // Saving a book was silent too — the start of the loop deserves the
+          // same acknowledgement as the end of it.
+          track("book_added_to_shelf", {}, canonicalId);
+          toast.success("Saved to your TBR.", {
+            description: "It'll be waiting on your home page.",
+          });
         }
       } catch {
         toast.error("Could not update TBR");
@@ -944,7 +996,7 @@ export default function BookDetailPage() {
 
       if (response.ok) {
         const data = await response.json();
-        if (data.isComplete) toast.success("Book completed!");
+        if (data.isComplete) celebrateFinish(String(book.id || book._id || book.bookId || ""));
       } else {
         setPagesRead(prevPagesRead);
         setIsInTBR(prevPagesRead > 0);
@@ -991,6 +1043,7 @@ export default function BookDetailPage() {
   // no known page count can never accumulate logged pages. Mirrors canRateEntry
   // on the backend, which enforces it.
   const canRate = isInBookshelf || pagesRead >= MIN_PAGES_TO_RATE;
+  canRateRef.current = canRate;
 
   // Active states for segmented buttons
   const wantActive = isInTBR && !isInBookshelf && pagesRead === 0;
@@ -1004,7 +1057,7 @@ export default function BookDetailPage() {
   const TABS = [
     { id: "description", label: "Description" },
     { id: "author", label: "Author" },
-    { id: "reviews", label: "Reviews" },
+    { id: "reviews", label: "Readers" },
     { id: "highlights", label: "Highlights" },
     { id: "lists", label: "Lists" },
   ];
@@ -1291,48 +1344,34 @@ export default function BookDetailPage() {
             </div>
           </div>
 
+          {/* ── WHY YOU'LL LIKE THIS ── the same sentence the home feed
+              would put under this book, so every surface says one thing. */}
+          {fit?.reason && (
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mb-4">
+              <div className="rounded-2xl border border-border bg-card px-5 py-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                  Why you&rsquo;ll like this
+                </p>
+                <p className={cn(playfair.className, "mt-1 text-lg leading-snug text-foreground")}>{fit.reason}</p>
+                {fit.confidence && (
+                  <p className="mt-1 text-xs italic text-muted-foreground">{fit.confidence}</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── STATS STRIP ── */}
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-0 mb-8">
             <div className="bg-card border border-border rounded-2xl grid grid-cols-4">
-              {/* Cell 1: Community rating */}
+              {/* Cell 1: rating — Paperboxd's own once we have ratings, the
+                  publisher's (labelled) until then. Histogram is real counts. */}
               <div className="px-5 py-4">
-                <div className="text-[0.625rem] uppercase tracking-[0.12em] text-muted-foreground font-semibold mb-2">
-                  Community rating
-                </div>
-                <div className="flex items-center gap-3">
-                  <div
-                    className={cn(playfair.className, "text-[2rem] font-extrabold leading-none tracking-tight")}
-                  >
-                    {volumeInfo.averageRating ?? "—"}
-                    <small className="text-base text-muted-foreground font-normal">/5</small>
-                  </div>
-                  {volumeInfo.averageRating && (
-                    <div className="flex flex-col-reverse gap-0.5 flex-1 min-w-[64px]">
-                      {[10, 8, 38, 32, 12].map((p, i) => (
-                        <div key={i} className="flex items-center gap-1.5 text-[0.5rem] text-muted-foreground">
-                          <span className="w-5">{i + 1}★</span>
-                          <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: `${p}%`,
-                                background: i >= 3 ? "#a8893f" : i >= 2 ? "#b85c38" : "#7a7264",
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div
-                  className={cn(playfair.className, "text-[0.6875rem] text-muted-foreground mt-1")}
-                  style={{ fontStyle: "italic" }}
-                >
-                  {volumeInfo.ratingsCount
-                    ? `${volumeInfo.ratingsCount.toLocaleString()} readers`
-                    : "No ratings yet"}
-                </div>
+                <ReaderRating
+                  social={social}
+                  publisherRating={volumeInfo.averageRating}
+                  publisherRatingsCount={volumeInfo.ratingsCount}
+                  serifClass={playfair.className}
+                />
               </div>
 
               {/* Cell 2: Pages */}
@@ -1447,30 +1486,27 @@ export default function BookDetailPage() {
               </p>
             )}
 
-            {/* 3-stat row */}
+            {/* 3-stat row. The middle cell used to print Google's ratings
+                count under a "Reading" label — a number of strangers rendered
+                as Paperboxd activity. Both stats are ours now. */}
             <div className="flex justify-center gap-8 py-4 border-y border-border mt-4">
               <div className="text-center">
                 <div className={cn(playfair.className, "text-[1.125rem] font-extrabold")}>
-                  {volumeInfo.averageRating ?? "—"}
+                  {(() => {
+                    const r = social.readers.rating ?? volumeInfo.averageRating;
+                    return r != null ? (Math.round(r * 10) / 10).toFixed(1) : "—";
+                  })()}
                 </div>
                 <div className="text-[0.5625rem] uppercase tracking-[0.1em] text-muted-foreground font-semibold">
-                  ★ Rating
+                  {social.readers.rating != null ? "★ Paperboxd" : "★ Publisher"}
                 </div>
               </div>
               <div className="text-center">
                 <div className={cn(playfair.className, "text-[1.125rem] font-extrabold")}>
-                  {volumeInfo.ratingsCount != null && volumeInfo.ratingsCount > 0
-                    ? volumeInfo.ratingsCount > 999
-                      ? `${(volumeInfo.ratingsCount / 1000).toFixed(1)}k`
-                      : volumeInfo.ratingsCount
-                    : pageCount > 0
-                    ? pageCount
-                    : "—"}
+                  {social.readers.reads > 0 ? social.readers.reads : "—"}
                 </div>
                 <div className="text-[0.5625rem] uppercase tracking-[0.1em] text-muted-foreground font-semibold">
-                  {volumeInfo.ratingsCount != null && volumeInfo.ratingsCount > 0
-                    ? "Reading"
-                    : "Pages"}
+                  Finished
                 </div>
               </div>
               <div className="text-center">
@@ -1599,10 +1635,17 @@ export default function BookDetailPage() {
                         label: "Categories",
                         value: volumeInfo.categories?.slice(0, 2).join(", ") ?? "—",
                       },
-                      {
-                        label: "Rating",
-                        value: volumeInfo.averageRating ? `${volumeInfo.averageRating} / 5` : "—",
-                      },
+                      social.readers.rating != null
+                        ? {
+                            label: "Paperboxd",
+                            value: `${(Math.round(social.readers.rating * 10) / 10).toFixed(1)} / 5`,
+                          }
+                        : {
+                            label: "Publisher rating",
+                            value: volumeInfo.averageRating
+                              ? `${(Math.round(volumeInfo.averageRating * 10) / 10).toFixed(1)} / 5`
+                              : "—",
+                          },
                     ].map((fact, i) => (
                       <div
                         key={i}
@@ -1757,8 +1800,11 @@ export default function BookDetailPage() {
                 />
               )}
 
-              {/* Placeholder tabs */}
-              {(activeTab === "highlights" || activeTab === "lists") && (
+              {activeTab === "lists" && (
+                <BookLists social={social} loaded={socialLoaded} serifClass={playfair.className} />
+              )}
+
+              {activeTab === "highlights" && (
                 <div className="mb-8 flex items-center justify-center py-16">
                   <div className="text-center">
                     <p
@@ -1768,8 +1814,7 @@ export default function BookDetailPage() {
                       Coming soon
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {activeTab === "highlights" && "Highlighted passages will appear here."}
-                      {activeTab === "lists" && "Lists containing this book will appear here."}
+                      Highlighted passages will appear here.
                     </p>
                   </div>
                 </div>
@@ -1778,6 +1823,11 @@ export default function BookDetailPage() {
 
             {/* Right sidebar */}
             <div className="flex flex-col gap-4">
+
+              {/* Social proof — both blocks hide themselves when the numbers
+                  do not support a claim. */}
+              <FriendsProof social={social} />
+              <ShelfActivity social={social} />
 
               {/* Mobile: progress card */}
               {isAuthenticated && pageCount > 0 && (

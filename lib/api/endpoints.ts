@@ -446,9 +446,3 @@ export const activityApi = {
   },
 };
 
-// ── Admin ─────────────────────────────────────────────────────────────────────
-
-export const adminApi = {
-  cleanupBooks: () =>
-    goFetchAuthed(`/api/v1/admin/cleanup-books`, { method: "DELETE" }),
-};

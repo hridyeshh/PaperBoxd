@@ -6,6 +6,9 @@ type BookCandidate = {
   id: string;
   reason?: string;
   reasonType?: string;
+  /** Human confidence tier ("This feels very you"), never a number. */
+  confidence?: string;
+  isHiddenGem?: boolean;
   [key: string]: unknown;
 };
 
@@ -84,6 +87,8 @@ export async function GET(req: NextRequest) {
       cover: (rec.cover_url as string) || '',
       reason: rec.reason,
       reasonType: rec.reasonType,
+      confidence: rec.confidence,
+      isHiddenGem: rec.isHiddenGem,
     }));
 
     console.log(

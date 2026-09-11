@@ -19,6 +19,7 @@ import {
   type SearchType,
   type UserSearchResult,
   type VibeSearchItem,
+  REFINE_CHIPS,
   useLibrarySearch,
 } from "@/components/ui/search/use-library-search";
 
@@ -38,6 +39,8 @@ export function MobileSearchWithFeed() {
     userResults,
     vibeResults,
     vibePersonalised,
+    understood,
+    refined,
     isSearching,
     searchError,
     setSearchError,
@@ -217,6 +220,8 @@ export function MobileSearchWithFeed() {
                 userResults={userResults}
                 vibeResults={vibeResults}
                 vibePersonalised={vibePersonalised}
+                understood={understood}
+                refined={refined}
                 vibePrompts={vibePrompts}
                 router={router}
               />
@@ -241,6 +246,8 @@ export function SearchResultsBody({
   userResults,
   vibeResults,
   vibePersonalised,
+  understood = "",
+  refined = false,
   vibePrompts,
   router,
 }: {
@@ -255,6 +262,10 @@ export function SearchResultsBody({
   userResults: UserSearchResult[];
   vibeResults: VibeSearchItem[];
   vibePersonalised: boolean;
+  /** What the backend understood the accumulated ask to be ("like Murakami · under 300 pages"). */
+  understood?: string;
+  /** True when this result set came from a refinement of the previous query. */
+  refined?: boolean;
   vibePrompts: readonly string[];
   router: ReturnType<typeof useRouter>;
 }) {
@@ -322,12 +333,40 @@ export function SearchResultsBody({
     }
     return (
       <CommandGroup className="py-1">
-        {searchType === "Vibe" && vibePersonalised && (
-          <div className="mb-2 flex items-center gap-1.5 px-1">
-            <Sparkles className="size-3 text-amber-500/50" />
-            <p className="text-[10px] italic text-amber-600/50 dark:text-amber-400/40">
-              Tuned to your reading taste
-            </p>
+        {searchType === "Vibe" && (vibePersonalised || understood) && (
+          <div className="mb-2 flex flex-col gap-0.5 px-1">
+            {/* The accumulated ask, so a reader who typed "shorter" can see
+                it was applied to the previous search and not searched for
+                as a word. Without this the conversation is invisible. */}
+            {understood && understood.trim() !== query.trim() && (
+              <p className="text-[10px] text-muted-foreground">
+                {refined ? "Refined: " : "Looking for: "}
+                <span className="italic">{understood}</span>
+              </p>
+            )}
+            {vibePersonalised && (
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="size-3 text-amber-500/50" />
+                <p className="text-[10px] italic text-amber-600/50 dark:text-amber-400/40">
+                  Tuned to your reading taste
+                </p>
+              </div>
+            )}
+            {/* The conversation is invisible until someone knows they can
+                talk back. One tap sets the query; the hook sends it as a
+                refinement of the live session. */}
+            <div className="mt-1 flex flex-wrap gap-1">
+              {REFINE_CHIPS.map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => setQuery(chip)}
+                  className="rounded-full bg-muted/50 px-2 py-0.5 text-[10px] text-foreground/70 ring-1 ring-border/40 transition-colors hover:bg-muted"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {searchType === "Vibe" &&

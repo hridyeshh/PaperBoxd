@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { track } from "@/lib/analytics";
 
 export type BookSearchResult = {
   id: string;
@@ -57,6 +58,10 @@ export const VIBE_PROMPTS = [
   "Books that feel like a long train journey",
 ] as const;
 
+/** One-tap refinements. Each is a comparative the backend's ParseRefinement reads
+ *  against the live session, so tapping "Shorter" edits the previous ask. */
+export const REFINE_CHIPS = ["Shorter", "Darker", "Lighter", "More emotional", "Less weird", "No romance"] as const;
+
 export function useLibrarySearch() {
   const [query, setQuery] = React.useState("");
   const [searchType, setSearchType] = React.useState<SearchType>("Books");
@@ -64,6 +69,12 @@ export function useLibrarySearch() {
   const [userResults, setUserResults] = React.useState<UserSearchResult[]>([]);
   const [vibeResults, setVibeResults] = React.useState<VibeSearchItem[]>([]);
   const [vibePersonalised, setVibePersonalised] = React.useState(false);
+  // Conversational search: the backend hands back a session id so the next
+  // query ("shorter") is read as a refinement of this one, and a one-line
+  // summary of what it understood so the reader can see the accumulated ask.
+  const sessionRef = React.useRef<string | null>(null);
+  const [understood, setUnderstood] = React.useState<string>("");
+  const [refined, setRefined] = React.useState(false);
   const [isSearching, setIsSearching] = React.useState(false);
   const [searchError, setSearchError] = React.useState<string | null>(null);
 
@@ -91,7 +102,10 @@ export function useLibrarySearch() {
       return;
     }
 
-    if (searchType === "Vibe" && query.trim().length < 10) {
+    // A fresh vibe ask needs a few words; a refinement of a live session
+    // ("shorter", "darker") is one word by design and must go through.
+    const minLen = searchType === "Vibe" && sessionRef.current ? 3 : 10;
+    if (searchType === "Vibe" && query.trim().length < minLen) {
       setVibeResults([]);
       setSearchError(null);
       return;
@@ -101,6 +115,16 @@ export function useLibrarySearch() {
     const timeoutId = setTimeout(async () => {
       setIsSearching(true);
       setSearchError(null);
+
+      // Emitted after the debounce, so one event means one query the reader
+      // actually settled on rather than one per keystroke. `search_performed`
+      // and `vibe_search_performed` are separated because they are different
+      // products: one is lookup, one is discovery, and mixing them would hide
+      // whichever is the smaller.
+      track(searchType === "Vibe" ? "vibe_search_performed" : "search_performed", {
+        query_length: query.trim().length,
+        search_type: searchType,
+      });
 
       try {
         if (searchType === "Books") {
@@ -150,15 +174,29 @@ export function useLibrarySearch() {
           setUserResults(result.users && Array.isArray(result.users) ? result.users : []);
           setBookResults([]);
         } else {
-          const vibeResponse = await fetch("/api/books/vibe-search", {
+          let anonId: string | undefined;
+          try {
+            anonId = window.localStorage.getItem("pb_anon_id") ?? undefined;
+          } catch {
+            // private mode: the session will just not persist across searches
+          }
+          const vibeResponse = await fetch("/api/search", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query: query.trim(), limit: 10 }),
+            body: JSON.stringify({
+              query: query.trim(),
+              limit: 10,
+              session_id: sessionRef.current ?? undefined,
+              anon_id: anonId,
+            }),
           });
           if (!vibeResponse.ok) {
-            throw new Error(`Vibe search unavailable (${vibeResponse.status})`);
+            throw new Error(`Search unavailable (${vibeResponse.status})`);
           }
           const vibeData = await vibeResponse.json();
+          if (typeof vibeData?.sessionId === "string") sessionRef.current = vibeData.sessionId;
+          setUnderstood(typeof vibeData?.understood === "string" ? vibeData.understood : "");
+          setRefined(!!vibeData?.refined);
           if (vibeData?.items && Array.isArray(vibeData.items)) {
             setVibeResults(
               vibeData.items.map(
@@ -214,6 +252,8 @@ export function useLibrarySearch() {
     userResults,
     vibeResults,
     vibePersonalised,
+    understood,
+    refined,
     isSearching,
     searchError,
     setSearchError,

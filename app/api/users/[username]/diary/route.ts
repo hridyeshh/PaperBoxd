@@ -6,8 +6,8 @@ export const dynamic = "force-dynamic";
 
 // Default cover + helper — must match the transform in app/api/users/[username]/route.ts
 // so the profile load and the diary-tab reload produce identical entry shapes.
-const DEFAULT_COVER =
-  "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80";
+// Empty, not a stock photo — see the note in app/api/users/[username]/route.ts.
+const DEFAULT_COVER = "";
 
 interface GoVolumeInfo {
   title?: string;

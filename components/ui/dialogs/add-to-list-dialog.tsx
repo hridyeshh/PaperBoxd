@@ -240,7 +240,9 @@ export function AddToListDialog({
                 <div className="flex flex-col items-center justify-center py-8 gap-2 text-center">
                   <BookOpen className="h-8 w-8 text-muted-foreground/40" />
                   <p className="text-sm text-muted-foreground">No lists yet</p>
-                  <p className="text-xs text-muted-foreground/70">Create one above to get started</p>
+                  <p className="text-xs text-muted-foreground/70">
+                    Name one above — &ldquo;Books that changed me&rdquo; is a good first list.
+                  </p>
                 </div>
               ) : (
                 <div className="flex flex-col gap-1.5 max-h-72 overflow-y-auto pr-0.5" style={{ scrollbarWidth: "none" }}>

@@ -633,14 +633,14 @@ export default function ActivityPage() {
                         }
                       }
                       // Book-related activities: navigate to the book page using slug or id
-                      else if ((entry.type === "added_book" || entry.type === "read" || entry.type === "started_reading" || entry.type === "rated" || entry.type === "liked") && entry.bookId) {
+                      else if (entry.bookId) {
                         const bookId = entry.bookId.toString();
                         router.push(`/b/${bookId}`);
                       }
                       // Don't navigate for collaboration requests - they have buttons
                     }}
                     className={`flex gap-4 rounded-3xl border border-border/70 bg-background/90 p-4 shadow-sm transition hover:-translate-y-1 ${
-                      (entry.type === "diary_entry" || entry.type === "shared_list" || entry.type === "shared_book" || entry.type === "granted_access" || entry.type === "liked_diary_entry" || entry.type === "added_book" || entry.type === "read" || entry.type === "started_reading" || entry.type === "rated" || entry.type === "liked") ? "cursor-pointer" : ""
+                      (entry.type === "diary_entry" || entry.type === "shared_list" || entry.type === "granted_access" || entry.type === "liked_diary_entry" || entry.bookId) ? "cursor-pointer" : ""
                     }`}
                   >
                     {/* Show profile picture of the person who did the activity */}

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Check, Upload, ChevronRight, BookOpen, SkipForward } from "lucide-react";
+import { Loader2, Check, Upload, ChevronRight, BookOpen, SkipForward, Search, UserPlus } from "lucide-react";
 import { Pinyon_Script, Playfair_Display } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/primitives/input";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/primitives/button";
 import { Label } from "@/components/ui/primitives/label";
 import { useAuth } from "@/components/providers/auth-provider";
 import { toast } from "sonner";
+import { track } from "@/lib/analytics";
 
 const pinyonScript = Pinyon_Script({ weight: "400", subsets: ["latin"], display: "swap" });
 const playfair = Playfair_Display({
@@ -67,23 +68,28 @@ const GENRES = [
   { id: "poetry", label: "Poetry" },
 ];
 
-const TEMPO_OPTIONS = [
-  { id: "casual", label: "Casual", sub: "1–3 books / month" },
-  { id: "regular", label: "Regular", sub: "About 1 / week" },
-  { id: "voracious", label: "Voracious", sub: "Multiple per week" },
-];
+const MAX_PICKS = 4; // Top 4 — same cap as favourites on the profile
 
 const STAGE_LABELS = ["Sign up", "Set up", "Aha"];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Step = "username" | "genres" | "tempo" | "aha-loading" | "aha-reveal";
+type Step = "username" | "genres" | "books" | "readers" | "aha-loading" | "aha-reveal";
 
 type AhaBook = {
   id: string;
   title: string;
   author: string;
   cover: string;
+};
+
+type SuggestedReader = {
+  id: string;
+  username: string;
+  name?: string;
+  avatar_url?: string;
+  books_read_count: number;
+  reason: string;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -95,7 +101,26 @@ function stageForStep(step: Step): number {
 function subStepForStep(step: Step): number {
   if (step === "username") return 1;
   if (step === "genres") return 2;
-  return 3;
+  if (step === "books") return 3;
+  return 4;
+}
+
+// Search results come back in Google-volumes shape from /api/books/search.
+type SearchItem = {
+  id: string;
+  volumeInfo?: {
+    title?: string;
+    authors?: string[];
+    imageLinks?: Record<string, string | undefined>;
+  };
+};
+
+function searchItemToBook(item: SearchItem): AhaBook | null {
+  const title = item.volumeInfo?.title ?? "";
+  const links = item.volumeInfo?.imageLinks ?? {};
+  const cover = links.thumbnail ?? links.smallThumbnail ?? links.medium ?? "";
+  if (!item.id || !title) return null;
+  return { id: item.id, title, author: item.volumeInfo?.authors?.[0] ?? "", cover };
 }
 
 // ── Background cover columns ──────────────────────────────────────────────────
@@ -144,7 +169,7 @@ function CoverColumn({
 function StageHeader({ step }: { step: Step }) {
   const active = stageForStep(step);
   const sub = subStepForStep(step);
-  const inSetup = step === "username" || step === "genres" || step === "tempo";
+  const inSetup = step === "username" || step === "genres" || step === "books" || step === "readers";
 
   return (
     <div className="mb-8">
@@ -176,7 +201,7 @@ function StageHeader({ step }: { step: Step }) {
       </div>
       {inSetup && (
         <p className="text-[11px] text-white/30 tracking-wider uppercase font-medium">
-          Step {sub} of 3
+          Step {sub} of 4
         </p>
       )}
     </div>
@@ -395,122 +420,296 @@ function GenresStep({
   );
 }
 
-// ── Step: Tempo + Import ──────────────────────────────────────────────────────
+// ── Step: Books you love ──────────────────────────────────────────────────────
+//
+// Up to four books the reader already loves. Each pick becomes a favourite
+// (Top 4 on the profile) and a `read` shelf entry, which is the signal the
+// recommendation engine actually ranks on — so the aha reveal that follows is
+// personal, not just genre-flavoured.
 
-function TempoStep({
+function BooksStep({
+  suggestions,
+  loadingSuggestions,
+  picks,
+  setPicks,
   onNext,
-  tempo,
-  setTempo,
+  onImport,
 }: {
-  onNext: (file: File | null) => void;
-  tempo: string;
-  setTempo: (t: string) => void;
+  suggestions: AhaBook[];
+  loadingSuggestions: boolean;
+  picks: AhaBook[];
+  setPicks: React.Dispatch<React.SetStateAction<AhaBook[]>>;
+  onNext: () => void;
+  onImport: (file: File) => void;
 }) {
-  const [file, setFile] = React.useState<File | null>(null);
-  const [importing, setImporting] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const [results, setResults] = React.useState<AhaBook[]>([]);
+  const [searching, setSearching] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) setFile(f);
+  // Debounced search; the newest request wins.
+  React.useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setResults([]);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/books/search?q=${encodeURIComponent(q)}&maxResults=8`);
+        const data = await res.json();
+        if (cancelled) return;
+        const items: SearchItem[] = data.items ?? [];
+        setResults(items.map(searchItemToBook).filter((b): b is AhaBook => !!b));
+      } catch {
+        if (!cancelled) setResults([]);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [query]);
+
+  const isPicked = (id: string) => picks.some((p) => p.id === id);
+  const toggle = (book: AhaBook) => {
+    setPicks((prev) => {
+      if (prev.some((p) => p.id === book.id)) return prev.filter((p) => p.id !== book.id);
+      if (prev.length >= MAX_PICKS) {
+        toast.message(`That's your top ${MAX_PICKS} — remove one to swap.`);
+        return prev;
+      }
+      track("onboarding_book_selected", { title: book.title, source: query ? "search" : "suggested" });
+      return [...prev, book];
+    });
+    setQuery("");
   };
 
-  const handleNext = async () => {
-    if (!tempo) return;
-    setImporting(true);
-    onNext(file);
-  };
+  const grid = query.trim().length >= 2 ? results : suggestions;
 
   return (
     <motion.div
-      key="tempo"
+      key="books"
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -16 }}
       transition={{ duration: 0.35, ease: [0.32, 0, 0.16, 1] }}
     >
       <h2 className={cn("text-3xl font-bold text-white mb-2", playfair.className)}>
-        How fast do you read?
+        Books you love
       </h2>
-      <p className="text-sm text-white/50 mb-6">
-        Helps us pace recommendations for your schedule.
+      <p className="text-sm text-white/50 mb-5">
+        Pick up to {MAX_PICKS}. They become your Top 4 and teach us your taste.
       </p>
 
-      <div className="space-y-2 mb-8">
-        {TEMPO_OPTIONS.map((opt) => {
-          const active = tempo === opt.id;
-          return (
+      {/* Picks tray */}
+      <div className="flex gap-2 mb-5 min-h-[72px]">
+        {Array.from({ length: MAX_PICKS }).map((_, i) => {
+          const b = picks[i];
+          return b ? (
             <button
-              key={opt.id}
+              key={b.id}
               type="button"
-              onClick={() => setTempo(opt.id)}
-              className={cn(
-                "w-full flex items-center justify-between px-4 py-3.5 rounded-xl border text-left transition-all",
-                active
-                  ? "bg-white text-black border-white"
-                  : "bg-white/5 text-white/70 border-white/10 hover:bg-white/8 hover:border-white/20"
-              )}
+              onClick={() => toggle(b)}
+              title={`Remove ${b.title}`}
+              className="relative w-12 h-[72px] rounded-md overflow-hidden ring-2 ring-white shadow-lg"
             >
-              <div>
-                <p className="font-medium text-sm">{opt.label}</p>
-                <p className={cn("text-xs mt-0.5", active ? "text-black/60" : "text-white/40")}>
-                  {opt.sub}
-                </p>
-              </div>
-              {active && <Check className="w-4 h-4 text-black/70 flex-shrink-0" />}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={b.cover} alt={b.title} className="w-full h-full object-cover" />
             </button>
+          ) : (
+            <div key={i} className="w-12 h-[72px] rounded-md border border-dashed border-white/15 bg-white/[0.03]" />
           );
         })}
       </div>
 
-      {/* Goodreads import */}
-      <div className="mb-8 rounded-xl border border-white/8 bg-white/3 p-4">
-        <p className="text-xs text-white/50 uppercase tracking-wider font-medium mb-1">
-          Optional
-        </p>
-        <p className="text-sm text-white/80 font-medium mb-1">Import from Goodreads</p>
-        <p className="text-xs text-white/40 mb-3">
-          Export your library from Goodreads and upload the CSV — we&apos;ll add your books automatically.
-        </p>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".csv"
-          className="hidden"
-          onChange={handleFile}
+      {/* Search */}
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search a title or author"
+          className="pl-9 h-11 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus-visible:ring-white/20"
         />
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className={cn(
-            "flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all",
-            file
-              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-              : "bg-white/5 border-white/10 text-white/50 hover:bg-white/8 hover:text-white/70"
-          )}
-        >
-          {file ? (
-            <><Check className="w-3.5 h-3.5" />{file.name}</>
-          ) : (
-            <><Upload className="w-3.5 h-3.5" />Choose CSV file</>
-          )}
-        </button>
+        {searching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-white/40" />}
+      </div>
+
+      {/* Suggestions / results */}
+      <div className="grid grid-cols-4 gap-2 mb-6 min-h-[120px]">
+        {loadingSuggestions && grid.length === 0 ? (
+          Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="rounded-md bg-white/5 animate-pulse" style={{ aspectRatio: "2/3" }} />
+          ))
+        ) : (
+          grid.slice(0, 12).map((b) => {
+            const active = isPicked(b.id);
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => toggle(b)}
+                title={`${b.title}${b.author ? ` — ${b.author}` : ""}`}
+                className={cn(
+                  "relative rounded-md overflow-hidden transition-all",
+                  active ? "ring-2 ring-white scale-[0.97]" : "ring-1 ring-white/10 hover:ring-white/40"
+                )}
+                style={{ aspectRatio: "2/3" }}
+              >
+                {b.cover ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={b.cover} alt={b.title} className="w-full h-full object-cover" loading="lazy" />
+                ) : (
+                  <div className="w-full h-full bg-white/5 p-1.5 text-[10px] leading-tight text-white/60 text-left">
+                    {b.title}
+                  </div>
+                )}
+                {active && (
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                    <Check className="w-5 h-5 text-white" />
+                  </div>
+                )}
+              </button>
+            );
+          })
+        )}
       </div>
 
       <Button
-        onClick={handleNext}
-        disabled={!tempo || importing}
+        onClick={onNext}
         className={cn(
           "w-full h-11 rounded-full font-medium text-sm",
           "bg-white text-black hover:bg-white/90",
-          "disabled:bg-white/10 disabled:text-white/30",
         )}
       >
-        {importing ? (
-          <><Loader2 className="w-4 h-4 animate-spin mr-2" />Building your profile...</>
+        <span>{picks.length > 0 ? "Continue" : "Skip for now"}</span>
+        <ChevronRight className="w-4 h-4 ml-1" />
+      </Button>
+
+      {/* Goodreads import — secondary path, same step */}
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".csv"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onImport(f);
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        className="w-full text-center text-xs text-white/30 hover:text-white/50 py-3 transition-colors"
+      >
+        <Upload className="w-3 h-3 inline mr-1 -mt-0.5" />
+        Import your Goodreads library instead
+      </button>
+    </motion.div>
+  );
+}
+
+// ── Step: Readers to follow ───────────────────────────────────────────────────
+//
+// The feed is empty until you follow someone. Suggestions come from
+// /users/suggested with a server-authored reason so the same explanation
+// shows on every platform.
+
+function ReadersStep({
+  readers,
+  loading,
+  followed,
+  onFollow,
+  onNext,
+}: {
+  readers: SuggestedReader[];
+  loading: boolean;
+  followed: Set<string>;
+  onFollow: (r: SuggestedReader) => void;
+  onNext: () => void;
+}) {
+  return (
+    <motion.div
+      key="readers"
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -16 }}
+      transition={{ duration: 0.35, ease: [0.32, 0, 0.16, 1] }}
+    >
+      <h2 className={cn("text-3xl font-bold text-white mb-2", playfair.className)}>
+        Readers to follow
+      </h2>
+      <p className="text-sm text-white/50 mb-6">
+        Your home fills up with what they read, finish and write.
+      </p>
+
+      <div className="space-y-2 mb-6 min-h-[160px]">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-14 rounded-xl bg-white/5 animate-pulse" />
+          ))
+        ) : readers.length === 0 ? (
+          <p className="text-sm text-white/40 py-6 text-center">
+            You&apos;re early — no readers to suggest yet. You can find people from search any time.
+          </p>
         ) : (
-          <><span>Get my recommendations</span><ChevronRight className="w-4 h-4 ml-1" /></>
+          readers.map((r) => {
+            const done = followed.has(r.username);
+            return (
+              <div
+                key={r.id}
+                className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5"
+              >
+                <div className="w-9 h-9 rounded-full overflow-hidden bg-white/10 flex-shrink-0">
+                  {r.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={r.avatar_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xs text-white/60 uppercase">
+                      {(r.name || r.username).slice(0, 1)}
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-white truncate">{r.name || r.username}</p>
+                  <p className="text-xs text-white/40 truncate">
+                    {r.reason}
+                    {r.books_read_count > 0 ? ` · ${r.books_read_count} read` : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={done}
+                  onClick={() => onFollow(r)}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
+                    done
+                      ? "bg-white/10 text-white/50"
+                      : "bg-white text-black hover:bg-white/90"
+                  )}
+                >
+                  {done ? <Check className="w-3 h-3" /> : <UserPlus className="w-3 h-3" />}
+                  {done ? "Following" : "Follow"}
+                </button>
+              </div>
+            );
+          })
         )}
+      </div>
+
+      <Button
+        onClick={onNext}
+        className={cn(
+          "w-full h-11 rounded-full font-medium text-sm",
+          "bg-white text-black hover:bg-white/90",
+        )}
+      >
+        <span>{followed.size > 0 ? "Continue" : "Skip for now"}</span>
+        <ChevronRight className="w-4 h-4 ml-1" />
       </Button>
     </motion.div>
   );
@@ -680,11 +879,22 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
   const [username, setUsername] = React.useState(user?.username || "");
   const [genres, setGenres] = React.useState<string[]>([]);
-  const [tempo, setTempo] = React.useState("regular");
+  const [suggestions, setSuggestions] = React.useState<AhaBook[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = React.useState(false);
+  const [picks, setPicks] = React.useState<AhaBook[]>([]);
+  const [readers, setReaders] = React.useState<SuggestedReader[]>([]);
+  const [loadingReaders, setLoadingReaders] = React.useState(false);
+  const [followed, setFollowed] = React.useState<Set<string>>(new Set());
   const [ahaBook, setAhaBook] = React.useState<AhaBook | null>(null);
   const [ahaPool, setAhaPool] = React.useState<AhaBook[]>([]);
   const [ahaIdx, setAhaIdx] = React.useState(0);
   const [isAdding, setIsAdding] = React.useState(false);
+  const startedAt = React.useRef(Date.now());
+
+  React.useEffect(() => {
+    track("onboarding_started", { entry_step: user?.username ? "genres" : "username" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Distribute covers across 4 columns
   const col1 = BOOK_COVERS.slice(0, 6);
@@ -692,68 +902,153 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const col3 = BOOK_COVERS.slice(11, 18);
   const col4 = BOOK_COVERS.slice(17, 24);
 
+  const finish = React.useCallback(
+    (extra: Record<string, unknown> = {}) => {
+      track("onboarding_completed", {
+        books_selected: picks.length,
+        people_followed: followed.size,
+        genres: genres.length,
+        seconds: Math.round((Date.now() - startedAt.current) / 1000),
+        ...extra,
+      });
+      onComplete();
+    },
+    [picks.length, followed.size, genres.length, onComplete]
+  );
+
   const handleUsernameNext = (uname: string) => {
     setUsername(uname);
     setStep("genres");
   };
 
-  const handleGenresNext = () => {
-    setStep("tempo");
-  };
-
-  const handleTempoNext = async (file: File | null) => {
-    setStep("aha-loading");
-
+  // Genres are saved as soon as they're chosen so (a) the picker suggestions
+  // and every later recommendation call are genre-aware, and (b) a reader
+  // who bails after this step is still onboarded rather than bounced back.
+  const handleGenresNext = async () => {
+    setStep("books");
+    setLoadingSuggestions(true);
     try {
-      // Save genres first so the recommendation engine has them before we query it
       await fetch("/api/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ genres, authors: [] }),
       });
+      const fd = new FormData();
+      fd.append("genres", JSON.stringify(genres));
+      fd.append("limit", "12");
+      const res = await fetch("/api/onboarding/aha", { method: "POST", body: fd });
+      const data = await res.json();
+      setSuggestions((data.books || []).filter((b: AhaBook) => b.cover && b.title));
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
 
-      // Build the aha recommendation request (multipart so CSV travels with genres)
-      const ahaFd = new FormData();
-      ahaFd.append("genres", JSON.stringify(genres));
-      if (file) ahaFd.append("file", file);
+  // Goodreads import from the books step: kicks off in the background, the
+  // reader keeps going. The picks step still works either way.
+  const handleImport = (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    toast.message("Importing your Goodreads library…");
+    fetch("/api/import/goodreads", { method: "POST", body: fd })
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          toast.error(d.error || "Import failed — you can retry from your profile");
+          return;
+        }
+        // Never report a partial import as a clean success: a 500-book library
+        // that lands 40 used to say "Imported 40 books" and nothing else.
+        const notes: string[] = [];
+        if (d.failed > 0) {
+          notes.push(
+            d.rateLimited
+              ? `${d.failed} hit a rate limit — retry from your profile`
+              : `${d.failed} couldn't be saved — retry from your profile`,
+          );
+        }
+        if (d.notFound > 0) notes.push(`${d.notFound} aren't on Paperboxd yet`);
+        if (d.truncated) notes.push(`only the first ${d.processed} of ${d.total} rows were read`);
 
-      // Fetch aha recommendation and (optionally) import Goodreads shelf in parallel
-      const parallelTasks: Promise<unknown>[] = [
-        fetch("/api/onboarding/aha", { method: "POST", body: ahaFd }),
-      ];
+        if (d.imported > 0) {
+          toast.success(`Imported ${d.imported} ${d.imported === 1 ? "book" : "books"} from Goodreads`, {
+            description: notes.length ? notes.join(" · ") : undefined,
+            duration: notes.length ? 8000 : 4000,
+          });
+        } else {
+          toast.error("Nothing could be imported", {
+            description: notes.length ? notes.join(" · ") : "Your CSV had no rows we could match.",
+            duration: 8000,
+          });
+        }
+      })
+      .catch(() => toast.error("Import failed — you can retry from your profile"));
+  };
 
-      if (file) {
-        const importFd = new FormData();
-        importFd.append("file", file);
-        parallelTasks.push(
-          fetch("/api/import/goodreads", { method: "POST", body: importFd })
-            .then(async (r) => {
-              if (r.ok) {
-                const d = await r.json();
-                if (d.imported > 0) toast.success(`Imported ${d.imported} books from Goodreads`);
-              }
-            })
-            .catch(() => {})
-        );
-      }
+  // Persist picks: favourite (Top 4) + read shelf entry. Fire all in parallel;
+  // a failure on one book must not block the rest or the flow.
+  const handleBooksNext = async () => {
+    setStep("readers");
+    setLoadingReaders(true);
+    // display_order = pick order, so the Top 4 reads in the order they chose.
+    const save = picks.map(async (b, i) => {
+      const post = (payload: Record<string, unknown>) =>
+        fetch(`/api/users/${encodeURIComponent(username)}/books`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookId: b.id, ...payload }),
+        }).catch(() => {});
+      await post({ type: "bookshelf", status: "read" });
+      await post({ type: "favorite", displayOrder: i + 1 });
+    });
+    const load = fetch("/api/onboarding/suggested-readers?limit=6")
+      .then((r) => r.json())
+      .then((d) => setReaders(d.users ?? []))
+      .catch(() => setReaders([]));
+    await Promise.all([...save, load]);
+    setLoadingReaders(false);
+  };
 
-      const [ahaRes] = await Promise.all(parallelTasks) as [Response, ...unknown[]];
-      const ahaData = await ahaRes.json();
-      const books: AhaBook[] = (ahaData.books || []).filter(
-        (b: AhaBook) => b.cover && b.title
+  const handleFollow = async (r: SuggestedReader) => {
+    setFollowed((prev) => new Set(prev).add(r.username));
+    try {
+      const res = await fetch(`/api/users/${encodeURIComponent(r.username)}/follow`, { method: "POST" });
+      if (!res.ok) throw new Error();
+      track("onboarding_reader_followed", { username: r.username, reason: r.reason });
+    } catch {
+      setFollowed((prev) => {
+        const next = new Set(prev);
+        next.delete(r.username);
+        return next;
+      });
+      toast.error(`Couldn't follow ${r.name || r.username}`);
+    }
+  };
+
+  const handleReadersNext = async () => {
+    setStep("aha-loading");
+    try {
+      const fd = new FormData();
+      fd.append("genres", JSON.stringify(genres));
+      const res = await fetch("/api/onboarding/aha", { method: "POST", body: fd });
+      const data = await res.json();
+      const pickedIds = new Set(picks.map((p) => p.id));
+      const books: AhaBook[] = (data.books || []).filter(
+        (b: AhaBook) => b.cover && b.title && !pickedIds.has(b.id)
       );
-
       if (books.length > 0) {
         setAhaPool(books);
         setAhaBook(books[0]);
         setAhaIdx(0);
         setStep("aha-reveal");
       } else {
-        onComplete();
+        finish({ aha: "none" });
       }
     } catch {
       toast.error("Something went wrong. Taking you home.");
-      onComplete();
+      finish({ aha: "error" });
     }
   };
 
@@ -776,12 +1071,12 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       // Silent fail — don't block navigation
     } finally {
       setIsAdding(false);
-      onComplete();
+      finish({ aha: "saved" });
     }
   };
 
   const handleShowAnother = () => {
-    if (ahaPool.length === 0) { onComplete(); return; }
+    if (ahaPool.length === 0) { finish({ aha: "none" }); return; }
     const next = (ahaIdx + 1) % ahaPool.length;
     setAhaIdx(next);
     setAhaBook(ahaPool[next]);
@@ -846,12 +1141,25 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 setSelected={setGenres}
               />
             )}
-            {step === "tempo" && (
-              <TempoStep
-                key="tempo"
-                onNext={handleTempoNext}
-                tempo={tempo}
-                setTempo={setTempo}
+            {step === "books" && (
+              <BooksStep
+                key="books"
+                suggestions={suggestions}
+                loadingSuggestions={loadingSuggestions}
+                picks={picks}
+                setPicks={setPicks}
+                onNext={handleBooksNext}
+                onImport={handleImport}
+              />
+            )}
+            {step === "readers" && (
+              <ReadersStep
+                key="readers"
+                readers={readers}
+                loading={loadingReaders}
+                followed={followed}
+                onFollow={handleFollow}
+                onNext={handleReadersNext}
               />
             )}
             {step === "aha-loading" && <AhaLoadingStep key="aha-loading" />}
@@ -861,7 +1169,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 book={ahaBook}
                 onAddToShelf={handleAddToShelf}
                 onShowAnother={handleShowAnother}
-                onSkip={onComplete}
+                onSkip={() => finish({ aha: "skipped" })}
                 isAdding={isAdding}
               />
             )}

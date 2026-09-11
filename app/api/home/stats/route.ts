@@ -107,6 +107,10 @@ export async function GET() {
     });
 
     const tbrCount = Array.isArray(tbrRes.data) ? tbrRes.data.length : 0;
+    // One untouched TBR book for the "nothing in progress" nudge on home.
+    // Random so the same title does not nag every day.
+    const untouched = tbrRaw.map(normalizeEntry).filter((b): b is NonNullable<typeof b> => b !== null && b.currentPage === 0);
+    const tbrPick = untouched.length ? untouched[Math.floor(Math.random() * untouched.length)] : null;
     const finishedCount =
       (bsRes.data as { total_count?: number } | null)?.total_count ?? 0;
 
@@ -127,6 +131,7 @@ export async function GET() {
         tbr: tbrCount,
         finished: finishedCount,
       },
+      tbrPick,
       lists,
     });
   } catch (error) {
