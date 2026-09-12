@@ -23,17 +23,32 @@ export function SurpriseMe({ className, serifClass }: { className?: string; seri
   const router = useRouter();
   const [result, setResult] = React.useState<Surprise | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
+  // Every failure here used to be swallowed, so a 401, a 500 or an empty pool
+  // all looked identical to a dead button. Say which one it was instead: the
+  // reader can act on "rate a few books first", not on silence.
   const roll = async (mode?: string) => {
     setLoading(true);
+    setError(null);
     try {
       const r = await fetch(`/api/recommendations/surprise${mode ? `?mode=${mode}` : ""}`);
-      if (r.ok) {
-        const d = (await r.json()) as { surprise: Surprise | null };
-        setResult(d.surprise);
+      if (!r.ok) {
+        setError(
+          r.status === 401
+            ? "Sign in again to be surprised."
+            : "Couldn't pull a book just now. Try again."
+        );
+        return;
       }
+      const d = (await r.json()) as { surprise: Surprise | null };
+      if (!d.surprise) {
+        setError("Nothing to pull from yet — rate a few books and try again.");
+        return;
+      }
+      setResult(d.surprise);
     } catch {
-      // keep whatever was showing
+      setError("Couldn't pull a book just now. Try again.");
     } finally {
       setLoading(false);
     }
@@ -41,18 +56,22 @@ export function SurpriseMe({ className, serifClass }: { className?: string; seri
 
   if (!result) {
     return (
-      <button
-        type="button"
-        onClick={() => roll()}
-        disabled={loading}
-        className={cn(
-          "inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm hover:border-foreground transition-colors disabled:opacity-60",
-          className
+      <div className={cn("flex flex-wrap items-center gap-3", className)}>
+        <button
+          type="button"
+          onClick={() => roll()}
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm hover:border-foreground transition-colors disabled:opacity-60"
+        >
+          <Sparkles className="h-4 w-4" />
+          {loading ? "Thinking…" : "Surprise me"}
+        </button>
+        {error && (
+          <p role="status" className="text-xs text-muted-foreground">
+            {error}
+          </p>
         )}
-      >
-        <Sparkles className="h-4 w-4" />
-        {loading ? "Thinking…" : "Surprise me"}
-      </button>
+      </div>
     );
   }
 
@@ -93,6 +112,11 @@ export function SurpriseMe({ className, serifClass }: { className?: string; seri
             </button>
           ))}
         </div>
+        {error && (
+          <p role="status" className="mt-2 text-xs text-muted-foreground">
+            {error}
+          </p>
+        )}
       </div>
     </section>
   );

@@ -289,6 +289,7 @@ export function HomeSidebar() {
 
   const [shelfCounts, setShelfCounts] = React.useState<{ reading: number; tbr: number; finished: number } | null>(null);
   const [lists, setLists] = React.useState<UserList[]>([]);
+  const [listsError, setListsError] = React.useState<string | null>(null);
 
   const [openSheet, setOpenSheet] = React.useState<SheetKey>(null);
   const [newListOpen, setNewListOpen] = React.useState(false);
@@ -302,14 +303,27 @@ export function HomeSidebar() {
       .catch(() => {});
   }, [isAuthenticated]);
 
-  // Fetch lists directly (authed endpoint)
+  // Fetch lists directly (authed endpoint).
+  //
+  // Reads `lists` (own + saved), the same field the /lists page and the profile
+  // Lists tab read. This used to read `json.ownLists || json.lists`, which
+  // never reached the fallback: an empty array is truthy, so an empty
+  // `ownLists` won over a populated `lists` instead of deferring to it.
+  //
+  // A failed fetch is also no longer silent. Rendering "No lists yet" on a 401
+  // or a 500 tells the reader they have no lists when we simply could not ask.
   React.useEffect(() => {
     if (!isAuthenticated || !user?.username) return;
+    let cancelled = false;
+    setListsError(null);
     fetch(`/api/users/${encodeURIComponent(user.username)}/lists`)
-      .then((r) => r.ok ? r.json() : null)
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`lists request failed (${r.status})`);
+        return r.json();
+      })
       .then((json) => {
-        if (!json) return;
-        const raw: UserList[] = (json.ownLists || json.lists || []).map(
+        if (cancelled) return;
+        const raw: UserList[] = (json?.lists ?? json?.ownLists ?? []).map(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (l: any) => ({
             id: l.id || l._id || l.listId || "",
@@ -319,7 +333,12 @@ export function HomeSidebar() {
         );
         setLists(raw);
       })
-      .catch(() => {});
+      .catch((err: Error) => {
+        if (cancelled) return;
+        console.error("[home-sidebar] lists:", err);
+        setListsError("Couldn't load your lists.");
+      });
+    return () => { cancelled = true; };
   }, [isAuthenticated, user?.username]);
 
   const shelves = [
@@ -408,7 +427,7 @@ export function HomeSidebar() {
             ))
           ) : (
             <div className="px-2.5 py-2 text-xs text-muted-foreground">
-              No lists yet — make one below.
+              {listsError ?? "No lists yet — make one below."}
             </div>
           )}
 

@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bookshelfApi } from "@/lib/api/endpoints";
 import { cookies } from "next/headers";
-import { getSession } from "@/lib/auth/jwt-session";
-import { recordActivity, STREAK_COOKIE_OPTIONS } from "@/lib/streak";
 import { extractGoError } from "@/lib/api/error";
 
 /**
@@ -131,25 +129,8 @@ export async function POST(
     const resolvedPages =
       typeof row?.current_page === "number" ? row.current_page : currentPage;
 
-    // Only count streak if user actually logged pages (pagesRead > 0)
-    if (currentPage > 0) {
-      const session = await getSession();
-      const userId = session.user?.id;
-      if (userId) {
-        const { result, cookieName, cookieValue } = await recordActivity(userId);
-        const res = NextResponse.json({
-          success: true,
-          pagesRead: resolvedPages,
-          totalPages: 0,
-          isComplete: false,
-          streak: result.streak,
-          streakUpdatedToday: result.updatedToday,
-        });
-        res.cookies.set(cookieName, cookieValue, STREAK_COOKIE_OPTIONS);
-        return res;
-      }
-    }
-
+    // No streak bookkeeping here: the Go progress call above already awarded
+    // read_progress XP, which advances the streak for every platform at once.
     return NextResponse.json({
       success: true,
       pagesRead: resolvedPages,

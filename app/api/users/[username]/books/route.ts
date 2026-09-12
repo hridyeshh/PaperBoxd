@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bookshelfApi, favoritesApi, goFetchAuthed, userApi } from "@/lib/api/endpoints";
-import { getSession } from "@/lib/auth/jwt-session";
-import { recordActivity, STREAK_COOKIE_OPTIONS } from "@/lib/streak";
 import { extractGoError } from "@/lib/api/error";
 
 function isPostgresBookUUID(s: string): boolean {
@@ -147,17 +145,9 @@ export async function POST(
           const err = data as { error?: { message?: string }; message?: string };
           return NextResponse.json({ error: extractGoError(err, "Failed to add to bookshelf") }, { status });
         }
-        // Marking a book as read counts as a reading activity
-        {
-          const session = await getSession();
-          const userId = session.user?.id;
-          if (userId) {
-            const { result, cookieName, cookieValue } = await recordActivity(userId);
-            const res = NextResponse.json({ message: "Book added to bookshelf successfully", ...(data as object), streak: result.streak });
-            res.cookies.set(cookieName, cookieValue, STREAK_COOKIE_OPTIONS);
-            return res;
-          }
-        }
+        // Marking a book as read counts as a reading activity, and the Go call
+        // above already awarded book_read XP — which is what advances the
+        // streak, on every platform at once.
         return NextResponse.json({ message: "Book added to bookshelf successfully", ...(data as object) });
       }
 
