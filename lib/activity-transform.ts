@@ -71,6 +71,11 @@ export function transformActivity(a: Record<string, unknown>) {
       action = "liked your note on";
       detail = (a.entry_title as string | null) ?? null;
       break;
+    case "fusion_joined":
+      // The story is app-only; the web just says it happened.
+      action = "fused with you. Open PaperBoxd on your phone to see your Fusion";
+      detail = null;
+      break;
     default:
       action = type.replace(/_/g, " ");
   }

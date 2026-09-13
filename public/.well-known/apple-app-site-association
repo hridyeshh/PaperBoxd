@@ -1,0 +1,10 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["JHJZJSU6SA.com.paperboxd.PaperBoxd"],
+        "components": [{ "/": "/fusion/*", "comment": "Fusion invite links" }]
+      }
+    ]
+  }
+}

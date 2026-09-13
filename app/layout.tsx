@@ -5,6 +5,7 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 import { MobileDock } from "@/components/ui/layout/mobile-dock";
 import { SiteSplash } from "@/components/ui/features/site-splash";
+import { PendingFusionRedirect } from "@/components/ui/fusion/pending-fusion";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -132,6 +133,7 @@ export default function RootLayout({
         />
         <Providers>
           <SiteSplash />
+          <PendingFusionRedirect />
           {children}
           <MobileDock />
         </Providers>

@@ -42,7 +42,7 @@ export function MobileDock() {
   }, []);
 
   // Don't show dock on auth pages, if not authenticated, or if edit form is open
-  const shouldShowDock = isMobile && isAuthenticated && !pathname?.startsWith("/auth") && !pathname?.startsWith("/choose-username") && !pathname?.startsWith("/onboarding") && !isEditOpen;
+  const shouldShowDock = isMobile && isAuthenticated && !pathname?.startsWith("/auth") && !pathname?.startsWith("/choose-username") && !pathname?.startsWith("/onboarding") && !pathname?.startsWith("/fusion/") && !isEditOpen;
 
   // Function to fetch profile avatar
   const fetchProfileAvatar = React.useCallback(() => {
