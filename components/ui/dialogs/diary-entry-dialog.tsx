@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
-import { Heart, Trash2, AlertTriangle } from "lucide-react";
+import { Heart, Loader2, Lock, Repeat2, Share, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/primitives/button";
 import {
   Dialog,
@@ -11,34 +11,64 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/primitives/dialog";
-import { useAuth } from "@/components/providers/auth-provider";
-import { toast } from "sonner";
-import { motion, AnimatePresence } from "framer-motion";
-import { useIsMobile } from "@/hooks/use-media-query";
-import { cn, formatDiaryDate, DEFAULT_COVER } from "@/lib/utils";
+import { ShareImageDialog } from "@/components/ui/features/book-share-button";
+import { ThoughtAvatar, ThoughtBookChip, relativeTime, useThoughtToggles } from "@/components/ui/profile/thought-row";
+import { cn } from "@/lib/utils";
+import { thoughtShareImageUrl, type Thought } from "@/lib/thoughts";
+
+/** Callers from the activity feed only know part of a thought; the thread fetch fills the rest. */
+type ThoughtSeed = Partial<Thought> & { id: string; content?: string };
 
 interface DiaryEntryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  entry: {
-    id: string;
-    bookId?: string | null;
-    bookTitle?: string | null;
-    bookAuthor?: string | null;
-    bookCover?: string | null;
-    subject?: string | null;
-    content: string;
-    createdAt: string;
-    updatedAt: string;
-    likes?: string[];
-    isLiked?: boolean;
-    likesCount?: number;
-    isPrivate?: boolean;
-  };
+  entry: ThoughtSeed;
+  /** Author's username when the seed doesn't carry one. */
   username: string;
   isOwnProfile?: boolean;
+  /** Focus the "Add to thread" box on open. */
+  focusComposer?: boolean;
+  /** A like, repost, follow-up or delete happened — the caller should refetch. */
   onLikeChange?: () => void;
   onDelete?: () => void;
+}
+
+function fromSeed(seed: ThoughtSeed, username: string): Thought {
+  return {
+    authorUsername: username,
+    authorName: username,
+    authorAvatar: null,
+    bookId: null,
+    bookTitle: null,
+    bookAuthor: null,
+    bookCover: null,
+    bookSlug: null,
+    subject: null,
+    isPrivate: false,
+    rating: null,
+    likesCount: 0,
+    isLiked: false,
+    repostsCount: 0,
+    isReposted: false,
+    threadRootId: null,
+    threadCount: 0,
+    repostedBy: null,
+    canEdit: false,
+    createdAt: "",
+    updatedAt: "",
+    ...Object.fromEntries(Object.entries(seed).filter(([, v]) => v !== undefined)),
+    content: seed.content ?? "",
+  } as Thought;
+}
+
+/** Plain text from the composer → the paragraph HTML every other thought is stored as. */
+function textToHtml(text: string): string {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return text
+    .trim()
+    .split(/\n{2,}/)
+    .map((para) => `<p>${esc(para).replace(/\n/g, "<br>")}</p>`)
+    .join("");
 }
 
 export function DiaryEntryDialog({
@@ -46,376 +76,289 @@ export function DiaryEntryDialog({
   onOpenChange,
   entry,
   username,
-  isOwnProfile = false,
+  focusComposer = false,
   onLikeChange,
   onDelete,
 }: DiaryEntryDialogProps) {
-  const { user } = useAuth();
-  const [isLiked, setIsLiked] = React.useState(entry.isLiked || false);
-  const [likesCount, setLikesCount] = React.useState(entry.likesCount || entry.likes?.length || 0);
-  const [isLiking, setIsLiking] = React.useState(false);
-  const [isAnimating, setIsAnimating] = React.useState(false);
-  const [isDeleting, setIsDeleting] = React.useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
-  const isMobile = useIsMobile();
+  // Callers pass `entry` inline, so its identity changes every render; the
+  // thread is keyed on the id and re-seeded only when that changes.
+  const seed = fromSeed(entry, username);
+  const seedRef = React.useRef(seed);
+  seedRef.current = seed;
+  const [thread, setThread] = React.useState<Thought[]>([seed]);
+  const [loading, setLoading] = React.useState(false);
+  const [draft, setDraft] = React.useState("");
+  const [posting, setPosting] = React.useState(false);
+  const [sharing, setSharing] = React.useState<{ thought: Thought; label?: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = React.useState<Thought | null>(null);
+  const composerRef = React.useRef<HTMLTextAreaElement>(null);
 
-  // Update state when entry prop changes
+  const author = thread[0]?.authorUsername || seed.authorUsername;
+  const canContinue = thread[0]?.canEdit ?? false;
+
   React.useEffect(() => {
-    setIsLiked(entry.isLiked || false);
-    setLikesCount(entry.likesCount || entry.likes?.length || 0);
-  }, [entry.id, entry.isLiked, entry.likesCount, entry.likes]);
+    if (!open || !seed.id) return;
+    let cancelled = false;
+    setThread([seedRef.current]);
+    setDraft("");
+    setConfirmDelete(null);
+    setLoading(true);
+    fetch(`/api/users/${encodeURIComponent(seed.authorUsername)}/thoughts/${encodeURIComponent(seed.id)}/thread`)
+      .then((res) => (res.ok ? res.json() : null)) // on failure keep the seed on screen
+      .then((data: { thoughts?: Thought[] } | null) => {
+        if (!cancelled && data?.thoughts?.length) setThread(data.thoughts);
+      })
+      .catch(() => {})
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, seed.id, seed.authorUsername]);
 
-  // Reset confirmation state when dialog closes
   React.useEffect(() => {
-    if (!open) {
-      setShowDeleteConfirm(false);
-    }
-  }, [open]);
+    if (open && focusComposer && canContinue) composerRef.current?.focus();
+  }, [open, focusComposer, canContinue]);
 
-  const handleLike = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    if (!user?.id) {
-      toast.info("Please sign in to like diary entries");
-      return;
-    }
-
-    const wasLiked = isLiked;
-
-    // Optimistic update
-    setIsLiked(!isLiked);
-    setLikesCount(prev => wasLiked ? prev - 1 : prev + 1);
-    setIsAnimating(true);
-    setIsLiking(true);
-
+  const post = async () => {
+    const text = draft.trim();
+    if (!text || posting) return;
+    setPosting(true);
     try {
-      const response = await fetch(`/api/users/${encodeURIComponent(username)}/diary/${entry.id}/like`, {
-        method: wasLiked ? "DELETE" : "POST",
+      const res = await fetch(`/api/users/${encodeURIComponent(author)}/thoughts`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: textToHtml(text), threadParentId: thread[thread.length - 1].id }),
       });
-
-      if (!response.ok) {
-        setIsLiked(wasLiked);
-        setLikesCount(prev => wasLiked ? prev + 1 : prev - 1);
-
-        let errorMessage = `Failed to toggle like (${response.status})`;
-        try {
-          const errorData = await response.clone().json() as { error?: string; details?: string };
-          errorMessage = errorData.error || errorData.details || errorMessage;
-        } catch {
-          const text = await response.clone().text().catch(() => "");
-          if (text) errorMessage = text;
-        }
-
-        throw new Error(errorMessage);
-      }
-
-      if (onLikeChange) {
-        try { await onLikeChange(); } catch { /* ignore */ }
-      }
-
-      // Reset animation after delay
-      setTimeout(() => {
-        setIsAnimating(false);
-      }, 800);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update like");
-      setIsAnimating(false);
+      const data = (await res.json().catch(() => ({}))) as Thought & { error?: string };
+      if (!res.ok) throw new Error(data.error || "Couldn't add to thread");
+      setDraft("");
+      setThread((t) => [...t, data]);
+      onLikeChange?.();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't add to thread");
     } finally {
-      setIsLiking(false);
+      setPosting(false);
     }
   };
 
-  const handleDeleteClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowDeleteConfirm(true);
-  };
-
-  const handleDeleteConfirm = async () => {
-    setIsDeleting(true);
-    setShowDeleteConfirm(false);
-
+  const remove = async (t: Thought) => {
+    setConfirmDelete(null);
     try {
-      const response = await fetch(`/api/users/${encodeURIComponent(username)}/diary`, {
+      const res = await fetch(`/api/users/${encodeURIComponent(author)}/thoughts`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entryId: entry.id }),
+        body: JSON.stringify({ thoughtId: t.id }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({})) as { error?: string; details?: string };
-        throw new Error(errorData.error || errorData.details || "Failed to delete entry");
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error || "Couldn't delete");
       }
-
-      toast.success("Diary entry deleted");
-      onOpenChange(false);
-      
-      if (onDelete) {
-        onDelete();
+      const isFirst = t.id === thread[0].id;
+      toast.success(isFirst ? "Thread deleted" : "Thought deleted");
+      if (isFirst) {
+        onOpenChange(false);
+        onDelete?.();
+      } else {
+        setThread((all) => all.filter((x) => x.id !== t.id));
+        onLikeChange?.();
       }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete diary entry");
-    } finally {
-      setIsDeleting(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't delete");
     }
   };
 
+  const first = thread[0];
+  const isThread = thread.length > 1;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(
-        "max-h-[85vh] flex flex-col p-0",
-        isMobile ? "max-w-[95vw] w-full" : "max-w-2xl"
-      )}>
-        {/* Delete Confirmation Overlay - appears inline to avoid nested Dialog */}
-        <AnimatePresence>
-          {showDeleteConfirm && (
-            <motion.div
-              className="absolute inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm rounded-lg"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <motion.div
-                className={cn(
-                  "bg-background border rounded-lg shadow-lg",
-                  isMobile ? "mx-4 p-4 max-w-sm w-full" : "p-6 max-w-md w-full"
-                )}
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div className={cn(
-                  "flex items-center gap-3 mb-4",
-                  isMobile && "gap-2"
-                )}>
-                  <div className={cn(
-                    "flex items-center justify-center rounded-full bg-destructive/10",
-                    isMobile ? "h-10 w-10" : "h-12 w-12"
-                  )}>
-                    <AlertTriangle className={cn(
-                      "text-destructive",
-                      isMobile ? "h-5 w-5" : "h-6 w-6"
-                    )} />
-                  </div>
-                  <div>
-                    <h3 className={cn(
-                      "font-semibold",
-                      isMobile ? "text-lg" : "text-xl"
-                    )}>Delete Diary Entry</h3>
-                  </div>
-                </div>
-                
-                <p className={cn(
-                  "text-muted-foreground mb-6",
-                  isMobile ? "text-sm" : "text-sm"
-                )}>
-                  Are you sure you want to delete this diary entry? This action cannot be undone.
-                </p>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="flex max-h-[88vh] w-[calc(100vw-2rem)] max-w-xl flex-col gap-0 p-0">
+          <DialogHeader className="border-b border-border px-5 py-3.5">
+            <DialogTitle className="text-base">{isThread ? "Thread" : "Thought"}</DialogTitle>
+            <DialogDescription className="sr-only">
+              {first.authorName}&apos;s {isThread ? "thread" : "thought"}
+              {first.bookTitle ? ` about ${first.bookTitle}` : ""}
+            </DialogDescription>
+          </DialogHeader>
 
-                <div className="flex gap-3 justify-end">
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowDeleteConfirm(false)}
-                    disabled={isDeleting}
-                    className={isMobile ? "text-sm" : ""}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={handleDeleteConfirm}
-                    disabled={isDeleting}
-                    className={isMobile ? "text-sm" : ""}
-                  >
-                    {isDeleting ? "Deleting..." : "Delete"}
-                  </Button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <DialogHeader className={cn(
-          "pb-3",
-          isMobile ? "px-3 pt-3" : "px-4 pt-4"
-        )}>
-          <DialogTitle className={cn(isMobile ? "text-base" : "text-lg")}>
-            {entry.bookTitle || ((entry.subject && entry.subject.trim()) ? entry.subject : "Your notes")}
-          </DialogTitle>
-          <DialogDescription className="text-sm">
-            {entry.bookAuthor ? entry.bookAuthor : (entry.bookTitle ? null : "You")}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className={cn(
-          "flex-1 flex overflow-hidden pb-4",
-          entry.bookCover ? (isMobile ? 'flex-col gap-3' : 'gap-4') : '',
-          isMobile ? "px-3" : "px-4"
-        )}>
-          {/* Book Cover - Left Side (only show if book exists) */}
-          {entry.bookCover && (
-            <div className={cn(
-              "flex-shrink-0",
-              isMobile ? "w-24 mx-auto" : "w-32"
-            )}>
-              <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-muted">
-                <Image
-                  src={entry.bookCover || DEFAULT_COVER}
-                  alt={entry.bookTitle ? `${entry.bookTitle} cover` : "Book cover"}
-                  fill
-                  className="object-cover"
-                  sizes={isMobile ? "96px" : "128px"}
-                  quality={100}
-                  unoptimized={entry.bookCover?.includes('isbndb.com') || entry.bookCover?.includes('images.isbndb.com') || entry.bookCover?.includes('covers.isbndb.com') || true}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Content - Right Side */}
-          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            <div className="flex-1 overflow-y-auto pr-2">
-              <div
-                className="prose prose-sm dark:prose-invert max-w-none text-foreground/90 text-sm"
-                dangerouslySetInnerHTML={{ __html: entry.content }}
+          <div className="flex-1 overflow-y-auto px-5 pt-4">
+            {thread.map((t, i) => (
+              <ThreadItem
+                key={t.id}
+                thought={t}
+                isFirst={i === 0}
+                hasNext={i < thread.length - 1 || canContinue}
+                onShare={() => setSharing({ thought: t, label: isThread ? `${i + 1}/${thread.length}` : undefined })}
+                onDelete={() => setConfirmDelete(t)}
+                onChange={() => onLikeChange?.()}
               />
-            </div>
-
-            {/* Footer with date, delete button (if owner), and like button */}
-            <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-              <div className="flex items-center gap-3">
-                <div className="text-xs text-muted-foreground">
-                  {entry.updatedAt !== entry.createdAt
-                    ? `Updated ${formatDiaryDate(entry.updatedAt)}`
-                    : formatDiaryDate(entry.createdAt)}
-                </div>
-                {entry.isPrivate && (
-                  <span
-                    className="rounded-full border border-foreground/15 bg-foreground/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
-                    title="Only you can see this entry"
-                  >
-                    Private
-                  </span>
-                )}
-                {isOwnProfile && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleDeleteClick}
-                    disabled={isDeleting || showDeleteConfirm}
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    {isDeleting ? "Deleting..." : "Delete"}
-                  </Button>
-                )}
+            ))}
+            {loading && thread.length === 1 && (
+              <div className="flex justify-center pb-4 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" aria-label="Loading thread" />
               </div>
+            )}
 
-              {/* Animated Like Button */}
-              <motion.div className="relative">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleLike}
-                  disabled={isLiking || showDeleteConfirm}
-                  className="flex items-center gap-2 relative overflow-visible"
-                >
-                  {/* Heart icon with animation */}
-                  <motion.div
-                    className="relative"
-                    animate={
-                      isAnimating
-                        ? {
-                            scale: [1, 1.3, 0.9, 1.1, 1],
-                            rotate: [0, -10, 10, -5, 0],
-                          }
-                        : {}
-                    }
-                    transition={{
-                      duration: 0.6,
-                      ease: "easeInOut",
+            {canContinue && (
+              <div className="flex gap-3 pb-4">
+                <ThoughtAvatar thought={first} />
+                <div className="min-w-0 flex-1">
+                  <textarea
+                    ref={composerRef}
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) post();
                     }}
-                  >
-                    <Heart
-                      className={`h-5 w-5 transition-all duration-300 ${
-                        isLiked
-                          ? "fill-red-500 text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]"
-                          : "text-muted-foreground hover:text-red-400"
-                      }`}
-                    />
-
-                    {/* Pulsing glow effect when liked */}
-                    <AnimatePresence>
-                      {isLiked && isAnimating && (
-                        <motion.div
-                          className="absolute inset-0 rounded-full bg-red-500"
-                          initial={{ scale: 1, opacity: 0.6 }}
-                          animate={{ scale: 2.5, opacity: 0 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.6 }}
-                        />
-                      )}
-                    </AnimatePresence>
-                  </motion.div>
-
-                  {/* Like count with animation */}
-                  <motion.span
-                    className="text-sm font-medium"
-                    key={likesCount}
-                    initial={{ scale: 1 }}
-                    animate={isAnimating ? { scale: [1, 1.3, 1] } : {}}
-                    transition={{ duration: 0.3 }}
-                  >
-                    {likesCount}
-                  </motion.span>
-                </Button>
-
-                {/* Floating heart particles when liked */}
-                <AnimatePresence>
-                  {isLiked && isAnimating && (
-                    <>
-                      {[...Array(6)].map((_, i) => (
-                        <motion.div
-                          key={i}
-                          className="absolute top-0 left-1/2 pointer-events-none"
-                          initial={{
-                            x: -10,
-                            y: 0,
-                            opacity: 1,
-                            scale: 0.5,
-                          }}
-                          animate={{
-                            x: -10 + (Math.random() - 0.5) * 60,
-                            y: -50 - Math.random() * 30,
-                            opacity: 0,
-                            scale: 0.3 + Math.random() * 0.4,
-                          }}
-                          exit={{ opacity: 0 }}
-                          transition={{
-                            duration: 0.8,
-                            delay: i * 0.05,
-                            ease: "easeOut",
-                          }}
-                        >
-                          <Heart
-                            className="h-3 w-3 fill-red-500 text-red-500"
-                            style={{
-                              filter: "drop-shadow(0 0 4px rgba(239, 68, 68, 0.8))",
-                            }}
-                          />
-                        </motion.div>
-                      ))}
-                    </>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            </div>
+                    rows={draft ? 3 : 1}
+                    maxLength={5000}
+                    placeholder="Add to this thread…"
+                    aria-label="Add to this thread"
+                    className="w-full resize-none bg-transparent py-1.5 text-[15px] leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none"
+                  />
+                  <div className="flex items-center justify-between border-t border-border/70 pt-2">
+                    <span className="text-xs text-muted-foreground">
+                      {first.isPrivate ? "Private, like the rest of the thread" : "Joins the thread under the same book"}
+                    </span>
+                    <Button size="sm" className="rounded-full" onClick={post} disabled={!draft.trim() || posting}>
+                      {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Post"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+
+          {confirmDelete && (
+            <div className="flex items-center justify-between gap-3 border-t border-border bg-destructive/5 px-5 py-3">
+              <p className="text-sm text-foreground">
+                {confirmDelete.id === first.id && isThread
+                  ? "Delete the first thought? The whole thread goes with it."
+                  : "Delete this thought? This can't be undone."}
+              </p>
+              <div className="flex shrink-0 gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setConfirmDelete(null)}>Cancel</Button>
+                <Button size="sm" variant="destructive" onClick={() => remove(confirmDelete)}>Delete</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {sharing && (
+        <ShareImageDialog
+          open={!!sharing}
+          onOpenChange={(o) => !o && setSharing(null)}
+          imageUrl={thoughtShareImageUrl(sharing.thought, sharing.label)}
+          shareTitle={`A thought by @${sharing.thought.authorUsername}`}
+        />
+      )}
+    </>
   );
 }
 
+function ThreadItem({
+  thought,
+  isFirst,
+  hasNext,
+  onShare,
+  onDelete,
+  onChange,
+}: {
+  thought: Thought;
+  isFirst: boolean;
+  hasNext: boolean;
+  onShare: () => void;
+  onDelete: () => void;
+  onChange: () => void;
+}) {
+  const t = useThoughtToggles(thought, onChange);
+
+  return (
+    <div className="flex gap-3">
+      {/* Avatar column with the line that joins a thread */}
+      <div className="flex flex-col items-center">
+        <ThoughtAvatar thought={thought} />
+        {hasNext && <span className="my-1 w-0.5 flex-1 rounded-full bg-border" aria-hidden />}
+      </div>
+
+      <div className="min-w-0 flex-1 pb-5">
+        <header className="flex items-baseline gap-1.5 text-sm">
+          <span className="truncate font-semibold text-foreground">{thought.authorName}</span>
+          <span className="truncate text-muted-foreground">@{thought.authorUsername}</span>
+          {thought.createdAt && (
+            <>
+              <span className="text-muted-foreground" aria-hidden>·</span>
+              <time dateTime={thought.createdAt} className="shrink-0 text-muted-foreground">{relativeTime(thought.createdAt)}</time>
+            </>
+          )}
+          {thought.isPrivate && (
+            <span className="ml-auto flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+              <Lock className="h-3 w-3" aria-hidden /> Private
+            </span>
+          )}
+        </header>
+
+        {isFirst && thought.subject && !thought.bookTitle && (
+          <p className="mt-0.5 text-sm font-semibold text-foreground">{thought.subject}</p>
+        )}
+
+        <div
+          className="prose prose-sm mt-1 max-w-none break-words text-[15px] leading-relaxed text-foreground dark:prose-invert prose-p:my-2"
+          dangerouslySetInnerHTML={{ __html: thought.content }}
+        />
+
+        {isFirst && <ThoughtBookChip thought={thought} />}
+
+        <div className="mt-2 flex items-center gap-5">
+          <button
+            type="button"
+            onClick={t.toggleRepost}
+            disabled={t.isOwn || thought.isPrivate}
+            aria-pressed={t.isReposted}
+            aria-label={t.isReposted ? "Undo repost" : "Repost"}
+            className={cn(
+              "-ml-2 flex min-h-9 items-center gap-1.5 rounded-full px-2 text-[13px] tabular-nums text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40",
+              t.isReposted && "text-emerald-600 dark:text-emerald-400",
+            )}
+          >
+            <Repeat2 className="h-[18px] w-[18px]" />
+            {t.repostsCount > 0 && t.repostsCount}
+          </button>
+          <button
+            type="button"
+            onClick={t.toggleLike}
+            aria-pressed={t.isLiked}
+            aria-label={t.isLiked ? "Unlike" : "Like"}
+            className={cn(
+              "-ml-2 flex min-h-9 items-center gap-1.5 rounded-full px-2 text-[13px] tabular-nums text-muted-foreground hover:bg-muted hover:text-foreground",
+              t.isLiked && "text-rose-600 dark:text-rose-400",
+            )}
+          >
+            <Heart className={cn("h-[18px] w-[18px]", t.isLiked && "fill-current")} />
+            {t.likesCount > 0 && t.likesCount}
+          </button>
+          <button
+            type="button"
+            onClick={onShare}
+            aria-label="Share to story"
+            className="-ml-2 flex min-h-9 items-center rounded-full px-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <Share className="h-[18px] w-[18px]" />
+          </button>
+          {thought.canEdit && (
+            <button
+              type="button"
+              onClick={onDelete}
+              aria-label="Delete"
+              className="ml-auto flex min-h-9 items-center rounded-full px-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

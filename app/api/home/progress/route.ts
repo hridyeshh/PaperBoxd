@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { goFetchAuthed, bookshelfApi, diaryApi } from "@/lib/api/endpoints";
+import { goFetchAuthed, bookshelfApi, thoughtsApi } from "@/lib/api/endpoints";
 import { getSession } from "@/lib/auth/jwt-session";
 
 export interface TodayLastBook {
@@ -67,7 +67,7 @@ export async function GET() {
       ),
       bookshelfApi.getCurrentlyReading(username, 1, 100),
       bookshelfApi.getTBR(username, 1, 100),
-      diaryApi.getEntries(username, 1, 100),
+      thoughtsApi.list(username, 1, 100),
     ]);
 
     // ── Today stats from reading_log (Go endpoint) ────────────────────────────
@@ -105,12 +105,13 @@ export async function GET() {
     const diaryByDay = new Map<string, number>();
     for (let i = 0; i < 7; i++) diaryByDay.set(utcDateStr(i), 0);
 
-    type DiaryEntry = { createdAt?: string; created_at?: string };
+    // Reposts are on the list too, dated by someone else's writing — skip them.
+    type GoThoughtRow = { created_at?: string; reposted_by?: unknown };
     if (diaryRes.status === "fulfilled" && diaryRes.value.status < 400) {
-      const data = diaryRes.value.data as { entries?: DiaryEntry[] } | null;
-      const entries = data?.entries ?? [];
+      const data = diaryRes.value.data as { thoughts?: GoThoughtRow[] } | null;
+      const entries = (data?.thoughts ?? []).filter((e) => !e.reposted_by);
       for (const e of entries) {
-        const ts = e.createdAt || e.created_at;
+        const ts = e.created_at;
         if (!ts) continue;
         const ds = dateKeyUTC(ts);
         if (diaryByDay.has(ds)) diaryByDay.set(ds, (diaryByDay.get(ds) ?? 0) + 1);

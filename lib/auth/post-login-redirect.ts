@@ -7,7 +7,7 @@ export type PostLoginUserPayload = {
   books_read_count?: number;
   favorites_count?: number;
   lists_count?: number;
-  diary_entries_count?: number;
+  thoughts_count?: number;
   favorite_genres?: string[];
   created_at?: string;
 };

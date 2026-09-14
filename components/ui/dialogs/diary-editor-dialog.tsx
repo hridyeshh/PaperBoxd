@@ -83,7 +83,7 @@ export function DiaryEditorDialog({
 
       console.log("[DiaryEditor] Request body:", requestBody);
 
-      const response = await fetch(`/api/users/${encodeURIComponent(username)}/diary`, {
+      const response = await fetch(`/api/users/${encodeURIComponent(username)}/thoughts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),

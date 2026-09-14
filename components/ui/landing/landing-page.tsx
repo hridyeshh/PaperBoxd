@@ -975,8 +975,8 @@ function LandingFriendsBand() {
     .map((a) => {
       const kind = a.type.startsWith("created_list") || a.type.startsWith("shared_list")
         ? "List"
-        : a.type === "created_diary_entry"
-        ? "Diary"
+        : a.type === "created_thought"
+        ? "Thought"
         : a.type === "wants_to_read"
         ? "To-be-read"
         : null;

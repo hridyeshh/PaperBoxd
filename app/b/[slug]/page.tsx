@@ -2018,18 +2018,14 @@ export default function BookDetailPage() {
           username={user?.username}
           onSave={() => {
             if (user?.username) {
-              fetch(`/api/users/${encodeURIComponent(user?.username)}/diary`)
+              fetch(`/api/users/${encodeURIComponent(user?.username)}/thoughts?limit=50`)
                 .then((res) => res.json())
-                .then((data) => {
-                  type DiaryEntry = {
-                    bookId?: { toString(): string } | string;
-                    content?: string;
-                  };
+                .then((data: { thoughts?: Array<{ bookId: string | null; content: string; repostedBy: unknown }> }) => {
                   const bookId = book._id || book.bookId || book.id;
-                  const existingEntry = data.entries?.find((entry: DiaryEntry) => {
+                  const existingEntry = data.thoughts?.find((entry) => {
                     return (
-                      entry.bookId?.toString() === bookId?.toString() ||
-                      (book.id && entry.bookId === book.id)
+                      !entry.repostedBy &&
+                      (entry.bookId === bookId?.toString() || (book.id && entry.bookId === book.id))
                     );
                   });
                   if (existingEntry) {

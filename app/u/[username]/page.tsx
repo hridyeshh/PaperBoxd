@@ -33,10 +33,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/primitives/dialog";
-import { Edit, MoreVertical, Trash2, Plus, X, Heart, AlertTriangle, Link2, Check, Share2 } from "lucide-react";
+import { Edit, MoreVertical, Trash2, Plus, X, AlertTriangle, Link2, Check, Share2 } from "lucide-react";
 import BookLoader from "@/components/ui/features/book-loader";
 import { createBookSlug } from "@/lib/utils/book-slug";
-import { cn, DEFAULT_AVATAR, DEFAULT_COVER, formatDiaryDate } from "@/lib/utils";
+import { cn, DEFAULT_AVATAR, DEFAULT_COVER } from "@/lib/utils";
 import {
   type BookshelfBook,
   type LikedBook,
@@ -45,6 +45,9 @@ import {
   type ProfileBook,
 } from "@/lib/mock/profileBooks";
 import { DiaryEntryDialog } from "@/components/ui/dialogs/diary-entry-dialog";
+import { ShareImageDialog } from "@/components/ui/features/book-share-button";
+import { ThoughtRow } from "@/components/ui/profile/thought-row";
+import { thoughtShareImageUrl, type Thought } from "@/lib/thoughts";
 import { Input } from "@/components/ui/primitives/input";
 import { Label } from "@/components/ui/primitives/label";
 import { Switch } from "@/components/ui/primitives/switch";
@@ -62,7 +65,7 @@ type ActivityView = "Friends" | "Me";
 const BOOKSHELF_PAGE_SIZE = 12;
 const LIKES_PAGE_SIZE = 12;
 const TBR_PAGE_SIZE = 12;
-const DIARY_PAGE_SIZE = 15; // 3x5 grid
+const DIARY_PAGE_SIZE = 15;
 const LISTS_PAGE_SIZE = 12;
 
 type ActivityEntry = {
@@ -2444,74 +2447,39 @@ function TabPlaceholder({ label }: { label: string }) {
   );
 }
 
-type DiaryEntry = {
-  id: string;
-  bookId?: string | null;
-  bookTitle?: string | null;
-  bookAuthor?: string | null;
-  bookCover?: string | null;
-  subject?: string | null;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  isLiked: boolean;
-  likesCount: number;
-  likes: string[];
-  isPrivate?: boolean;
-};
+type DiaryEntry = Thought;
 
 function DiarySection({
   entries,
   isOwnProfile,
   username,
-  onEntryClick,
   onRefresh,
   page,
   pageSize,
   onPageChange,
-  isMobile = false,
 }: {
   entries: DiaryEntry[];
   isOwnProfile: boolean;
   username: string;
-  onEntryClick?: (entry: DiaryEntry) => void;
-  onRefresh?: () => void;
+  onRefresh?: () => void | Promise<void>;
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
-  isMobile?: boolean;
 }) {
-  const [selectedEntry, setSelectedEntry] = React.useState<DiaryEntry | null>(null);
-
-  // Update selectedEntry when entries change (to keep it in sync)
-  const selectedEntryId = selectedEntry?.id || null;
-  const selectedEntryIsLiked = selectedEntry?.isLiked;
-  const selectedEntryLikesCount = selectedEntry?.likesCount;
-
-  React.useEffect(() => {
-    if (selectedEntryId) {
-      const updatedEntry = entries.find((entry) => entry.id === selectedEntryId);
-      if (updatedEntry &&
-        (updatedEntry.isLiked !== selectedEntryIsLiked ||
-          updatedEntry.likesCount !== selectedEntryLikesCount)) {
-        setSelectedEntry(updatedEntry);
-      }
-    }
-  }, [entries, selectedEntryId, selectedEntryIsLiked, selectedEntryLikesCount]);
+  const [open, setOpen] = React.useState<{ thought: Thought; compose: boolean } | null>(null);
+  const [sharing, setSharing] = React.useState<Thought | null>(null);
 
   const totalPages = Math.ceil(entries.length / pageSize);
-  const startIndex = (page - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedEntries = entries.slice(startIndex, endIndex);
+  const paginatedEntries = entries.slice((page - 1) * pageSize, page * pageSize);
 
   if (entries.length === 0) {
     return (
       <EmptyState
-        title={isOwnProfile ? "Write your first note" : "No diary entries yet"}
+        title={isOwnProfile ? "Write your first thought" : "No thoughts yet"}
         description={
           isOwnProfile
             ? "A line about what a book did to you is worth more later than you think. Open any book and write."
-            : "This reader hasn't written any diary entries yet."
+            : "This reader hasn't shared any thoughts yet."
         }
         actionLabel={isOwnProfile ? "Find a book" : undefined}
         actionHref={isOwnProfile ? "/search" : undefined}
@@ -2519,141 +2487,24 @@ function DiarySection({
     );
   }
 
-  const handleEntryClick = (entry: DiaryEntry) => {
-    setSelectedEntry(entry);
-    if (onEntryClick) {
-      onEntryClick(entry);
-    }
-  };
-
   return (
     <>
-      <div className="space-y-6">
-        <div className="mb-4">
-          <h2 className="text-xl font-semibold text-foreground">Thoughts</h2>
-          <p className="text-sm text-muted-foreground">Thoughts and reflections on books</p>
-        </div>
-        <div className={cn(
-          "grid gap-4",
-          isMobile ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
-        )}>
-          {paginatedEntries.map((entry) => {
-            const isLiked = entry.isLiked || false;
-            const likesCount = entry.likesCount || 0;
-            const hasBookCover = entry.bookCover && entry.bookCover.trim();
-
-            return (
-              <div
-                key={entry.id}
-                onClick={() => handleEntryClick(entry)}
-                className={cn(
-                  "group relative rounded-lg border border-border/70 bg-card shadow-sm transition-shadow hover:shadow-md cursor-pointer overflow-hidden",
-                  isMobile ? "flex flex-col" : "flex gap-3 p-3"
-                )}
-              >
-                {/* Private label — corner chip, visible for both layouts */}
-                {entry.isPrivate && (
-                  <span
-                    className="pointer-events-none absolute right-1.5 top-1.5 z-10 rounded-full border border-foreground/15 bg-background/90 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground shadow-sm backdrop-blur"
-                    title="Only you can see this entry"
-                  >
-                    Private
-                  </span>
-                )}
-
-                {/* Book Cover (if entry is about a book) */}
-                {hasBookCover && (
-                  <div className={cn(
-                    "relative aspect-[2/3] overflow-hidden bg-muted",
-                    isMobile ? "w-full" : "h-20 w-14 flex-shrink-0 rounded-lg"
-                  )}>
-                    <Image
-                      src={entry.bookCover || DEFAULT_COVER}
-                      alt={entry.bookTitle || "Book cover"}
-                      fill
-                      className="object-cover"
-                      sizes={isMobile ? "50vw" : "56px"}
-                      quality={100}
-                      unoptimized={entry.bookCover?.includes('isbndb.com') || entry.bookCover?.includes('images.isbndb.com') || entry.bookCover?.includes('covers.isbndb.com') || true}
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        if (target && target.parentElement) {
-                          target.style.display = 'none';
-                        }
-                      }}
-                    />
-                  </div>
-                )}
-
-                {/* Entry Content */}
-                <div className={cn(
-                  "space-y-1",
-                  isMobile ? "p-2.5" : "flex-1 min-w-0"
-                )}>
-                  <div>
-                    {entry.bookTitle ? (
-                      <>
-                        <h3 className={cn(
-                          "font-semibold text-foreground line-clamp-2 leading-tight",
-                          isMobile ? "text-xs" : "text-sm"
-                        )}>{entry.bookTitle}</h3>
-                        {entry.bookAuthor && (
-                          <p className={cn(
-                            "text-muted-foreground truncate",
-                            isMobile ? "text-xs mt-0.5" : "text-xs"
-                          )}>{entry.bookAuthor}</p>
-                        )}
-                      </>
-                    ) : (
-                      <h3 className={cn(
-                        "font-semibold text-foreground line-clamp-2 leading-tight",
-                        isMobile ? "text-xs" : "text-sm"
-                      )}>
-                        {(entry.subject && entry.subject.trim()) ? entry.subject : "Diary Entry"}
-                      </h3>
-                    )}
-                    {entry.updatedAt && (
-                      <p className={cn(
-                        "text-muted-foreground/80 truncate",
-                        isMobile ? "text-xs mt-1" : "text-xs mt-1"
-                      )}>
-                        {entry.updatedAt !== entry.createdAt
-                          ? `Updated ${formatDiaryDate(entry.updatedAt)}`
-                          : formatDiaryDate(entry.createdAt)}
-                      </p>
-                    )}
-                  </div>
-                  {entry.content && entry.content.trim() && (
-                    <div
-                      className="prose prose-sm dark:prose-invert max-w-none text-foreground/90 line-clamp-2 overflow-hidden text-xs"
-                      dangerouslySetInnerHTML={{ __html: entry.content }}
-                      style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                      }}
-                    />
-                  )}
-                  {likesCount > 0 && (
-                    <div className={cn(
-                      "flex items-center gap-1 text-muted-foreground",
-                      isMobile ? "text-xs mt-1.5" : "text-xs mt-1"
-                    )}>
-                      <Heart className={cn(
-                        isLiked ? 'fill-red-500 text-red-500' : '',
-                        "h-3 w-3"
-                      )} />
-                      <span>{likesCount}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+      <div className="mx-auto max-w-2xl">
+        <div className="border-t border-border/70">
+          {paginatedEntries.map((thought) => (
+            <ThoughtRow
+              // A reposted thought can sit next to the original on the same page.
+              key={`${thought.id}-${thought.repostedBy ? "repost" : "own"}`}
+              thought={thought}
+              onOpen={(t) => setOpen({ thought: t, compose: false })}
+              onContinue={(t) => setOpen({ thought: t, compose: true })}
+              onShare={setSharing}
+              onChange={() => onRefresh?.()}
+            />
+          ))}
         </div>
         {totalPages > 1 && (
-          <Pagination>
+          <Pagination className="mt-6">
             <PaginationContent>
               <PaginationItem>
                 <PaginationPrevious
@@ -2694,59 +2545,27 @@ function DiarySection({
         )}
       </div>
 
-      {selectedEntry && (
+      {open && (
         <DiaryEntryDialog
-          open={!!selectedEntry}
-          onOpenChange={(open) => {
-            if (!open) setSelectedEntry(null);
+          open
+          onOpenChange={(o) => !o && setOpen(null)}
+          entry={open.thought}
+          username={open.thought.authorUsername || username}
+          focusComposer={open.compose}
+          onLikeChange={() => onRefresh?.()}
+          onDelete={() => {
+            setOpen(null);
+            onRefresh?.();
           }}
-          entry={selectedEntry ? {
-            id: selectedEntry.id,
-            bookId: selectedEntry.bookId || null,
-            bookTitle: selectedEntry.bookTitle || null,
-            bookAuthor: selectedEntry.bookAuthor || null,
-            bookCover: selectedEntry.bookCover || null,
-            subject: selectedEntry.subject || null,
-            content: selectedEntry.content || "",
-            createdAt: selectedEntry.createdAt || "",
-            updatedAt: selectedEntry.updatedAt || "",
-            likes: selectedEntry.likes || [],
-            isLiked: selectedEntry.isLiked || false,
-            likesCount: selectedEntry.likesCount || 0,
-            isPrivate: selectedEntry.isPrivate || false,
-          } : {
-            id: "",
-            content: "",
-            createdAt: "",
-            updatedAt: "",
-          }}
-          username={username}
-          isOwnProfile={isOwnProfile}
-          onLikeChange={async () => {
-            // Refresh entries list view after like change
-            if (onEntryClick && selectedEntry) {
-              try {
-                await onEntryClick(selectedEntry);
-              } catch (error) {
-                console.error("Error in onEntryClick callback:", error);
-              }
-            }
-            // Also refresh the diary entries list via onRefresh if available
-            if (onRefresh) {
-              try {
-                await onRefresh();
-              } catch (error) {
-                console.error("Error refreshing diary entries:", error);
-              }
-            }
-          }}
-          onDelete={async () => {
-            // Refresh entries list after deletion
-            setSelectedEntry(null);
-            if (onRefresh) {
-              await onRefresh();
-            }
-          }}
+        />
+      )}
+
+      {sharing && (
+        <ShareImageDialog
+          open
+          onOpenChange={(o) => !o && setSharing(null)}
+          imageUrl={thoughtShareImageUrl(sharing)}
+          shareTitle={`A thought by @${sharing.authorUsername}`}
         />
       )}
     </>
@@ -3179,7 +2998,7 @@ export default function UserProfilePage() {
     level_name?: string;
     current_streak?: number;
     books_read?: number;
-    diary_entries?: number;
+    thoughts?: number;
     xp_rank?: number | null;
   } | null>(null);
 
@@ -3255,61 +3074,16 @@ export default function UserProfilePage() {
     }
   };
 
-  // Function to fetch diary entries
+  // Thoughts tab: the reader's thoughts and reposts, already newest-first from Go.
   const fetchDiaryEntries = React.useCallback(async (username: string) => {
     try {
-      const response = await fetch(`/api/users/${encodeURIComponent(username)}/diary`);
+      const response = await fetch(`/api/users/${encodeURIComponent(username)}/thoughts?limit=50`);
       if (response.ok) {
-        const data = await response.json();
-        type DiaryEntryFromAPI = {
-          _id?: { toString(): string } | string;
-          id?: string;
-          bookId?: { toString(): string } | string;
-          bookTitle?: string;
-          bookAuthor?: string;
-          bookCover?: string;
-          subject?: string;
-          content?: string;
-          createdAt?: string;
-          updatedAt?: string;
-          isLiked?: boolean;
-          likesCount?: number;
-          likes?: unknown[];
-          isPrivate?: boolean;
-          is_private?: boolean;
-        };
-        const transformedEntries: DiaryEntry[] = Array.isArray(data.entries)
-          ? data.entries
-            .map((entry: DiaryEntryFromAPI, idx: number) => {
-              const isGeneralEntry = !entry.bookId && !entry.bookTitle;
-              return {
-                id: entry._id?.toString() || entry.id || entry.bookId?.toString() || `diary-${idx}`,
-                bookId: entry.bookId?.toString() || entry.bookId,
-                bookTitle: entry.bookTitle || null,
-                bookAuthor: entry.bookAuthor || null,
-                bookCover: entry.bookCover || null,
-                subject: entry.subject || null,
-                isGeneralEntry,
-                content: entry.content || "",
-                createdAt: entry.createdAt ? new Date(entry.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
-                updatedAt: entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
-                isLiked: entry.isLiked || false,
-                likesCount: entry.likesCount || 0,
-                likes: entry.likes || [],
-                isPrivate: entry.isPrivate ?? entry.is_private ?? false,
-              };
-            })
-            .sort((a: DiaryEntry, b: DiaryEntry) => {
-              // Sort by updatedAt descending (newest first)
-              const aDate = a.updatedAt ? new Date(a.updatedAt) : (a.createdAt ? new Date(a.createdAt) : new Date(0));
-              const bDate = b.updatedAt ? new Date(b.updatedAt) : (b.createdAt ? new Date(b.createdAt) : new Date(0));
-              return bDate.getTime() - aDate.getTime();
-            })
-          : [];
-        setDiaryEntries(transformedEntries);
+        const data = (await response.json()) as { thoughts?: Thought[] };
+        setDiaryEntries(Array.isArray(data.thoughts) ? data.thoughts : []);
       }
     } catch (error) {
-      console.error("Error fetching diary entries:", error);
+      console.error("Error fetching thoughts:", error);
     }
   }, []);
 
@@ -3733,53 +3507,8 @@ export default function UserProfilePage() {
               : [];
             setReadingLists(transformedLists);
 
-            type DiaryEntryFromAPIForTransformation = {
-              _id?: { toString(): string } | string;
-              id?: string;
-              bookId?: { toString(): string } | string;
-              bookTitle?: string;
-              bookAuthor?: string;
-              bookCover?: string;
-              subject?: string;
-              content?: string;
-              createdAt?: string;
-              updatedAt?: string;
-              isLiked?: boolean;
-              likesCount?: number;
-              likes?: unknown[];
-              isPrivate?: boolean;
-              is_private?: boolean;
-            };
-            type LikeId = { toString(): string } | string;
-            // Diary entries
-            const transformedDiaryEntries: DiaryEntry[] = Array.isArray(data.user.diaryEntries)
-              ? data.user.diaryEntries.map((entry: DiaryEntryFromAPIForTransformation, idx: number) => {
-                const isGeneralEntry = !entry.bookId && !entry.bookTitle;
-                return {
-                  id: entry._id?.toString() || `diary-${idx}`,
-                  bookId: entry.bookId?.toString() || entry.bookId || null,
-                  bookTitle: entry.bookTitle || null,
-                  bookAuthor: entry.bookAuthor || null,
-                  bookCover: entry.bookCover || null,
-                  subject: entry.subject || null,
-                  isGeneralEntry,
-                  content: entry.content || "",
-                  likes: Array.isArray(entry.likes) ? entry.likes.map((id) => {
-                    const likeId = id as LikeId;
-                    return typeof likeId === 'string' ? likeId : likeId.toString();
-                  }) : [],
-                  likesCount: Array.isArray(entry.likes) ? entry.likes.length : 0,
-                  isLiked: user?.id && Array.isArray(entry.likes) && entry.likes.some((id) => {
-                    const likeId = id as LikeId;
-                    const idStr = typeof likeId === 'string' ? likeId : likeId.toString();
-                    return idStr === user?.id;
-                  }) || false,
-                  createdAt: entry.createdAt ? new Date(entry.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
-                  updatedAt: entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
-                  isPrivate: entry.isPrivate ?? entry.is_private ?? false,
-                };
-              })
-              : [];
+            // Thoughts arrive already shaped by lib/thoughts (toThought).
+            const transformedDiaryEntries: DiaryEntry[] = Array.isArray(data.user.diaryEntries) ? data.user.diaryEntries : [];
             setDiaryEntries(transformedDiaryEntries);
 
             // Activities
@@ -3865,22 +3594,10 @@ export default function UserProfilePage() {
               })
               : [];
 
-            type DiaryEntryFromAPI = {
-              _id?: { toString(): string } | string;
-              id?: string;
-              bookId?: { toString(): string } | string;
-              bookTitle?: string;
-              bookAuthor?: string;
-              bookCover?: string;
-              subject?: string;
-              content?: string;
-              createdAt?: string;
-              updatedAt?: string;
-              likes?: unknown[];
-            };
-            // Add diary entries as activities
+            // The reader's own thoughts as activity rows. Reposts are someone
+            // else's writing, and follow-ups belong to their thread.
             const diaryActivities: ActivityEntry[] = Array.isArray(data.user.diaryEntries)
-              ? data.user.diaryEntries.map((entry: DiaryEntryFromAPI, idx: number) => {
+              ? (data.user.diaryEntries as Thought[]).filter((t) => !t.repostedBy).map((entry) => {
                 // Format time ago
                 const entryDate = entry.updatedAt ? new Date(entry.updatedAt) : (entry.createdAt ? new Date(entry.createdAt) : new Date());
                 const now = new Date();
@@ -3899,41 +3616,31 @@ export default function UserProfilePage() {
                 else if (diffDays < 365) timeAgo = `${Math.floor(diffDays / 30)}mo ago`;
                 else timeAgo = `${Math.floor(diffDays / 365)}y ago`;
 
-                const entryId = entry._id?.toString() || entry.id || `diary-${idx}`;
-                const bookId = entry.bookId?.toString() || entry.bookId;
-                type LikeId = { toString(): string } | string;
-                const isLiked = user?.id && Array.isArray(entry.likes) && entry.likes.some((id) => {
-                  const likeId = id as LikeId;
-                  const idStr = typeof likeId === 'string' ? likeId : likeId.toString();
-                  return idStr === user?.id;
-                });
-
                 const isGeneralEntry = !entry.bookId && !entry.bookTitle;
                 return {
-                  id: `diary-activity-${entryId}`,
+                  id: `diary-activity-${entry.id}`,
                   name: isOwnerProfile ? "You" : data.user.name || "User",
                   action: isGeneralEntry ? "wrote" : "wrote about",
                   detail: entry.bookTitle || (isGeneralEntry
-                    ? (entry.subject && entry.subject.trim() ? entry.subject : "a diary entry")
+                    ? (entry.subject && entry.subject.trim() ? entry.subject : "a thought")
                     : "a book"),
                   timeAgo,
-                  cover: entry.bookCover || null,
+                  cover: entry.bookCover || DEFAULT_COVER,
                   type: "diary_entry",
-                  diaryEntryId: entryId,
-                  bookId: bookId,
-                  bookTitle: entry.bookTitle || null,
-                  bookAuthor: entry.bookAuthor || null,
+                  diaryEntryId: entry.id,
+                  bookId: entry.bookId ?? undefined,
+                  bookTitle: entry.bookTitle ?? undefined,
+                  bookAuthor: entry.bookAuthor ?? undefined,
                   isGeneralEntry,
                   content: entry.content || "",
                   createdAt: entry.createdAt ? new Date(entry.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
                   updatedAt: entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "",
-                  isLiked: isLiked || false,
-                  likesCount: Array.isArray(entry.likes) ? entry.likes.length : 0,
+                  isLiked: entry.isLiked,
+                  likesCount: entry.likesCount,
                 };
               })
               : [];
 
-            // Combine and sort all activities by time (newest first)
             const allActivities = [...transformedActivities, ...diaryActivities].sort((a, b) => {
               // Parse timeAgo to get approximate timestamp for sorting
               // This is a simple heuristic - activities with "Just now" or "m ago" come first
@@ -4311,7 +4018,7 @@ export default function UserProfilePage() {
   // booksReadTotal is Go's count of the whole shelf; bookshelfBooks is only the
   // first 100 rows the profile route loads, so it is a floor, never the stat.
   const booksReadStat = booksReadTotal || leaderboardStats?.books_read || bookshelfBooks.length || 0;
-  const diaryEntriesStat = diaryEntries.length || leaderboardStats?.diary_entries || 0;
+  const diaryEntriesStat = diaryEntries.filter((t) => !t.repostedBy).length || leaderboardStats?.thoughts || 0;
   // XP-within-level using backend's variable thresholds
   const levelStart   = xpAtLevelStart(level);
   const levelEnd     = xpAtLevelStart(level + 1);
@@ -4702,7 +4409,7 @@ export default function UserProfilePage() {
                     value={booksReadStat}
                   />
                   <StatCell
-                    label="Diary entries"
+                    label="Thoughts"
                     value={diaryEntriesStat}
                   />
                   <StatCell
@@ -4741,8 +4448,8 @@ export default function UserProfilePage() {
                 <h2 className="text-lg font-semibold text-foreground">This account is private</h2>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {hasRequested
-                    ? `${profileData.name || profileData.username} has to approve your request before you can see their shelves, diary and lists.`
-                    : `Follow ${profileData.name || profileData.username} to see their shelves, diary and lists.`}
+                    ? `${profileData.name || profileData.username} has to approve your request before you can see their shelves, thoughts and lists.`
+                    : `Follow ${profileData.name || profileData.username} to see their shelves, thoughts and lists.`}
                 </p>
               </div>
             ) : (
@@ -5083,7 +4790,6 @@ export default function UserProfilePage() {
                       content: selectedActivityDiaryEntry.content || "",
                       createdAt: selectedActivityDiaryEntry.createdAt || "",
                       updatedAt: selectedActivityDiaryEntry.updatedAt || "",
-                      likes: [],
                       isLiked: selectedActivityDiaryEntry.isLiked || false,
                       likesCount: selectedActivityDiaryEntry.likesCount || 0,
                       isPrivate: selectedActivityDiaryEntry.isPrivate || false,
@@ -5092,7 +4798,6 @@ export default function UserProfilePage() {
                       content: "",
                       createdAt: "",
                       updatedAt: "",
-                      likes: [],
                       isLiked: false,
                       likesCount: 0,
                     }}
@@ -5246,12 +4951,8 @@ export default function UserProfilePage() {
                 isOwnProfile={isOwnProfile}
                 username={activeUsername}
                 page={diaryPage}
-                pageSize={isMobile ? 8 : DIARY_PAGE_SIZE}
+                pageSize={DIARY_PAGE_SIZE}
                 onPageChange={setDiaryPage}
-                isMobile={isMobile}
-                onEntryClick={() => {
-                  if (activeUsername) fetchDiaryEntries(activeUsername);
-                }}
                 onRefresh={async () => {
                   if (activeUsername) await fetchDiaryEntries(activeUsername);
                 }}

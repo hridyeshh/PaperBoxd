@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   } catch {
     // Preview text is decoration; the page still works.
   }
-  const title = first ? `${first} wants to Fuse with you` : "A Fusion invite";
+  const title = first ? `${first} invited you to a Fusion on PaperBoxd` : "A Fusion invite";
   return {
     title,
     description: "See how your reading tastes line up: what you both loved, where you split, and a book neither of you has read.",

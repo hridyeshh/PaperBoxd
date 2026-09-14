@@ -8,13 +8,13 @@ interface LeaderboardEntry {
   level_name?: string;
   current_streak?: number;
   books_read?: number;
-  diary_entries?: number;
+  thoughts?: number;
   pages_read?: number;
   xp_rank?: number | null;
   books_rank?: number | null;
   pages_rank?: number | null;
   streak_rank?: number | null;
-  diary_rank?: number | null;
+  thoughts_rank?: number | null;
 }
 
 function zeroStats(username: string): LeaderboardEntry {
@@ -25,7 +25,7 @@ function zeroStats(username: string): LeaderboardEntry {
     level_name: "Beginner Reader",
     current_streak: 0,
     books_read: 0,
-    diary_entries: 0,
+    thoughts: 0,
     pages_read: 0,
   };
 }

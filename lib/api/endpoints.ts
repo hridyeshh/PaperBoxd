@@ -313,49 +313,46 @@ export const bookApi = {
   unlike: (bookId: string) =>
     goFetchAuthed(`/api/v1/books/${encodeURIComponent(bookId)}/like`, { method: "DELETE" }),
 
-  getDiaryEntries: (bookId: string, page = 1, pageSize = 20) =>
-    goFetch(`/api/v1/books/${encodeURIComponent(bookId)}/diary?page=${page}&page_size=${pageSize}`),
+  getThoughts: (bookId: string, page = 1, pageSize = 20) =>
+    goFetch(`/api/v1/books/${encodeURIComponent(bookId)}/thoughts?page=${page}&page_size=${pageSize}`),
 };
 
-// ── Diary ─────────────────────────────────────────────────────────────────────
+// ── Thoughts ──────────────────────────────────────────────────────────────────
 
-export const diaryApi = {
+const thoughtPath = (username: string, thoughtId?: string) =>
+  `/api/v1/users/${encodeURIComponent(username)}/thoughts${thoughtId ? `/${encodeURIComponent(thoughtId)}` : ""}`;
+
+export const thoughtsApi = {
   // Auth is optional on the backend, but when the viewer is logged in we must
-  // forward their Bearer so their own private entries appear in the response.
-  // Same reasoning for getEntry.
-  getEntries: (username: string, page = 1, pageSize = 20) =>
-    goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/diary?page=${page}&page_size=${pageSize}`),
+  // forward their Bearer so their own private thoughts (and is_liked /
+  // is_reposted) appear in the response. Same reasoning for get and getThread.
+  list: (username: string, page = 1, pageSize = 20) =>
+    goFetchAuthed(`${thoughtPath(username)}?page=${page}&page_size=${pageSize}`),
 
-  createEntry: (username: string, body: Record<string, unknown>) =>
-    goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/diary`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
+  create: (username: string, body: Record<string, unknown>) =>
+    goFetchAuthed(thoughtPath(username), { method: "POST", body: JSON.stringify(body) }),
 
-  getEntry: (username: string, entryId: string) =>
-    goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/diary/${encodeURIComponent(entryId)}`),
+  get: (username: string, thoughtId: string) => goFetchAuthed(thoughtPath(username, thoughtId)),
 
-  updateEntry: (username: string, entryId: string, body: Record<string, unknown>) =>
-    goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/diary/${encodeURIComponent(entryId)}`, {
-      method: "PUT",
-      body: JSON.stringify(body),
-    }),
+  getThread: (username: string, thoughtId: string) => goFetchAuthed(`${thoughtPath(username, thoughtId)}/thread`),
 
-  deleteEntry: (username: string, entryId: string) =>
-    goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/diary/${encodeURIComponent(entryId)}`, {
-      method: "DELETE",
-    }),
+  update: (username: string, thoughtId: string, body: Record<string, unknown>) =>
+    goFetchAuthed(thoughtPath(username, thoughtId), { method: "PUT", body: JSON.stringify(body) }),
 
-  likeEntry: (username: string, entryId: string) =>
-    goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/diary/${encodeURIComponent(entryId)}/like`, {
-      method: "POST",
-      body: JSON.stringify({}),
-    }),
+  delete: (username: string, thoughtId: string) =>
+    goFetchAuthed(thoughtPath(username, thoughtId), { method: "DELETE" }),
 
-  unlikeEntry: (username: string, entryId: string) =>
-    goFetchAuthed(`/api/v1/users/${encodeURIComponent(username)}/diary/${encodeURIComponent(entryId)}/like`, {
-      method: "DELETE",
-    }),
+  like: (username: string, thoughtId: string) =>
+    goFetchAuthed(`${thoughtPath(username, thoughtId)}/like`, { method: "POST", body: JSON.stringify({}) }),
+
+  unlike: (username: string, thoughtId: string) =>
+    goFetchAuthed(`${thoughtPath(username, thoughtId)}/like`, { method: "DELETE" }),
+
+  repost: (username: string, thoughtId: string) =>
+    goFetchAuthed(`${thoughtPath(username, thoughtId)}/repost`, { method: "POST", body: JSON.stringify({}) }),
+
+  unrepost: (username: string, thoughtId: string) =>
+    goFetchAuthed(`${thoughtPath(username, thoughtId)}/repost`, { method: "DELETE" }),
 };
 
 // ── Lists ─────────────────────────────────────────────────────────────────────

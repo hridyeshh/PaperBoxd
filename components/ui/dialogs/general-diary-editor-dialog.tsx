@@ -63,7 +63,7 @@ export function GeneralDiaryEditorDialog({
       };
       if (subject.trim()) body.subject = subject.trim();
 
-      const res = await fetch(`/api/users/${encodeURIComponent(username)}/diary`, {
+      const res = await fetch(`/api/users/${encodeURIComponent(username)}/thoughts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -74,7 +74,7 @@ export function GeneralDiaryEditorDialog({
         throw new Error(err.error || err.details || `Failed to save (${res.status})`);
       }
 
-      toast.success("Diary entry saved");
+      toast.success("Thought saved");
       onOpenChange(false);
       onSave?.();
     } catch (error) {

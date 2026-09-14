@@ -16,12 +16,12 @@ type Review = {
   review?: string | null;
   reviewed_at?: string | null;
   edited?: boolean;
-  /** Set for rows that came from a diary note rather than a shelf review. */
-  kind?: "review" | "diary";
-  entry_id?: string;
+  /** Set for rows that came from a thought rather than a shelf review. */
+  kind?: "review" | "thought";
+  thought_id?: string;
 };
 
-type DiaryEntry = {
+type BookThought = {
   id: string;
   user_id: string;
   username: string;
@@ -85,7 +85,7 @@ export function ReviewsList({ bookId, currentUserId, currentUsername }: ReviewsL
   const [reviews, setReviews] = React.useState<Review[]>([]);
   const [loading, setLoading] = React.useState(true);
 
-  // A shelf review and a diary note about the same book are the same act of
+  // A shelf review and a thought about the same book are the same act of
   // writing; the reader should not have to know which form produced which.
   // Both land here, newest first, deduped so one person's note does not appear
   // twice when they also left a review.
@@ -95,28 +95,28 @@ export function ReviewsList({ bookId, currentUserId, currentUsername }: ReviewsL
       fetch(`/api/books/${encodeURIComponent(bookId)}/reviews`)
         .then((res) => (res.ok ? res.json() : { reviews: [] }))
         .catch(() => ({ reviews: [] })),
-      fetch(`/api/books/${encodeURIComponent(bookId)}/diary`)
-        .then((res) => (res.ok ? res.json() : { entries: [] }))
-        .catch(() => ({ entries: [] })),
+      fetch(`/api/books/${encodeURIComponent(bookId)}/thoughts`)
+        .then((res) => (res.ok ? res.json() : { thoughts: [] }))
+        .catch(() => ({ thoughts: [] })),
     ])
-      .then(([reviewData, diaryData]: [{ reviews?: Review[] }, { entries?: DiaryEntry[] }]) => {
+      .then(([reviewData, thoughtData]: [{ reviews?: Review[] }, { thoughts?: BookThought[] }]) => {
         if (cancelled) return;
         const fromReviews: Review[] = (Array.isArray(reviewData.reviews) ? reviewData.reviews : [])
           .map((r) => ({ ...r, kind: "review" as const }));
         const seen = new Set(fromReviews.map((r) => r.user_id));
-        const fromDiary: Review[] = (Array.isArray(diaryData.entries) ? diaryData.entries : [])
+        const fromThoughts: Review[] = (Array.isArray(thoughtData.thoughts) ? thoughtData.thoughts : [])
           .filter((e) => e.content?.trim() && !seen.has(e.user_id))
           .map((e) => ({
             user_id: e.user_id,
-            entry_id: e.id,
+            thought_id: e.id,
             username: e.username,
             avatar_url: e.avatar_url,
             rating: e.rating,
             review: e.content,
             reviewed_at: e.created_at,
-            kind: "diary" as const,
+            kind: "thought" as const,
           }));
-        const merged = [...fromReviews, ...fromDiary].sort((a, b) => {
+        const merged = [...fromReviews, ...fromThoughts].sort((a, b) => {
           const at = a.reviewed_at ? new Date(a.reviewed_at).getTime() : 0;
           const bt = b.reviewed_at ? new Date(b.reviewed_at).getTime() : 0;
           return bt - at;
@@ -156,7 +156,7 @@ export function ReviewsList({ bookId, currentUserId, currentUsername }: ReviewsL
             Nobody has written about this one yet.
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Rate it, or write a diary note — both show up here.
+            Rate it, or write a thought — both show up here.
           </p>
         </div>
       ) : (
@@ -164,7 +164,7 @@ export function ReviewsList({ bookId, currentUserId, currentUsername }: ReviewsL
           {reviews.map((r) => {
             const isMe = r.user_id === currentUserId || r.username === currentUsername;
             return (
-              <div key={r.entry_id ?? r.user_id} className="py-5 border-b border-border/50 last:border-0">
+              <div key={r.thought_id ?? r.user_id} className="py-5 border-b border-border/50 last:border-0">
                 <div className="flex items-start gap-3">
                   {/* Avatar */}
                   <Link
@@ -194,9 +194,9 @@ export function ReviewsList({ bookId, currentUserId, currentUsername }: ReviewsL
                           You
                         </span>
                       )}
-                      {r.kind === "diary" && (
+                      {r.kind === "thought" && (
                         <span className="text-[0.625rem] uppercase tracking-[0.1em] text-muted-foreground/60 font-medium">
-                          from their diary
+                          from their thoughts
                         </span>
                       )}
                       {r.edited && (

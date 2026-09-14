@@ -140,9 +140,9 @@ function formatActivity(activity: ActivityFromAPI): { action: string; bookTitle?
   } else if (activity.type === "granted_access") {
     action = "granted access to";
     bookTitle = activity.listTitle;
-  } else if (activity.type === "liked_diary_entry") {
-    action = "liked your note on";
-    bookTitle = activity.subject || "diary entry";
+  } else if (activity.type === "liked_thought" || activity.type === "reposted_thought") {
+    action = activity.type === "liked_thought" ? "liked your thought on" : "reposted your thought on";
+    bookTitle = activity.subject || activity.bookTitle || "a thought";
   } else if (activity.type === "followed") {
     action = "started following you";
     bookTitle = undefined;
@@ -163,8 +163,8 @@ function transformActivity(activity: ActivityFromAPI, idx: number): ActivityEntr
   const detail =
     activity.detail !== undefined
       ? (activity.detail ?? "")
-      : activity.type === "liked_diary_entry"
-      ? activity.subject || "diary entry"
+      : activity.type === "liked_thought" || activity.type === "reposted_thought"
+      ? activity.subject || activity.bookTitle || "a thought"
       : activity.isGeneralEntry
       ? activity.subject?.trim() || "a diary entry"
       : isListType

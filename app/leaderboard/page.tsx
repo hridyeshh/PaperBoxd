@@ -36,7 +36,7 @@ type LeaderboardEntry = {
   username: string;
   books_read: number;
   pages_read: number;
-  diary_entries: number;
+  thoughts: number;
   genres_explored: number;
   total_xp: number;
   level: number;
@@ -44,14 +44,14 @@ type LeaderboardEntry = {
   xp_rank: number | null;
   books_rank: number | null;
   pages_rank: number | null;
-  diary_rank: number | null;
+  thoughts_rank: number | null;
   streak_rank: number | null;
   genres_rank: number | null;
   level_name: string;
   level_badge: string;
 };
 
-type Tab = "global" | "books" | "pages" | "streak" | "diary" | "friends";
+type Tab = "global" | "books" | "pages" | "streak" | "thoughts" | "friends";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -89,7 +89,7 @@ function getStatForTab(entry: LeaderboardEntry, tab: Tab): { value: number; labe
     case "books":  return { value: entry.books_read,     label: "books"   };
     case "pages":  return { value: entry.pages_read,     label: "pages"   };
     case "streak": return { value: entry.current_streak, label: "day streak" };
-    case "diary":  return { value: entry.diary_entries,  label: "entries" };
+    case "thoughts": return { value: entry.thoughts, label: "thoughts" };
     default:       return { value: entry.total_xp,       label: "XP"      };
   }
 }
@@ -330,7 +330,7 @@ function ColumnHeaders({ tab }: { tab: Tab }) {
       <span className="hidden min-w-[72px] text-right text-[10px] font-semibold uppercase tracking-widest text-muted-foreground sm:block">Streak</span>
       <span className="hidden min-w-[64px] text-right text-[10px] font-semibold uppercase tracking-widest text-muted-foreground md:block">Books</span>
       <span className="min-w-[72px] text-right text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-        {tab === "books" ? "Books" : tab === "pages" ? "Pages" : tab === "streak" ? "Streak" : tab === "diary" ? "Entries" : "XP"}
+        {tab === "books" ? "Books" : tab === "pages" ? "Pages" : tab === "streak" ? "Streak" : tab === "thoughts" ? "Thoughts" : "XP"}
       </span>
     </div>
   );
@@ -458,7 +458,7 @@ export default function LeaderboardPage() {
     { id: "books",   label: "By Books",  icon: <BookOpen className="h-3.5 w-3.5" /> },
     { id: "pages",   label: "By Pages",  icon: <TrendingUp className="h-3.5 w-3.5" /> },
     { id: "streak",  label: "By Streak", icon: <Flame className="h-3.5 w-3.5" /> },
-    { id: "diary",   label: "By Diary",  icon: <FileText className="h-3.5 w-3.5" /> },
+    { id: "thoughts", label: "By Thoughts",  icon: <FileText className="h-3.5 w-3.5" /> },
     { id: "friends", label: "Friends",   icon: <Users className="h-3.5 w-3.5" />, requiresAuth: true },
   ];
 

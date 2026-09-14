@@ -766,7 +766,7 @@ export function AuthenticatedHome() {
   const { feed } = useFeed(isAuthenticated);
   useEffect(() => {
     if (!isAuthenticated || !user?.username) return;
-    const BOOK_TYPES = new Set(["added_book", "read", "finished_reading", "started_reading", "wants_to_read", "rated", "liked", "reviewed", "diary_entry", "created_diary_entry"]);
+    const BOOK_TYPES = new Set(["added_book", "read", "finished_reading", "started_reading", "wants_to_read", "rated", "liked", "reviewed", "diary_entry", "created_thought"]);
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     fetch(`/api/users/${user.username}/activities/following?page=1&pageSize=40`)
       .then((r) => (r.ok ? r.json() : null))

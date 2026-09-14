@@ -2,12 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { bookApi } from "@/lib/api/endpoints";
 
 /**
- * GET /api/books/[id]/diary
+ * GET /api/books/[id]/thoughts
  *
- * Public diary notes written about this book. The Go endpoint already filters
- * private entries and blocked users; this route existed in `lib/api/endpoints`
- * (`bookApi.getDiaryEntries`) but had no caller, so diary notes never reached
- * the book page.
+ * Public thoughts written about this book. The Go endpoint already filters
+ * private thoughts, thread follow-ups and blocked users.
  */
 export async function GET(
   request: NextRequest,
@@ -22,13 +20,13 @@ export async function GET(
   );
 
   try {
-    const { data, status } = await bookApi.getDiaryEntries(id, 1, pageSize);
+    const { data, status } = await bookApi.getThoughts(id, 1, pageSize);
     if (status >= 400) {
-      return NextResponse.json({ entries: [] }, { status: status === 404 ? 200 : status });
+      return NextResponse.json({ thoughts: [] }, { status: status === 404 ? 200 : status });
     }
     return NextResponse.json(data);
   } catch (error) {
-    console.error("[book diary] fetch error:", error);
-    return NextResponse.json({ entries: [] });
+    console.error("[book thoughts] fetch error:", error);
+    return NextResponse.json({ thoughts: [] });
   }
 }

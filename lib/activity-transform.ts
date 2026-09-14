@@ -40,9 +40,9 @@ export function transformActivity(a: Record<string, unknown>) {
       break;
     case "reviewed":
     case "diary_entry":
-    case "created_diary_entry":
+    case "created_thought":
       action = detail ? "wrote about" : "wrote";
-      if (!detail) detail = (a.entry_title as string | null) ?? null;
+      if (!detail) detail = (a.thought_title as string | null) ?? null;
       break;
     case "created_list":
       action = "created a list";
@@ -67,9 +67,13 @@ export function transformActivity(a: Record<string, unknown>) {
       action = "started following you";
       detail = null;
       break;
-    case "liked_diary_entry":
-      action = "liked your note on";
-      detail = (a.entry_title as string | null) ?? null;
+    case "liked_thought":
+      action = "liked your thought on";
+      detail = (a.thought_title as string | null) ?? (a.book_title as string | null) ?? null;
+      break;
+    case "reposted_thought":
+      action = "reposted your thought on";
+      detail = (a.thought_title as string | null) ?? (a.book_title as string | null) ?? null;
       break;
     case "fusion_joined":
       // The story is app-only; the web just says it happened.
@@ -93,8 +97,8 @@ export function transformActivity(a: Record<string, unknown>) {
     bookCover: (a.book_cover as string | null) ?? null,
     listId: (a.list_id as string | null) ?? null,
     listTitle: (a.list_title as string | null) ?? null,
-    diaryEntryId: (a.entry_id as string | null) ?? null,
-    subject: (a.entry_title as string | null) ?? null,
+    diaryEntryId: (a.thought_id as string | null) ?? null,
+    subject: (a.thought_title as string | null) ?? null,
     targetUsername: (a.target_username as string | null) ?? null,
     rating: (metadata?.rating as number | undefined) ?? undefined,
     // Pre-computed for the frontend formatActivity / render path

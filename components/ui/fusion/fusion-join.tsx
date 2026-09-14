@@ -111,9 +111,9 @@ export function FusionJoin({ token }: { token: string }) {
             <>
               <Discs className="mt-10" />
               <h1 className="mt-8 text-[2.6rem] font-bold leading-[0.98] tracking-[-0.035em]">
-                {first} wants to
+                {first} invited you
                 <br />
-                <span style={{ color: ACCENT }}>Fuse with you.</span>
+                <span style={{ color: ACCENT }}>to a Fusion.</span>
               </h1>
 
               <Eyebrow className="mt-8">{first} will see</Eyebrow>

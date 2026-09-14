@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { goFetch, bookshelfApi, favoritesApi, diaryApi, listsApi, activityApi } from "@/lib/api/endpoints";
+import { goFetch, bookshelfApi, favoritesApi, thoughtsApi, listsApi, activityApi } from "@/lib/api/endpoints";
+import { toThought, type GoThought } from "@/lib/thoughts";
 import { extractGoError } from "@/lib/api/error";
 import { cookies } from "next/headers";
 
@@ -88,28 +89,6 @@ interface GoUserListsResponse {
   saved_lists: GoListResponse[];
 }
 
-interface GoDiaryEntry {
-  id: string;
-  user_id: string;
-  username: string;
-  book_id?: string;
-  book?: GoBookResponse;
-  title?: string;
-  content: string;
-  is_private: boolean;
-  rating?: number;
-  likes_count: number;
-  is_liked: boolean;
-  can_edit: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-interface GoDiaryEntriesResponse {
-  entries: GoDiaryEntry[];
-  total_count: number;
-}
-
 interface GoActivityResponse {
   id: string;
   user_id: string;
@@ -122,8 +101,8 @@ interface GoActivityResponse {
   book_slug?: string;
   list_id?: string;
   list_title?: string;
-  entry_id?: string;
-  entry_title?: string;
+  thought_id?: string;
+  thought_title?: string;
   target_user_id?: string;
   target_username?: string;
   created_at: string;
@@ -193,7 +172,7 @@ export async function GET(
       bookshelfApi.getCurrentlyReading(username, 1, 20),
       goFetch(`/api/v1/users/${encodeURIComponent(username)}/likes?page=1&page_size=100`),
       listsApi.getUserLists(username),
-      diaryApi.getEntries(username, 1, 50),
+      thoughtsApi.list(username, 1, 50),
       hasToken ? activityApi.getMyActivities(1, 20) : Promise.resolve({ data: null, status: 401 }),
     ]);
 
@@ -331,30 +310,11 @@ export async function GET(
       });
     }
 
-    // ── Diary entries ─────────────────────────────────────────────────────────
-    const diaryEntries: unknown[] = [];
-    if (diaryResult.status === "fulfilled" && diaryResult.value.status < 400) {
-      const dr = diaryResult.value.data as GoDiaryEntriesResponse;
-      (dr?.entries ?? []).forEach((e) => {
-        diaryEntries.push({
-          _id: e.id,
-          id: e.id,
-          bookId: e.book_id ?? null,
-          bookTitle: e.book?.volumeInfo?.title ?? null,
-          bookAuthor: bookAuthor(e.book?.volumeInfo),
-          bookCover: e.book ? bookCover(e.book.volumeInfo) : null,
-          subject: e.title ?? null,
-          content: e.content,
-          isPrivate: e.is_private,
-          rating: e.rating ?? null,
-          likes: [],
-          likesCount: e.likes_count,
-          isLiked: e.is_liked,
-          createdAt: e.created_at,
-          updatedAt: e.updated_at,
-        });
-      });
-    }
+    // ── Thoughts (own + reposts) ──────────────────────────────────────────────
+    const diaryEntries =
+      diaryResult.status === "fulfilled" && diaryResult.value.status < 400
+        ? ((diaryResult.value.data as { thoughts?: GoThought[] })?.thoughts ?? []).map(toThought)
+        : [];
 
     // ── Activities ────────────────────────────────────────────────────────────
     const recentActivities: unknown[] = [];
@@ -369,8 +329,8 @@ export async function GET(
           bookCover: null,
           listId: a.list_id ?? null,
           listName: a.list_title ?? null,
-          entryId: a.entry_id ?? null,
-          entryTitle: a.entry_title ?? null,
+          entryId: a.thought_id ?? null,
+          entryTitle: a.thought_title ?? null,
           targetUsername: a.target_username ?? null,
           timestamp: a.created_at,
           rating: null,
@@ -424,7 +384,7 @@ export async function GET(
       followingCount: goUser.following_count ?? 0,
       listsCount: goUser.lists_count ?? 0,
       favoritesCount: goUser.favorites_count ?? 0,
-      diaryEntriesCount: goUser.diary_entries_count ?? 0,
+      diaryEntriesCount: goUser.thoughts_count ?? 0,
 
       // XP / gamification — passed through if Go returns them
       totalXp: goUser.total_xp ?? 0,

@@ -9,7 +9,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/primitives/dialog";
 
 // We DO NOT import BookShareCard here. 
@@ -38,41 +37,77 @@ export function BookShareButton({
   children,
   asCustomButton = false,
 }: BookShareButtonProps) {
-  const [isSharing, setIsSharing] = React.useState(false);
   const [showDialog, setShowDialog] = React.useState(false);
-  const [isImageLoading, setIsImageLoading] = React.useState(true);
 
-  // 1. Construct the API URL. This is the "Source of Truth" for the image.
+  // The API URL is the "Source of Truth" for the image.
   const shareImageUrl = `/api/og/share?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author || '')}&cover=${encodeURIComponent(coverUrl || '')}&username=${encodeURIComponent(username || '')}`;
+
+  return (
+    <>
+      {asCustomButton && children ? (
+        <div onClick={() => setShowDialog(true)} className={className}>{children}</div>
+      ) : (
+        <Button variant={buttonVariant} size={size} className={className} onClick={() => setShowDialog(true)}>
+          {children || <><Share2 className="h-4 w-4 mr-2" /> Share</>}
+        </Button>
+      )}
+      <ShareImageDialog
+        open={showDialog}
+        onOpenChange={setShowDialog}
+        imageUrl={shareImageUrl}
+        shareTitle={`Check out ${title}`}
+      />
+    </>
+  );
+}
+
+/**
+ * Previews a server-rendered story image and hands it to the OS share sheet
+ * (Instagram Stories on phones), or downloads it where the browser can't share
+ * files. Book and thought share both route through here.
+ */
+export function ShareImageDialog({
+  open,
+  onOpenChange,
+  imageUrl,
+  shareTitle,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  imageUrl: string;
+  shareTitle: string;
+}) {
+  const [isSharing, setIsSharing] = React.useState(false);
+  const [isImageLoading, setIsImageLoading] = React.useState(true);
 
   // Reset loading state when dialog opens
   React.useEffect(() => {
-    if (showDialog) {
+    if (open) {
       setIsImageLoading(true);
     }
-  }, [showDialog]);
+  }, [open, imageUrl]);
 
   const handleShare = async () => {
     setIsSharing(true);
     const toastId = toast.loading("Downloading high-quality card...");
 
     try {
-      // 2. Fetch the generated image from Vercel
-      const response = await fetch(shareImageUrl);
+      // Fetch the generated image
+      const response = await fetch(imageUrl);
       if (!response.ok) throw new Error("Generation failed");
       const blob = await response.blob();
 
-      // 3. Create file for Instagram
+      // Create file for Instagram
       const file = new File([blob], "paperboxd-story.png", { type: "image/png" });
 
-      // 4. Share or Download
+      // Share or Download
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: `Check out ${title}`,
+          title: shareTitle,
         });
         toast.success("Opened Share Sheet!", { id: toastId });
-        setShowDialog(false);
+        onOpenChange(false);
       } else {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -93,17 +128,7 @@ export function BookShareButton({
   };
 
   return (
-    <Dialog open={showDialog} onOpenChange={setShowDialog}>
-      <DialogTrigger asChild>
-        {asCustomButton && children ? (
-          <div onClick={() => setShowDialog(true)} className={className}>{children}</div>
-        ) : (
-          <Button variant={buttonVariant} size={size} className={className} onClick={() => setShowDialog(true)}>
-            {children || <><Share2 className="h-4 w-4 mr-2" /> Share</>}
-          </Button>
-        )}
-      </DialogTrigger>
-      
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[95vw] h-[90vh] p-0 bg-zinc-950 border-zinc-800 flex flex-col overflow-hidden rounded-xl">
         <DialogHeader className="px-6 py-4 border-b border-white/10 bg-zinc-900/50 absolute top-0 w-full z-10 backdrop-blur-md">
           <DialogTitle className="text-white">Instagram Preview</DialogTitle>
@@ -125,7 +150,7 @@ export function BookShareButton({
             {/* Image - hidden until loaded */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
-              src={shareImageUrl} 
+              src={imageUrl} 
               alt="Story Preview" 
               className={`max-h-full max-w-full object-contain shadow-2xl rounded-lg transition-opacity duration-300 ${
                 isImageLoading ? 'opacity-0' : 'opacity-100'

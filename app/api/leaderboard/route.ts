@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { goFetch } from "@/lib/api/endpoints";
 
-const VALID_DIMENSIONS = new Set(["books", "pages", "diary", "genres", "xp", "streak"]);
+const VALID_DIMENSIONS = new Set(["books", "pages", "thoughts", "genres", "xp", "streak"]);
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

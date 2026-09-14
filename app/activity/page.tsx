@@ -60,9 +60,9 @@ type DiaryEntryData = {
   bookTitle?: string | null;
   bookAuthor?: string | null;
   bookCover?: string | null;
-  content: string; // Required by DiaryEntryDialog
-  createdAt: string; // Required by DiaryEntryDialog
-  updatedAt: string; // Required by DiaryEntryDialog
+  content: string;
+  createdAt?: string;
+  updatedAt?: string;
   isLiked?: boolean;
   likesCount?: number;
 };
@@ -201,9 +201,9 @@ export default function ActivityPage() {
     } else if (activity.type === "granted_access") {
       action = "granted access to";
       bookTitle = activity.listTitle;
-    } else if (activity.type === "liked_diary_entry") {
-      action = "liked your note on";
-      bookTitle = activity.subject || "diary entry";
+    } else if (activity.type === "liked_thought" || activity.type === "reposted_thought") {
+      action = activity.type === "liked_thought" ? "liked your thought on" : "reposted your thought on";
+      bookTitle = activity.subject || activity.bookTitle || "a thought";
     } else if (activity.type === "followed") {
       action = "started following you";
       bookTitle = undefined;
@@ -284,8 +284,8 @@ export default function ActivityPage() {
               const isListType = activity.type === "shared_list" || activity.type === "collaboration_request" || activity.type === "granted_access" || activity.type === "created_list";
               const detail = activity.detail !== undefined
                 ? (activity.detail ?? "")
-                : activity.type === "liked_diary_entry"
-                  ? (activity.subject || "diary entry")
+                : activity.type === "liked_thought" || activity.type === "reposted_thought"
+                  ? (activity.subject || activity.bookTitle || "a thought")
                   : activity.isGeneralEntry
                     ? (activity.subject?.trim() || "a diary entry")
                     : isListType
@@ -439,7 +439,7 @@ export default function ActivityPage() {
                     baseEntry.isGeneralEntry = activity.isGeneralEntry;
                   }
                   
-                  if (activity.type === "liked_diary_entry") {
+                  if (activity.type === "liked_thought" || activity.type === "reposted_thought") {
                     baseEntry.diaryEntryId = activity.diaryEntryId;
                   }
                   
@@ -569,39 +569,11 @@ export default function ActivityPage() {
                         });
                         setSelectedDiaryEntryUsername(entry.username || null);
                       }
-                      // If it's a liked_diary_entry, fetch and open the diary entry
-                      // The owner is the current user (since the activity is in their activities array)
-                      else if (entry.type === "liked_diary_entry" && entry.diaryEntryId && user?.username) {
-                        // Fetch the diary entry from the current user's diary
-                        fetch(`/api/users/${encodeURIComponent(user?.username)}/diary`)
-                          .then((res) => res.json())
-                          .then((data: { entries?: Array<{ _id?: { toString(): string } | string; id?: string; bookId?: { toString(): string } | string; bookTitle?: string; bookAuthor?: string; bookCover?: string; content?: string; createdAt?: string; updatedAt?: string; isLiked?: boolean; likesCount?: number }> }) => {
-                            const diaryEntry = data.entries?.find((e) => 
-                              (e._id?.toString() || e.id) === entry.diaryEntryId
-                            );
-                            if (diaryEntry) {
-                              const entryId = typeof diaryEntry._id === 'string' ? diaryEntry._id : (diaryEntry._id?.toString() || diaryEntry.id || '');
-                              const bookIdValue = diaryEntry.bookId 
-                                ? (typeof diaryEntry.bookId === 'string' ? diaryEntry.bookId : diaryEntry.bookId.toString())
-                                : null;
-                              setSelectedDiaryEntry({
-                                id: entryId,
-                                bookId: bookIdValue,
-                                bookTitle: diaryEntry.bookTitle || null,
-                                bookAuthor: diaryEntry.bookAuthor || null,
-                                bookCover: diaryEntry.bookCover || null,
-                                content: diaryEntry.content || "",
-                                createdAt: diaryEntry.createdAt || new Date().toISOString(),
-                                updatedAt: diaryEntry.updatedAt || new Date().toISOString(),
-                                isLiked: diaryEntry.isLiked,
-                                likesCount: diaryEntry.likesCount,
-                              });
-                              setSelectedDiaryEntryUsername(user?.username || null);
-                            }
-                          })
-                          .catch((error) => {
-                            console.error("Error fetching diary entry:", error);
-                          });
+                      // Someone liked or reposted one of the viewer's thoughts:
+                      // the dialog loads the thread by id.
+                      else if ((entry.type === "liked_thought" || entry.type === "reposted_thought") && entry.diaryEntryId && user?.username) {
+                        setSelectedDiaryEntry({ id: entry.diaryEntryId, content: "" });
+                        setSelectedDiaryEntryUsername(user.username);
                       }
                       // If it's a shared list or granted access, navigate to the list
                       else if ((entry.type === "shared_list" || entry.type === "granted_access") && entry.listId && entry.sharedByUsername) {
@@ -640,7 +612,7 @@ export default function ActivityPage() {
                       // Don't navigate for collaboration requests - they have buttons
                     }}
                     className={`flex gap-4 rounded-3xl border border-border/70 bg-background/90 p-4 shadow-sm transition hover:-translate-y-1 ${
-                      (entry.type === "diary_entry" || entry.type === "shared_list" || entry.type === "granted_access" || entry.type === "liked_diary_entry" || entry.bookId) ? "cursor-pointer" : ""
+                      (entry.type === "diary_entry" || entry.type === "shared_list" || entry.type === "granted_access" || entry.type === "liked_thought" || entry.type === "reposted_thought" || entry.bookId) ? "cursor-pointer" : ""
                     }`}
                   >
                     {/* Show profile picture of the person who did the activity */}
